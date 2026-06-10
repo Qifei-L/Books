@@ -1,0 +1,19 @@
+@Books.Api_HostAddress = http://localhost:5199
+
+GET {{Books.Api_HostAddress}}/api/v1/ledgers
+Accept: application/json
+
+###
+
+GET {{Books.Api_HostAddress}}/api/v1/ledgers/1/accounts
+Accept: application/json
+
+###
+
+GET {{Books.Api_HostAddress}}/api/v1/ledgers/1/journal-entries
+Accept: application/json
+
+###
+
+GET {{Books.Api_HostAddress}}/api/v1/ledgers/1/reports/trial-balance
+Accept: application/json
