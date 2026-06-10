@@ -1,3 +1,3 @@
 export const environment = {
-  apiBaseUrl: 'http://localhost:5199/api/v1'
+  apiBaseUrl: 'https://books-backend-production-450e.up.railway.app/api/v1'
 };
