@@ -5,98 +5,132 @@ Books is a minimal general ledger MVP with an ASP.NET Core Web API backend, Angu
 ## Project Structure
 
 ```text
-C:\Users\User\Desktop\Books
+/
 |-- backend
 |   `-- Books.Api
 `-- frontend
     `-- books-ui
 ```
 
-## Backend
+## Environments
 
-Set a PostgreSQL connection string before running against Railway or another remote database.
+Real `.env` files are ignored by git. Commit only `.env.example` templates.
 
-For local development, copy:
+Do not commit database passwords, Railway tokens, or real secrets.
 
-```text
-C:\Users\User\Desktop\Books\backend\Books.Api\.env.example
-```
+## Backend Configuration
 
-to:
+Template:
 
 ```text
-C:\Users\User\Desktop\Books\backend\Books.Api\.env
+backend/Books.Api/.env.example
 ```
 
-Then fill in either `DATABASE_URL` or `ConnectionStrings__DefaultConnection`. The real `.env` file is ignored by git.
+Supported variables:
 
-Connection string priority:
+```text
+DATABASE_URL=
+ConnectionStrings__DefaultConnection=
+CORS_ALLOWED_ORIGINS=http://localhost:4200
+ASPNETCORE_ENVIRONMENT=Development
+```
+
+Database connection priority:
 
 1. `DATABASE_URL`
 2. `ConnectionStrings__DefaultConnection`
 3. `ConnectionStrings:DefaultConnection` in `appsettings.json`
 
-Railway commonly provides:
-
-```powershell
-$env:DATABASE_URL = "postgresql://username:password@host:port/database"
-```
-
-The backend converts that URL into the Npgsql format automatically:
+Railway PostgreSQL usually provides a URL like:
 
 ```text
-Host=host;Port=port;Database=database;Username=username;Password=password;SSL Mode=Require;Trust Server Certificate=true
+postgresql://user:password@host:port/database
 ```
 
-You can also set an Npgsql connection string directly:
+The backend converts `postgresql://` and `postgres://` URLs to the Npgsql format automatically:
 
-```powershell
-$env:ConnectionStrings__DefaultConnection = "Host=localhost;Port=5432;Database=books;Username=postgres;Password=postgres"
+```text
+Host=...;Port=...;Database=...;Username=...;Password=...;SSL Mode=Require;Trust Server Certificate=true
 ```
 
-Do not commit real Railway credentials.
+The backend uses `UseNpgsql`, not SQLite.
+
+### Backend CORS
+
+CORS is read from:
+
+```text
+CORS_ALLOWED_ORIGINS
+```
+
+Multiple origins are comma-separated:
+
+```text
+CORS_ALLOWED_ORIGINS=http://localhost:4200,https://laudable-blessing-production-afd7.up.railway.app
+```
+
+If the variable is not set, the backend defaults to:
+
+```text
+http://localhost:4200
+```
+
+## Frontend Configuration
+
+Template:
+
+```text
+frontend/books-ui/.env.example
+```
+
+Current template value:
+
+```text
+API_BASE_URL=https://books-backend-production-450e.up.railway.app/api/v1
+```
+
+Angular does not read this `.env` file at browser runtime. It is a deployment note/template only.
+
+Frontend API URLs are controlled by Angular environment files:
+
+```text
+frontend/books-ui/src/environments/environment.ts
+frontend/books-ui/src/environments/environment.prod.ts
+```
+
+Local development:
+
+```ts
+apiBaseUrl: 'http://localhost:5199/api/v1'
+```
+
+Production:
+
+```ts
+apiBaseUrl: 'https://books-backend-production-450e.up.railway.app/api/v1'
+```
+
+Do not put secrets in frontend code or frontend variables.
+
+## Local Development
+
+Backend:
 
 ```powershell
 cd C:\Users\User\Desktop\Books\backend\Books.Api
 dotnet restore
-dotnet tool restore
-dotnet ef database update
+dotnet build
 dotnet run
 ```
 
-If `dotnet ef` is not installed globally, run the local tool instead:
+The backend runs EF Core migrations and idempotent seed data on startup during the current MVP stage.
 
-```powershell
-dotnet tool run dotnet-ef database update
-```
-
-During the current MVP stage, the API also runs EF Core migrations and seed data on startup.
-
-Default HTTPS URL from `Properties\launchSettings.json`:
-
-```text
-https://localhost:7078
-```
-
-Swagger UI:
-
-```text
-https://localhost:7078/swagger
-```
-
-The API enables CORS policy `AllowAngularDevClient` for:
-
-```text
-http://localhost:4200
-http://127.0.0.1:4200
-```
-
-## Frontend
+Frontend:
 
 ```powershell
 cd C:\Users\User\Desktop\Books\frontend\books-ui
 npm install
-ng serve
+npm run dev
 ```
 
 Open:
@@ -105,19 +139,116 @@ Open:
 http://localhost:4200
 ```
 
-The Angular API base URL is configured in:
+Production build preview:
+
+```powershell
+cd C:\Users\User\Desktop\Books\frontend\books-ui
+npm run build
+npm start
+```
+
+`npm start` serves the production build from:
 
 ```text
-src\environments\environment.ts
+dist/books-ui/browser
 ```
 
-Current value:
+## Railway Deployment
 
-```ts
-apiBaseUrl: 'http://localhost:5199/api/v1'
+Railway domains:
+
+```text
+Backend:  https://books-backend-production-450e.up.railway.app
+Frontend: https://laudable-blessing-production-afd7.up.railway.app
 ```
 
-The backend also exposes HTTPS at `https://localhost:7078`. The frontend uses HTTP by default so the browser can call the local API without a self-signed certificate prompt.
+### Railway Root Directory
+
+Backend Service:
+
+```text
+/backend/Books.Api
+```
+
+Frontend Service:
+
+```text
+/frontend/books-ui
+```
+
+PostgreSQL:
+
+```text
+No public domain required
+```
+
+Backend:
+
+```text
+Public domain required
+```
+
+Frontend:
+
+```text
+Public domain required
+```
+
+### Backend Railway Variables
+
+Set these in the Backend Service `Variables` tab:
+
+```text
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+CORS_ALLOWED_ORIGINS=https://laudable-blessing-production-afd7.up.railway.app
+ASPNETCORE_ENVIRONMENT=Production
+```
+
+If your Railway PostgreSQL service is not named `Postgres`, replace the service name. Example:
+
+```text
+DATABASE_URL=${{PostgreSQL.DATABASE_URL}}
+```
+
+Railway supports adding variables with `New Variable` or pasting `.env` style values in the `RAW Editor`.
+
+`backend/Books.Api/.env.example` is only a template. Railway uses the variables configured in the service.
+
+### Frontend Railway Variables
+
+No required variables right now.
+
+The production API URL is currently configured at build time in:
+
+```text
+frontend/books-ui/src/environments/environment.prod.ts
+```
+
+Frontend service does not need `DATABASE_URL`.
+
+Angular frontend environment values are build-time values. Do not assume the browser can read Railway runtime variables after the app has been built.
+
+### Frontend Production Start
+
+The frontend production start command must not use `ng serve`.
+
+Current scripts:
+
+```json
+{
+  "dev": "ng serve",
+  "build": "ng build --configuration production",
+  "start": "node scripts/serve.mjs"
+}
+```
+
+The project also includes a Dockerfile that builds Angular and serves:
+
+```text
+/app/dist/books-ui/browser
+```
+
+with nginx.
 
 ## Seed Data
 

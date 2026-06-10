@@ -8,6 +8,10 @@
 .env.*
 !**/.env.example
 appsettings.Production.json
+node_modules
+dist
+bin
+obj
 *.db
 *.db-shm
 *.db-wal

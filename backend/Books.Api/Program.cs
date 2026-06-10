@@ -7,6 +7,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 DotEnv.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
 var connectionString = DatabaseConnection.GetDatabaseConnectionString(builder.Configuration);
+var allowedOrigins = Environment
+    .GetEnvironmentVariable("CORS_ALLOWED_ORIGINS")?
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    ?? new[] { "http://localhost:4200" };
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
@@ -14,8 +18,8 @@ builder.Services.AddScoped<JournalService>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAngularDevClient", policy =>
-        policy.WithOrigins("http://localhost:4200", "http://127.0.0.1:4200")
+    options.AddPolicy("AllowFrontend", policy =>
+        policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod());
 });
@@ -40,7 +44,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseHttpsRedirection();
-app.UseCors("AllowAngularDevClient");
+app.UseCors("AllowFrontend");
 app.UseAuthorization();
 app.MapControllers();
 app.Run();
