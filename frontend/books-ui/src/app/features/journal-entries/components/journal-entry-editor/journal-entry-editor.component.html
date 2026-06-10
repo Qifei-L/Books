@@ -1,0 +1,156 @@
+<section class="journal-editor">
+  <header class="editor-toolbar">
+    <div>
+      <p class="eyebrow">Journal Entry</p>
+      <h1>{{ title }}</h1>
+      <p class="ledger-name" *ngIf="ledgerName">{{ ledgerName }}</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="secondary" (click)="cancel.emit()">Back</button>
+      <button type="button" (click)="submitDraft()" [disabled]="!canSaveDraft || loading">
+        Save Draft
+      </button>
+      <button
+        type="button"
+        class="accent"
+        (click)="submitPost()"
+        [disabled]="!canPost || loading"
+        [title]="postReasons.join(', ')"
+      >
+        Post
+      </button>
+    </div>
+  </header>
+
+  <section class="journal-header-card">
+    <div class="header-grid">
+      <label>
+        Journal No
+        <input
+          [(ngModel)]="journalNo"
+          name="journalNo"
+          placeholder="Auto generated if empty"
+          [disabled]="posted || loading"
+        />
+      </label>
+      <label>
+        Entry Date
+        <input type="date" [(ngModel)]="entryDate" name="entryDate" [disabled]="posted || loading" />
+      </label>
+      <div class="status-field">
+        <span>Status</span>
+        <span class="status-badge" [class.posted]="status === 'Posted'" [class.voided]="status === 'Voided'">
+          {{ status }}
+        </span>
+      </div>
+    </div>
+    <label class="description-field">
+      Description
+      <input
+        [(ngModel)]="description"
+        name="description"
+        placeholder="Memo or reference"
+        [disabled]="posted || loading"
+      />
+    </label>
+  </section>
+
+  <section class="journal-lines-card">
+    <div class="table-wrap">
+      <table class="lines-table">
+        <thead>
+          <tr>
+            <th class="line-no">#</th>
+            <th>Account</th>
+            <th>Description</th>
+            <th class="amount-column">Debit</th>
+            <th class="amount-column">Credit</th>
+            <th class="action-column">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let line of lines; let i = index; trackBy: trackLine" [class.muted-line]="lineState(line) === 'muted'" [class.attention-line]="lineState(line) === 'attention'">
+            <td class="line-no">{{ i + 1 }}</td>
+            <td>
+              <select [(ngModel)]="line.accountId" [name]="'account' + i" [disabled]="posted || loading">
+                <option [ngValue]="0">Select account</option>
+                <option *ngFor="let account of activeAccounts" [ngValue]="account.id">
+                  {{ accountLabel(account) }}
+                </option>
+              </select>
+            </td>
+            <td>
+              <input
+                [(ngModel)]="line.description"
+                [name]="'description' + i"
+                placeholder="Line memo"
+                [disabled]="posted || loading"
+              />
+            </td>
+            <td>
+              <input
+                class="amount-input"
+                type="number"
+                min="0"
+                step="0.01"
+                [(ngModel)]="line.debit"
+                (ngModelChange)="onDebitChange(line)"
+                [name]="'debit' + i"
+                [disabled]="posted || loading"
+              />
+            </td>
+            <td>
+              <input
+                class="amount-input"
+                type="number"
+                min="0"
+                step="0.01"
+                [(ngModel)]="line.credit"
+                (ngModelChange)="onCreditChange(line)"
+                [name]="'credit' + i"
+                [disabled]="posted || loading"
+              />
+            </td>
+            <td class="action-cell">
+              <button
+                type="button"
+                class="remove-line"
+                (click)="removeLine(i)"
+                [disabled]="posted || loading || lines.length <= 2"
+                title="Remove line"
+              >
+                Remove
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="line-footer">
+      <button type="button" class="secondary add-line" (click)="addLine()" [disabled]="posted || loading">
+        Add Line
+      </button>
+      <p class="draft-note" *ngIf="draftNote">{{ draftNote }}</p>
+      <p class="post-note" *ngIf="postReasons.length && !posted">
+        {{ postReasons.join(' · ') }}
+      </p>
+    </div>
+
+    <footer class="summary-bar" [class.summary-balanced]="isBalanced" [class.summary-unbalanced]="!isBalanced">
+      <div>
+        <span>Debit Total</span>
+        <strong>{{ debitTotal | number:'1.2-2' }}</strong>
+      </div>
+      <div>
+        <span>Credit Total</span>
+        <strong>{{ creditTotal | number:'1.2-2' }}</strong>
+      </div>
+      <div>
+        <span>Difference</span>
+        <strong>{{ difference | number:'1.2-2' }}</strong>
+      </div>
+      <strong class="balance-state">{{ isBalanced ? 'Balanced' : 'Not balanced' }}</strong>
+    </footer>
+  </section>
+</section>

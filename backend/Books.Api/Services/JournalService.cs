@@ -9,8 +9,8 @@ public class JournalService(AppDbContext db)
 {
     public async Task<JournalEntry> CreateAsync(int ledgerId, CreateJournalEntryDto dto)
     {
-        var entry = Map(ledgerId, dto);
-        ValidateLines(entry);
+        var entry = await MapAsync(ledgerId, dto);
+        ValidateLines(entry, requireBalanced: false, minimumLineCount: 1);
         await ValidateLineAccountsBelongToLedgerAsync(entry);
         db.JournalEntries.Add(entry);
         await db.SaveChangesAsync();
@@ -38,7 +38,7 @@ public class JournalService(AppDbContext db)
             return (false, "Posted journal entries cannot be modified.", entry);
         }
 
-        entry.JournalNo = dto.JournalNo.Trim();
+        entry.JournalNo = await NormalizeJournalNoAsync(entry.LedgerId, dto.JournalNo, entry.Id);
         entry.EntryDate = dto.EntryDate;
         entry.Description = dto.Description?.Trim() ?? string.Empty;
         entry.Lines.Clear();
@@ -53,7 +53,7 @@ public class JournalService(AppDbContext db)
             });
         }
 
-        ValidateLines(entry);
+        ValidateLines(entry, requireBalanced: false, minimumLineCount: 1);
         await ValidateLineAccountsBelongToLedgerAsync(entry);
         await db.SaveChangesAsync();
         return (true, null, await GetAsync(id));
@@ -72,7 +72,7 @@ public class JournalService(AppDbContext db)
             return (false, "Journal entry has already been posted.", entry);
         }
 
-        ValidateLines(entry);
+        ValidateLines(entry, requireBalanced: true, minimumLineCount: 2);
         await ValidateLineAccountsBelongToLedgerAsync(entry);
         entry.Status = JournalStatus.Posted;
         await db.SaveChangesAsync();
@@ -97,12 +97,12 @@ public class JournalService(AppDbContext db)
         return (true, null);
     }
 
-    private static JournalEntry Map(int ledgerId, CreateJournalEntryDto dto)
+    private async Task<JournalEntry> MapAsync(int ledgerId, CreateJournalEntryDto dto)
     {
         return new JournalEntry
         {
             LedgerId = ledgerId,
-            JournalNo = dto.JournalNo.Trim(),
+            JournalNo = await NormalizeJournalNoAsync(ledgerId, dto.JournalNo),
             EntryDate = dto.EntryDate,
             Description = dto.Description?.Trim() ?? string.Empty,
             Status = JournalStatus.Draft,
@@ -114,6 +114,34 @@ public class JournalService(AppDbContext db)
                 Description = line.Description?.Trim() ?? string.Empty
             }).ToList()
         };
+    }
+
+    private async Task<string> NormalizeJournalNoAsync(int ledgerId, string journalNo, int? currentEntryId = null)
+    {
+        var trimmed = journalNo.Trim();
+        return string.IsNullOrWhiteSpace(trimmed)
+            ? await GenerateJournalNoAsync(ledgerId, currentEntryId)
+            : trimmed;
+    }
+
+    private async Task<string> GenerateJournalNoAsync(int ledgerId, int? currentEntryId)
+    {
+        var nextNumber = await db.JournalEntries.CountAsync(x => x.LedgerId == ledgerId) + 1;
+        while (true)
+        {
+            var journalNo = $"JV-{nextNumber:000000}";
+            var exists = await db.JournalEntries.AnyAsync(x =>
+                x.LedgerId == ledgerId
+                && x.JournalNo == journalNo
+                && (!currentEntryId.HasValue || x.Id != currentEntryId.Value));
+
+            if (!exists)
+            {
+                return journalNo;
+            }
+
+            nextNumber++;
+        }
     }
 
     private async Task ValidateLineAccountsBelongToLedgerAsync(JournalEntry entry)
@@ -135,11 +163,13 @@ public class JournalService(AppDbContext db)
         }
     }
 
-    private static void ValidateLines(JournalEntry entry)
+    private static void ValidateLines(JournalEntry entry, bool requireBalanced, int minimumLineCount)
     {
-        if (entry.Lines.Count < 2)
+        if (entry.Lines.Count < minimumLineCount)
         {
-            throw new InvalidOperationException("A journal entry must have at least two lines.");
+            throw new InvalidOperationException(minimumLineCount == 1
+                ? "A journal entry must have at least one line."
+                : "A journal entry must have at least two lines.");
         }
 
         foreach (var line in entry.Lines)
@@ -160,11 +190,14 @@ public class JournalService(AppDbContext db)
             }
         }
 
-        var totalDebit = entry.Lines.Sum(x => x.Debit);
-        var totalCredit = entry.Lines.Sum(x => x.Credit);
-        if (totalDebit != totalCredit)
+        if (requireBalanced)
         {
-            throw new InvalidOperationException("Total Debit must equal Total Credit.");
+            var totalDebit = entry.Lines.Sum(x => x.Debit);
+            var totalCredit = entry.Lines.Sum(x => x.Credit);
+            if (totalDebit != totalCredit)
+            {
+                throw new InvalidOperationException("Total Debit must equal Total Credit.");
+            }
         }
     }
 }
