@@ -48,6 +48,13 @@ export interface JournalEntrySummary {
   totalCredit: number;
 }
 
+export interface JournalEntryFilter {
+  search?: string;
+  from?: string;
+  to?: string;
+  status?: JournalStatus | 'All' | '';
+}
+
 export interface TrialBalanceRow {
   accountCode: string;
   accountName: string;

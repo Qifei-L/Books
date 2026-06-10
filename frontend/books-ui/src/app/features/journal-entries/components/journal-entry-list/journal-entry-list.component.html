@@ -1,0 +1,98 @@
+<section class="journal-list-page">
+  <div class="journal-filter-bar">
+    <div class="filters">
+      <label class="search-field">
+        Search
+        <input
+          [(ngModel)]="filter.search"
+          name="journalSearch"
+          placeholder="Journal No or Description"
+          (keyup.enter)="applyFilter()"
+        />
+      </label>
+      <label>
+        From
+        <input type="date" [(ngModel)]="filter.from" name="fromDate" />
+      </label>
+      <label>
+        To
+        <input type="date" [(ngModel)]="filter.to" name="toDate" />
+      </label>
+      <label>
+        Status
+        <select [(ngModel)]="filter.status" name="status">
+          <option *ngFor="let status of statuses" [ngValue]="status">{{ status }}</option>
+        </select>
+      </label>
+      <button type="button" (click)="applyFilter()">Search</button>
+      <button type="button" class="secondary" (click)="clearFilter()">Clear</button>
+    </div>
+    <button type="button" class="new-entry" (click)="create.emit()">New Journal Entry</button>
+  </div>
+
+  <section class="journal-table-card">
+    <div class="error-state" *ngIf="error">
+      <strong>Unable to load journal entries.</strong>
+      <span>{{ error }}</span>
+      <button type="button" class="secondary" (click)="retry.emit()">Retry</button>
+    </div>
+
+    <table class="journal-table" *ngIf="!error">
+      <thead>
+        <tr>
+          <th>Journal No</th>
+          <th>Date</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th class="amount-cell">Debit</th>
+          <th class="amount-cell">Credit</th>
+          <th class="amount-cell">Difference</th>
+          <th class="actions-cell">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngIf="loading">
+          <td colspan="8" class="loading-row">Loading journal entries...</td>
+        </tr>
+        <tr *ngFor="let entry of filteredEntries; trackBy: trackEntry">
+          <td>
+            <button type="button" class="journal-link" (click)="view.emit(entry)">
+              {{ entry.journalNo }}
+            </button>
+          </td>
+          <td>{{ formatDate(entry.entryDate) }}</td>
+          <td class="description-cell" [title]="entry.description">{{ entry.description }}</td>
+          <td>
+            <span class="status-badge" [ngClass]="statusClass(entry.status)">{{ entry.status }}</span>
+          </td>
+          <td class="amount-cell">{{ entry.totalDebit | number:'1.2-2' }}</td>
+          <td class="amount-cell">{{ entry.totalCredit | number:'1.2-2' }}</td>
+          <td class="amount-cell" [class.difference-warning]="!isBalanced(entry)">
+            {{ difference(entry) | number:'1.2-2' }}
+          </td>
+          <td class="actions-cell">
+            <button type="button" class="text-action" (click)="entry.status === 'Draft' ? edit.emit(entry) : view.emit(entry)">
+              {{ actionLabel(entry) }}
+            </button>
+            <button
+              type="button"
+              class="text-action post-action"
+              *ngIf="entry.status === 'Draft'"
+              (click)="post.emit(entry)"
+              [disabled]="!canPost(entry)"
+              [title]="canPost(entry) ? 'Post journal entry' : 'Not balanced'"
+            >
+              Post
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="empty-state" *ngIf="!error && !loading && !hasEntries">
+      <strong>No journal entries yet.</strong>
+      <span>Create your first journal entry.</span>
+      <button type="button" (click)="create.emit()">New Journal Entry</button>
+    </div>
+  </section>
+</section>

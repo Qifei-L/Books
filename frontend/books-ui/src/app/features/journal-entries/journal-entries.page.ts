@@ -1,13 +1,15 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
-import { Router, RouterLink, ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { JournalApiService } from '../../core/api/journal-api.service';
-import { JournalEntrySummary } from '../../core/api/models';
+import { JournalEntryFilter, JournalEntrySummary } from '../../core/api/models';
 import { LedgerNavComponent } from '../../shared/ledger-nav.component';
+import { JournalEntryListComponent } from './components/journal-entry-list/journal-entry-list.component';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, RouterLink, LedgerNavComponent],
+  imports: [CommonModule, LedgerNavComponent, JournalEntryListComponent],
   template: `
     <main class="page">
       <app-ledger-nav [ledgerId]="ledgerId" />
@@ -16,38 +18,28 @@ import { LedgerNavComponent } from '../../shared/ledger-nav.component';
           <p class="eyebrow">Journal Entries</p>
           <h1>Entries</h1>
         </div>
-        <button type="button" (click)="newEntry()">New Journal Entry</button>
       </header>
 
-      <section class="panel">
-        <table>
-          <thead>
-            <tr>
-              <th>JournalNo</th><th>EntryDate</th><th>Description</th><th>Status</th>
-              <th class="number">TotalDebit</th><th class="number">TotalCredit</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let entry of entries">
-              <td><a [routerLink]="['/ledgers', ledgerId, 'journal-entries', entry.id]">{{ entry.journalNo }}</a></td>
-              <td>{{ entry.entryDate }}</td>
-              <td>{{ entry.description }}</td>
-              <td><span class="status">{{ entry.status }}</span></td>
-              <td class="number">{{ entry.totalDebit | number:'1.2-2' }}</td>
-              <td class="number">{{ entry.totalCredit | number:'1.2-2' }}</td>
-              <td class="actions">
-                <button type="button" class="secondary" (click)="post(entry)" [disabled]="entry.status === 'Posted'">Post</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
+      <app-journal-entry-list
+        [entries]="entries"
+        [loading]="loading"
+        [error]="error"
+        (create)="newEntry()"
+        (view)="viewEntry($event)"
+        (edit)="editEntry($event)"
+        (post)="postEntry($event)"
+        (filterChange)="applyFilter($event)"
+        (retry)="load()"
+      />
     </main>
   `
 })
 export class JournalEntriesPage implements OnInit {
   ledgerId = 0;
   entries: JournalEntrySummary[] = [];
+  loading = false;
+  error: string | null = null;
+  filter: JournalEntryFilter = {};
 
   constructor(
     private readonly route: ActivatedRoute,
@@ -62,17 +54,46 @@ export class JournalEntriesPage implements OnInit {
   }
 
   load() {
-    this.journalApi.getJournalEntries(this.ledgerId).subscribe((entries) => {
-      this.entries = entries;
-      this.cdr.detectChanges();
+    this.loading = true;
+    this.error = null;
+    this.journalApi.getJournalEntries(this.ledgerId, this.filter).subscribe({
+      next: (entries) => {
+        this.entries = entries;
+        this.loading = false;
+        this.cdr.detectChanges();
+      },
+      error: (response: HttpErrorResponse) => {
+        this.error = response.error?.error ?? 'Unable to load journal entries.';
+        this.loading = false;
+        this.cdr.detectChanges();
+      }
     });
+  }
+
+  applyFilter(filter: JournalEntryFilter) {
+    this.filter = filter;
+    this.load();
   }
 
   newEntry() {
     this.router.navigate(['/ledgers', this.ledgerId, 'journal-entries', 'new']);
   }
 
-  post(entry: JournalEntrySummary) {
-    this.journalApi.postJournalEntry(entry.id).subscribe(() => this.load());
+  viewEntry(entry: JournalEntrySummary) {
+    this.router.navigate(['/ledgers', this.ledgerId, 'journal-entries', entry.id]);
+  }
+
+  editEntry(entry: JournalEntrySummary) {
+    this.viewEntry(entry);
+  }
+
+  postEntry(entry: JournalEntrySummary) {
+    this.journalApi.postJournalEntry(entry.id).subscribe({
+      next: () => this.load(),
+      error: (response: HttpErrorResponse) => {
+        this.error = response.error?.error ?? 'Unable to post journal entry.';
+        this.cdr.detectChanges();
+      }
+    });
   }
 }

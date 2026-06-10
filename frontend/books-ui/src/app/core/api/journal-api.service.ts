@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { environment } from '../../../environments/environment';
-import { JournalEntry, JournalEntrySummary, JournalLine } from './models';
+import { JournalEntry, JournalEntryFilter, JournalEntrySummary, JournalLine } from './models';
 
 export interface SaveJournalEntryRequest {
   journalNo: string;
@@ -16,8 +16,16 @@ export class JournalApiService {
 
   constructor(private readonly http: HttpClient) {}
 
-  getJournalEntries(ledgerId: number) {
-    return this.http.get<JournalEntrySummary[]>(`${this.baseUrl}/ledgers/${ledgerId}/journal-entries`);
+  getJournalEntries(ledgerId: number, filter: Pick<JournalEntryFilter, 'from' | 'to'> = {}) {
+    const params: Record<string, string> = {};
+    if (filter.from) {
+      params['from'] = filter.from;
+    }
+    if (filter.to) {
+      params['to'] = filter.to;
+    }
+
+    return this.http.get<JournalEntrySummary[]>(`${this.baseUrl}/ledgers/${ledgerId}/journal-entries`, { params });
   }
 
   getJournalEntry(id: number) {

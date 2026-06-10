@@ -1,0 +1,173 @@
+.journal-list-page {
+  display: grid;
+  gap: 14px;
+}
+
+.journal-filter-bar {
+  align-items: end;
+  background: #ffffff;
+  border: 1px solid #d9e2e7;
+  border-radius: 8px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.filters {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1.5fr) 140px 140px 140px auto auto;
+}
+
+.new-entry {
+  white-space: nowrap;
+}
+
+.journal-table-card {
+  background: #ffffff;
+  border: 1px solid #d9e2e7;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(21, 35, 44, 0.05);
+  overflow-x: auto;
+}
+
+.journal-table {
+  min-width: 980px;
+}
+
+.journal-table th {
+  background: #f7fafb;
+}
+
+.journal-table th,
+.journal-table td {
+  padding: 10px 12px;
+}
+
+.journal-table tbody tr:hover {
+  background: #f7fbfb;
+}
+
+.journal-link {
+  background: transparent;
+  color: #11615f;
+  font-weight: 800;
+  min-height: auto;
+  padding: 0;
+}
+
+.description-cell {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-badge {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 9px;
+}
+
+.status-draft {
+  background: #e8eef7;
+  color: #2f527f;
+}
+
+.status-posted {
+  background: #e7f3f1;
+  color: #11615f;
+}
+
+.status-voided {
+  background: #f0eeee;
+  color: #7a2f2f;
+}
+
+.amount-cell {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.difference-warning {
+  color: #8a4f15;
+  font-weight: 800;
+}
+
+.actions-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.text-action {
+  background: transparent;
+  color: #11615f;
+  min-height: 28px;
+  padding: 0 6px;
+}
+
+.text-action:disabled {
+  color: #99a6ad;
+  opacity: 1;
+}
+
+.post-action {
+  color: #8a4f15;
+}
+
+.loading-row {
+  color: #697983;
+  font-weight: 700;
+  padding: 18px;
+  text-align: center;
+}
+
+.empty-state,
+.error-state {
+  align-items: center;
+  color: #50606b;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 36px 18px;
+  text-align: center;
+}
+
+.empty-state strong,
+.error-state strong {
+  color: #1f2933;
+  font-size: 18px;
+}
+
+.error-state {
+  color: #8a4f15;
+}
+
+@media (max-width: 900px) {
+  .journal-filter-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .search-field {
+    grid-column: 1 / -1;
+  }
+
+  .new-entry {
+    width: fit-content;
+  }
+}
+
+@media (max-width: 620px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+}
