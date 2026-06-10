@@ -31,7 +31,7 @@ Supported variables:
 ```text
 DATABASE_URL=
 ConnectionStrings__DefaultConnection=
-CORS_ALLOWED_ORIGINS=http://localhost:4200
+CORS_ALLOWED_ORIGINS=http://localhost:4200,https://laudable-blessing-production-afd7.up.railway.app
 ASPNETCORE_ENVIRONMENT=Development
 ```
 
@@ -69,10 +69,12 @@ Multiple origins are comma-separated:
 CORS_ALLOWED_ORIGINS=http://localhost:4200,https://laudable-blessing-production-afd7.up.railway.app
 ```
 
+Do not include a trailing slash in origins. Use `https://laudable-blessing-production-afd7.up.railway.app`, not `https://laudable-blessing-production-afd7.up.railway.app/`.
+
 If the variable is not set, the backend defaults to:
 
 ```text
-http://localhost:4200
+http://localhost:4200,https://laudable-blessing-production-afd7.up.railway.app
 ```
 
 ## Frontend Configuration

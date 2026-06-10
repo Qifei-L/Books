@@ -7,10 +7,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 DotEnv.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
 var connectionString = DatabaseConnection.GetDatabaseConnectionString(builder.Configuration);
-var allowedOrigins = Environment
-    .GetEnvironmentVariable("CORS_ALLOWED_ORIGINS")?
+var allowedOrigins = (Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS")
+        ?? "http://localhost:4200,https://laudable-blessing-production-afd7.up.railway.app")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-    ?? new[] { "http://localhost:4200" };
+    .Select(origin => origin.TrimEnd('/'))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
