@@ -218,7 +218,31 @@ Books.Api Service:
 /backend
 ```
 
-This repository is a .NET monorepo. Railway config-as-code files have been cleared while the deployment shape is being reset. Configure build and start commands from the Railway service settings until a final deployment strategy is chosen.
+This repository is a .NET monorepo. The backend directory contains `Books.slnx` and `global.json`, so Railway can use `/backend` as the root directory and restore the backend solution before publishing a specific host project.
+
+Books.Blazor build command:
+
+```bash
+dotnet publish Books.Blazor/Books.Blazor.csproj -c Release -o Books.Blazor/out --no-self-contained
+```
+
+Books.Blazor start command:
+
+```bash
+dotnet Books.Blazor/out/Books.Blazor.dll
+```
+
+Books.Api build command:
+
+```bash
+dotnet publish Books.Api/Books.Api.csproj -c Release -o Books.Api/out --no-self-contained
+```
+
+Books.Api start command:
+
+```bash
+dotnet Books.Api/out/Books.Api.dll
+```
 
 Frontend Service:
 

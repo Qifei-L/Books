@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Books.Api/Books.Api.csproj" />
+  <Project Path="Books.Application/Books.Application.csproj" />
+  <Project Path="Books.Blazor/Books.Blazor.csproj" />
+  <Project Path="Books.Domain/Books.Domain.csproj" />
+  <Project Path="Books.Infrastructure/Books.Infrastructure.csproj" />
+</Solution>
