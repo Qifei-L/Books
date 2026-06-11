@@ -1,0 +1,13 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "dotnet publish Books.Blazor/Books.Blazor.csproj -c Release -o Books.Blazor/out --no-self-contained"
+  },
+  "deploy": {
+    "startCommand": "dotnet Books.Blazor/out/Books.Blazor.dll",
+    "healthcheckPath": "/",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}

@@ -209,14 +209,34 @@ Frontend: https://laudable-blessing-production-afd7.up.railway.app
 Books.Blazor Service:
 
 ```text
-/backend/Books.Blazor
+/backend
 ```
 
 Books.Api Service:
 
 ```text
-/backend/Books.Api
+/backend
 ```
+
+This repository is a .NET monorepo. Keep the Railway root directory at `/backend` so project references such as `Books.Application`, `Books.Domain`, and `Books.Infrastructure` are available during publish.
+
+Railway config files:
+
+```text
+Books.Blazor default: /backend/railway.json
+Books.Blazor explicit: /backend/railway.blazor.json
+Books.Api explicit:    /backend/railway.api.json
+```
+
+For the Blazor service, `/backend/railway.json` is enough.
+
+For the API service, set Railway's Config File to:
+
+```text
+/backend/railway.api.json
+```
+
+If Railway is currently trying to run `start.sh`, remove that custom start command from the Railway dashboard or let the config file override it.
 
 Frontend Service:
 

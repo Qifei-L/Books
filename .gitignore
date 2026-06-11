@@ -10,6 +10,7 @@
 appsettings.Production.json
 node_modules
 dist
+out/
 bin
 obj
 *.db
