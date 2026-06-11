@@ -1,0 +1,28 @@
+@inherits LayoutComponentBase
+
+<div class="shell">
+    <aside class="sidebar">
+        <NavMenu />
+    </aside>
+
+    <main class="main">
+        <header class="topbar">
+            <div class="ledger-context">
+                <strong>Demo Ledger</strong>
+                <span>Period 2026-06</span>
+            </div>
+            <input class="top-search" placeholder="Search" />
+            <button class="ghost-button" type="button">User</button>
+        </header>
+
+        <article class="content">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">x</span>
+</div>

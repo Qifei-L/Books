@@ -1,0 +1,167 @@
+@page "/gl/journal-entries"
+@rendermode InteractiveServer
+@inject GeneralLedgerAppService Gl
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <div>
+        <p class="eyebrow">General Ledger</p>
+        <h1>Journal Entries</h1>
+    </div>
+    <button @onclick='() => Nav.NavigateTo("/gl/journal-entries/new")'>New Manual Journal</button>
+</div>
+
+<section class="panel">
+    <div class="tabs">
+        @foreach (var tab in tabs)
+        {
+            <button class="@(activeTab == tab ? "secondary active-tab" : "secondary")" @onclick="() => SetTab(tab)">@tab</button>
+        }
+    </div>
+</section>
+
+<section class="panel">
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="empty warn">@error</div>
+    }
+    @if (loading)
+    {
+        <div class="empty">Loading journal entries...</div>
+    }
+    else if (entries.Count == 0)
+    {
+        <div class="empty">
+            <p>No journal entries yet.</p>
+            <button @onclick='() => Nav.NavigateTo("/gl/journal-entries/new")'>Create first journal entry</button>
+        </div>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Journal No</th>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th class="amount">Debit</th>
+                    <th class="amount">Credit</th>
+                    <th class="amount">Difference</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var entry in entries)
+                {
+                    var difference = entry.TotalDebit - entry.TotalCredit;
+                    <tr>
+                        <td><a href="@($"/gl/journal-entries/{entry.Id}")">@entry.JournalNo</a></td>
+                        <td>@entry.EntryDate.ToString("yyyy-MM-dd")</td>
+                        <td class="truncate">@entry.Description</td>
+                        <td><span class="@StatusClass(entry.Status)">@entry.Status</span></td>
+                        <td class="amount">@entry.TotalDebit.ToString("N2")</td>
+                        <td class="amount">@entry.TotalCredit.ToString("N2")</td>
+                        <td class="amount @(difference == 0 ? "" : "warn")">@difference.ToString("N2")</td>
+                        <td class="actions">
+                            @if (entry.Status == JournalStatus.Draft)
+                            {
+                                <button class="text-button" @onclick="() => OpenEntry(entry.Id)">Edit</button>
+                                <button class="text-button" disabled="@(difference != 0)" title="@(difference == 0 ? "Post" : "Not balanced")" @onclick="() => Post(entry.Id)">Post</button>
+                                <button class="text-button" @onclick="() => Delete(entry.Id)">Delete</button>
+                            }
+                            else if (entry.Status == JournalStatus.Posted)
+                            {
+                                <button class="text-button" @onclick="() => OpenEntry(entry.Id)">View</button>
+                                <button class="text-button" @onclick="() => Reverse(entry.Id)">Reverse</button>
+                            }
+                            else
+                            {
+                                <button class="text-button" @onclick="() => OpenEntry(entry.Id)">View</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    private readonly string[] tabs = ["All", "Draft", "Posted", "Reversed", "Manual"];
+    private List<JournalEntryListDto> entries = [];
+    private bool loading = true;
+    private string activeTab = "All";
+    private string? error;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task SetTab(string tab)
+    {
+        activeTab = tab;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        error = null;
+        JournalStatus? status = activeTab switch
+        {
+            "Draft" => JournalStatus.Draft,
+            "Posted" => JournalStatus.Posted,
+            "Reversed" => JournalStatus.Reversed,
+            _ => null
+        };
+        entries = await Gl.GetJournalEntriesAsync(status);
+        loading = false;
+    }
+
+    private void OpenEntry(int id) => Nav.NavigateTo($"/gl/journal-entries/{id}");
+
+    private async Task Post(int id)
+    {
+        try
+        {
+            await Gl.PostJournalAsync(id);
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private async Task Reverse(int id)
+    {
+        try
+        {
+            await Gl.ReversePostedJournalAsync(id);
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private async Task Delete(int id)
+    {
+        try
+        {
+            await Gl.DeleteDraftJournalAsync(id);
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private static string StatusClass(JournalStatus status) => status switch
+    {
+        JournalStatus.Posted => "badge badge-posted",
+        JournalStatus.Reversed => "badge badge-reversed",
+        _ => "badge badge-draft"
+    };
+}

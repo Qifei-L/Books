@@ -1,12 +1,18 @@
-using Books.Api.Data;
-using Books.Api.Services;
+using Books.Application;
+using Books.Infrastructure;
+using Books.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 DotEnv.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
-var connectionString = DatabaseConnection.GetDatabaseConnectionString(builder.Configuration);
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 var allowedOrigins = (Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS")
         ?? "http://localhost:4200,https://laudable-blessing-production-afd7.up.railway.app")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -14,10 +20,8 @@ var allowedOrigins = (Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS")
     .Distinct(StringComparer.OrdinalIgnoreCase)
     .ToArray();
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
-builder.Services.AddScoped<JournalService>();
-builder.Services.AddScoped<ReportService>();
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>

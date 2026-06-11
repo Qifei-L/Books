@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/Books.Api/Books.Api.csproj" />
+    <Project Path="backend/Books.Application/Books.Application.csproj" />
+    <Project Path="backend/Books.Blazor/Books.Blazor.csproj" />
+    <Project Path="backend/Books.Domain/Books.Domain.csproj" />
+    <Project Path="backend/Books.Infrastructure/Books.Infrastructure.csproj" />
+  </Folder>
+</Solution>

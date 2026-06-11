@@ -1,0 +1,53 @@
+@page "/setup/numbering-rules"
+@rendermode InteractiveServer
+@inject GeneralLedgerAppService Gl
+
+<div class="page-header">
+    <div>
+        <p class="eyebrow">Setup</p>
+        <h1>Numbering Rules</h1>
+    </div>
+</div>
+
+@if (rule is null)
+{
+    <div class="panel empty">Loading numbering rules...</div>
+}
+else
+{
+    <section class="panel">
+        <table>
+            <thead>
+                <tr>
+                    <th>Document Type</th>
+                    <th>Prefix</th>
+                    <th>Date Format</th>
+                    <th>Padding</th>
+                    <th>Separator</th>
+                    <th>Reset</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>@rule.DocumentType</td>
+                    <td>@rule.Prefix</td>
+                    <td>@rule.DateFormat</td>
+                    <td>@rule.PaddingLength</td>
+                    <td>@rule.Separator</td>
+                    <td>@(rule.ResetMonthly ? "Monthly" : rule.ResetYearly ? "Yearly" : "Never")</td>
+                    <td><span class="@(rule.IsActive ? "badge badge-active" : "badge badge-inactive")">@(rule.IsActive ? "Active" : "Inactive")</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+}
+
+@code {
+    private NumberingRuleDto? rule;
+
+    protected override async Task OnInitializedAsync()
+    {
+        rule = await Gl.GetJournalNumberingRuleAsync();
+    }
+}

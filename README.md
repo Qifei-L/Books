@@ -1,16 +1,23 @@
 # Books
 
-Books is a minimal general ledger MVP with an ASP.NET Core Web API backend, Angular frontend, PostgreSQL database, and Entity Framework Core.
+Books is a minimal general ledger MVP with an ASP.NET Core Web API, a Blazor Server back-office UI, an Angular frontend, PostgreSQL, and Entity Framework Core.
 
 ## Project Structure
 
 ```text
 /
+|-- Books.slnx
 |-- backend
-|   `-- Books.Api
+|   |-- Books.Domain
+|   |-- Books.Application
+|   |-- Books.Infrastructure
+|   |-- Books.Api
+|   `-- Books.Blazor
 `-- frontend
     `-- books-ui
 ```
+
+The API and Blazor UI share the same Domain, Application, and Infrastructure projects. Business rules should live in Application services, not in UI pages.
 
 ## Environments
 
@@ -24,6 +31,7 @@ Template:
 
 ```text
 backend/Books.Api/.env.example
+backend/Books.Blazor/.env.example
 ```
 
 Supported variables:
@@ -39,7 +47,7 @@ Database connection priority:
 
 1. `DATABASE_URL`
 2. `ConnectionStrings__DefaultConnection`
-3. `ConnectionStrings:DefaultConnection` in `appsettings.json`
+3. `ConnectionStrings:DefaultConnection` in `appsettings.Development.json` or `appsettings.json`
 
 Railway PostgreSQL usually provides a URL like:
 
@@ -47,13 +55,29 @@ Railway PostgreSQL usually provides a URL like:
 postgresql://user:password@host:port/database
 ```
 
-The backend converts `postgresql://` and `postgres://` URLs to the Npgsql format automatically:
+Books.Api and Books.Blazor both use the shared `Books.Infrastructure` database configuration. `DATABASE_URL` and `ConnectionStrings__DefaultConnection` both support `postgresql://` and `postgres://` URLs and convert them to the Npgsql format automatically:
 
 ```text
 Host=...;Port=...;Database=...;Username=...;Password=...;SSL Mode=Require;Trust Server Certificate=true
 ```
 
-The backend uses `UseNpgsql`, not SQLite.
+The backend and Blazor UI use `UseNpgsql`, not SQLite.
+
+`appsettings.json` contains only local development placeholders. Put real Railway or production values in environment variables.
+
+Local development appsettings example:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=books_dev;Username=postgres;Password=postgres"
+  },
+  "App": {
+    "BaseCurrency": "USD",
+    "DefaultLedgerName": "Demo Ledger"
+  }
+}
+```
 
 ### Backend CORS
 
@@ -127,6 +151,22 @@ dotnet run
 
 The backend runs EF Core migrations and idempotent seed data on startup during the current MVP stage.
 
+Blazor back-office UI:
+
+```powershell
+cd C:\Users\User\Desktop\Books\backend\Books.Blazor
+dotnet restore
+dotnet run
+```
+
+Open the URL printed by `dotnet run`, usually:
+
+```text
+https://localhost:5001
+```
+
+Books.Blazor connects to PostgreSQL directly through the shared Infrastructure project. It does not require Books.Api to be running. The Angular frontend still requires Books.Api.
+
 Frontend:
 
 ```powershell
@@ -166,7 +206,13 @@ Frontend: https://laudable-blessing-production-afd7.up.railway.app
 
 ### Railway Root Directory
 
-Backend Service:
+Books.Blazor Service:
+
+```text
+/backend/Books.Blazor
+```
+
+Books.Api Service:
 
 ```text
 /backend/Books.Api
@@ -184,7 +230,13 @@ PostgreSQL:
 No public domain required
 ```
 
-Backend:
+Books.Blazor:
+
+```text
+Public domain required
+```
+
+Books.Api:
 
 ```text
 Public domain required
@@ -196,15 +248,52 @@ Frontend:
 Public domain required
 ```
 
-### Backend Railway Variables
+### Books.Blazor Railway Variables
 
-Set these in the Backend Service `Variables` tab:
+Set these in the Books.Blazor service `Variables` tab:
+
+```text
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+ASPNETCORE_ENVIRONMENT=Production
+```
+
+Alternative database variable:
+
+```text
+ConnectionStrings__DefaultConnection=${{Postgres.DATABASE_URL}}
+```
+
+Optional:
+
+```text
+ASPNETCORE_URLS=http://+:${PORT}
+```
+
+Books.Blazor also reads Railway's `PORT` variable directly in `Program.cs`, so `ASPNETCORE_URLS` is optional.
+
+### Books.Api Railway Variables
+
+Set these in the Books.Api service `Variables` tab:
 
 ```text
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 CORS_ALLOWED_ORIGINS=https://laudable-blessing-production-afd7.up.railway.app
 ASPNETCORE_ENVIRONMENT=Production
 ```
+
+Alternative database variable:
+
+```text
+ConnectionStrings__DefaultConnection=${{Postgres.DATABASE_URL}}
+```
+
+Optional:
+
+```text
+ASPNETCORE_URLS=http://+:${PORT}
+```
+
+Books.Api also reads Railway's `PORT` variable directly in `Program.cs`, so `ASPNETCORE_URLS` is optional.
 
 If your Railway PostgreSQL service is not named `Postgres`, replace the service name. Example:
 

@@ -1,0 +1,63 @@
+@page "/reports/trial-balance"
+@rendermode InteractiveServer
+@inject GeneralLedgerAppService Gl
+
+<div class="page-header">
+    <div>
+        <p class="eyebrow">Reports</p>
+        <h1>Trial Balance</h1>
+    </div>
+    <button class="secondary" @onclick="Load">Refresh</button>
+</div>
+
+<section class="panel">
+    @if (loading)
+    {
+        <div class="empty">Loading trial balance...</div>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th>Name</th>
+                    <th class="amount">Debit</th>
+                    <th class="amount">Credit</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in rows)
+                {
+                    <tr>
+                        <td>@row.AccountCode</td>
+                        <td>@row.AccountName</td>
+                        <td class="amount">@row.Debit.ToString("N2")</td>
+                        <td class="amount">@row.Credit.ToString("N2")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="2">Total</th>
+                    <th class="amount">@rows.Sum(x => x.Debit).ToString("N2")</th>
+                    <th class="amount">@rows.Sum(x => x.Credit).ToString("N2")</th>
+                </tr>
+            </tfoot>
+        </table>
+    }
+</section>
+
+@code {
+    private List<TrialBalanceRowDto> rows = [];
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        rows = await Gl.GetTrialBalanceAsync();
+        loading = false;
+    }
+}

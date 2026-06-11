@@ -1,5 +1,5 @@
-using Books.Api.DTOs;
-using Books.Api.Services;
+using Books.Application.DTOs;
+using Books.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Books.Api.Controllers;

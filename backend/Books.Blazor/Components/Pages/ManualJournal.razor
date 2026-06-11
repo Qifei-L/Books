@@ -1,0 +1,281 @@
+@page "/gl/journal-entries/new"
+@page "/gl/journal-entries/{Id:int}"
+@rendermode InteractiveServer
+@inject GeneralLedgerAppService Gl
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <div>
+        <p class="eyebrow">Manual Journal</p>
+        <h1>@(Id.HasValue ? "Journal Entry Detail" : "New Journal Entry")</h1>
+    </div>
+    <div class="actions-row compact">
+        <button class="secondary" @onclick="Back">Back</button>
+        @if (CanEdit)
+        {
+            <button class="secondary" disabled="@(!CanSaveDraft)" @onclick="SaveDraft">Save Draft</button>
+            <button disabled="@(!CanPost)" title="@PostHint" @onclick="Post">Post</button>
+        }
+    </div>
+</div>
+
+@if (loading)
+{
+    <div class="panel empty">Loading journal entry...</div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="panel warn">@error</div>
+    }
+
+    <section class="panel">
+        <div class="form-grid">
+            <label>Journal No
+                <input placeholder="Auto generated if empty" disabled="@(!CanEdit)" @bind="model.JournalNo" />
+            </label>
+            <label>Entry Date
+                <input type="date" disabled="@(!CanEdit)" value="@model.EntryDate.ToString("yyyy-MM-dd")" @onchange="SetEntryDate" />
+            </label>
+            <label>Status
+                <span class="@StatusClass(status)">@status</span>
+            </label>
+            <label>Currency
+                <input disabled value="@model.Currency" />
+            </label>
+            <label>Exchange Rate
+                <input class="amount" type="number" step="0.0001" min="0" disabled="@(!CanEdit)" @bind="model.ExchangeRate" />
+            </label>
+            <label class="wide">Description
+                <input disabled="@(!CanEdit)" @bind="model.Description" />
+            </label>
+        </div>
+    </section>
+
+    <section class="panel">
+        <table>
+            <thead>
+                <tr>
+                    <th class="number">#</th>
+                    <th>Account</th>
+                    <th>Description</th>
+                    <th>Currency</th>
+                    <th>Direction</th>
+                    <th class="amount">Amount</th>
+                    <th class="amount">Base Amount</th>
+                    <th class="actions">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (var i = 0; i < model.Lines.Count; i++)
+                {
+                    var line = model.Lines[i];
+                    <tr>
+                        <td class="number">@(i + 1)</td>
+                        <td>
+                            <select disabled="@(!CanEdit)" @bind="line.AccountId">
+                                <option value="0">Select account</option>
+                                @foreach (var account in accounts)
+                                {
+                                    <option value="@account.Id">@account.Code - @account.Name</option>
+                                }
+                            </select>
+                        </td>
+                        <td><input disabled="@(!CanEdit)" @bind="line.Description" /></td>
+                        <td><input disabled value="@model.Currency" /></td>
+                        <td>
+                            <select disabled="@(!CanEdit)" @bind="line.Direction">
+                                <option>Debit</option>
+                                <option>Credit</option>
+                            </select>
+                        </td>
+                        <td><input class="amount" type="number" min="0" step="0.01" disabled="@(!CanEdit)" @bind="line.Amount" @bind:after="() => SyncBaseAmount(line)" /></td>
+                        <td><input class="amount" type="number" min="0" step="0.01" disabled="@(!CanEdit)" @bind="line.BaseAmount" /></td>
+                        <td class="actions">
+                            @if (CanEdit && model.Lines.Count > 2)
+                            {
+                                <button class="text-button" @onclick="() => RemoveLine(line)">Remove</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (CanEdit)
+        {
+            <div class="actions-row">
+                <button class="secondary" @onclick="AddLine">Add Line</button>
+            </div>
+        }
+
+        <div class="summary-bar @(IsBalanced ? "summary-balanced" : "summary-unbalanced")">
+            <strong>@(IsBalanced ? "Balanced" : "Not balanced")</strong>
+            <span>Debit Total: @DebitTotal.ToString("N2")</span>
+            <span>Credit Total: @CreditTotal.ToString("N2")</span>
+            <span>Difference: @Difference.ToString("N2")</span>
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private readonly ManualJournalForm model = new();
+    private List<Account> accounts = [];
+    private JournalStatus status = JournalStatus.Draft;
+    private bool loading = true;
+    private string? error;
+
+    private bool CanEdit => status == JournalStatus.Draft;
+    private decimal DebitTotal => model.Lines.Where(x => x.Direction == "Debit").Sum(x => x.BaseAmount);
+    private decimal CreditTotal => model.Lines.Where(x => x.Direction == "Credit").Sum(x => x.BaseAmount);
+    private decimal Difference => DebitTotal - CreditTotal;
+    private bool IsBalanced => Difference == 0;
+    private int ValidLineCount => model.Lines.Count(IsLineValid);
+    private bool CanSaveDraft => model.Lines.Any(x => x.AccountId > 0 || x.Amount > 0 || !string.IsNullOrWhiteSpace(x.Description));
+    private bool CanPost => CanSaveDraft && ValidLineCount >= 2 && IsBalanced && model.Lines.All(IsLineValidOrEmpty);
+    private string PostHint => CanPost ? "Post journal" : ValidLineCount < 2 ? "Need at least two valid lines" : !IsBalanced ? "Not balanced" : "Missing account or invalid line";
+
+    protected override async Task OnInitializedAsync()
+    {
+        accounts = (await Gl.GetAccountsAsync(null, null, true)).ToList();
+        if (Id.HasValue)
+        {
+            var entry = await Gl.GetJournalEntryAsync(Id.Value);
+            if (entry is null)
+            {
+                error = "Journal entry not found.";
+            }
+            else
+            {
+                status = entry.Status;
+                model.Id = entry.Id;
+                model.JournalNo = entry.JournalNo;
+                model.EntryDate = entry.EntryDate;
+                model.Description = entry.Description;
+                model.Lines.Clear();
+                foreach (var line in entry.Lines)
+                {
+                    var amount = line.Debit > 0 ? line.Debit : line.Credit;
+                    model.Lines.Add(new ManualJournalLineForm
+                    {
+                        AccountId = line.AccountId,
+                        Direction = line.Debit > 0 ? "Debit" : "Credit",
+                        Amount = amount,
+                        BaseAmount = amount,
+                        Description = line.Description
+                    });
+                }
+            }
+        }
+
+        EnsureTwoLines();
+        loading = false;
+    }
+
+    private async Task SaveDraft()
+    {
+        try
+        {
+            var saved = await Gl.SaveJournalAsync(ToDto());
+            Nav.NavigateTo($"/gl/journal-entries/{saved.Id}");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private async Task Post()
+    {
+        try
+        {
+            var saved = await Gl.SaveJournalAsync(ToDto());
+            await Gl.PostJournalAsync(saved.Id);
+            Nav.NavigateTo("/gl/journal-entries");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private void SetEntryDate(ChangeEventArgs args)
+    {
+        if (DateTime.TryParse(args.Value?.ToString(), out var value))
+        {
+            model.EntryDate = value;
+        }
+    }
+
+    private void AddLine() => model.Lines.Add(new ManualJournalLineForm());
+
+    private void RemoveLine(ManualJournalLineForm line)
+    {
+        if (model.Lines.Count > 2)
+        {
+            model.Lines.Remove(line);
+        }
+    }
+
+    private void SyncBaseAmount(ManualJournalLineForm line) => line.BaseAmount = Math.Round(line.Amount * model.ExchangeRate, 2);
+
+    private ManualJournalDto ToDto()
+    {
+        var lines = model.Lines
+            .Where(x => !IsLineEmpty(x))
+            .Select(x => new ManualJournalLineDto(x.AccountId, x.Direction, x.Amount, x.BaseAmount, x.Description))
+            .ToList();
+
+        return new ManualJournalDto(model.Id, model.JournalNo, model.EntryDate, model.Period, model.Currency, model.BaseCurrency, model.ExchangeRate, model.Description, lines);
+    }
+
+    private static bool IsLineEmpty(ManualJournalLineForm line) =>
+        line.AccountId == 0 && line.Amount == 0 && string.IsNullOrWhiteSpace(line.Description);
+
+    private static bool IsLineValid(ManualJournalLineForm line) =>
+        line.AccountId > 0 && line.Amount > 0 && line.BaseAmount >= 0 && (line.Direction == "Debit" || line.Direction == "Credit");
+
+    private static bool IsLineValidOrEmpty(ManualJournalLineForm line) => IsLineEmpty(line) || IsLineValid(line);
+
+    private void EnsureTwoLines()
+    {
+        while (model.Lines.Count < 2)
+        {
+            model.Lines.Add(new ManualJournalLineForm());
+        }
+    }
+
+    private void Back() => Nav.NavigateTo("/gl/journal-entries");
+
+    private static string StatusClass(JournalStatus value) => value switch
+    {
+        JournalStatus.Posted => "badge badge-posted",
+        JournalStatus.Reversed => "badge badge-reversed",
+        _ => "badge badge-draft"
+    };
+
+    private sealed class ManualJournalForm
+    {
+        public int? Id { get; set; }
+        public string? JournalNo { get; set; }
+        public DateTime EntryDate { get; set; } = DateTime.Today;
+        public string Period { get; set; } = DateTime.Today.ToString("yyyy-MM");
+        public string Currency { get; set; } = "USD";
+        public string BaseCurrency { get; set; } = "USD";
+        public decimal ExchangeRate { get; set; } = 1;
+        public string? Description { get; set; }
+        public List<ManualJournalLineForm> Lines { get; } = [];
+    }
+
+    private sealed class ManualJournalLineForm
+    {
+        public int AccountId { get; set; }
+        public string Direction { get; set; } = "Debit";
+        public decimal Amount { get; set; }
+        public decimal BaseAmount { get; set; }
+        public string? Description { get; set; }
+    }
+}

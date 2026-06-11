@@ -1,6 +1,6 @@
-using Books.Api.Data;
-using Books.Api.DTOs;
-using Books.Api.Models;
+using Books.Infrastructure.Data;
+using Books.Application.DTOs;
+using Books.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 

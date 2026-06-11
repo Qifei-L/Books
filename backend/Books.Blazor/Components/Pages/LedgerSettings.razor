@@ -1,0 +1,72 @@
+@page "/setup/ledger"
+@rendermode InteractiveServer
+@inject GeneralLedgerAppService Gl
+
+<div class="page-header">
+    <div>
+        <p class="eyebrow">Setup</p>
+        <h1>Ledger Settings</h1>
+    </div>
+    <button disabled="@(!canSave)" @onclick="Save">Save</button>
+</div>
+
+@if (loading)
+{
+    <div class="panel empty">Loading ledger settings...</div>
+}
+else
+{
+    <section class="panel">
+        <div class="form-grid">
+            <label>Ledger Name
+                <input @bind="settings.LedgerName" />
+            </label>
+            <label>Base Currency
+                <input disabled @bind="settings.BaseCurrency" />
+            </label>
+            <label>Current Period
+                <input disabled @bind="settings.CurrentPeriod" />
+            </label>
+            <label>Status
+                <select @bind="settings.IsActive">
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                </select>
+            </label>
+        </div>
+    </section>
+}
+
+@code {
+    private LedgerSettingsForm settings = new();
+    private bool loading = true;
+    private bool canSave => !string.IsNullOrWhiteSpace(settings.LedgerName);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var dto = await Gl.GetLedgerSettingsAsync();
+        settings = new LedgerSettingsForm
+        {
+            LedgerId = dto.LedgerId,
+            LedgerName = dto.LedgerName,
+            BaseCurrency = dto.BaseCurrency,
+            CurrentPeriod = dto.CurrentPeriod,
+            IsActive = dto.IsActive
+        };
+        loading = false;
+    }
+
+    private async Task Save()
+    {
+        await Gl.SaveLedgerSettingsAsync(new LedgerSettingsDto(settings.LedgerId, settings.LedgerName, settings.BaseCurrency, settings.CurrentPeriod, settings.IsActive));
+    }
+
+    private sealed class LedgerSettingsForm
+    {
+        public int LedgerId { get; set; }
+        public string LedgerName { get; set; } = string.Empty;
+        public string BaseCurrency { get; set; } = "USD";
+        public string CurrentPeriod { get; set; } = "2026-06";
+        public bool IsActive { get; set; } = true;
+    }
+}

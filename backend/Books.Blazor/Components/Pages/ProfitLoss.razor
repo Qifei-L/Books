@@ -1,0 +1,62 @@
+@page "/reports/profit-loss"
+@rendermode InteractiveServer
+@inject GeneralLedgerAppService Gl
+
+<div class="page-header">
+    <div>
+        <p class="eyebrow">Reports</p>
+        <h1>Profit & Loss</h1>
+    </div>
+    <button class="secondary" @onclick="Load">Refresh</button>
+</div>
+
+<section class="panel">
+    @if (loading)
+    {
+        <div class="empty">Loading profit and loss...</div>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th class="amount">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in rows)
+                {
+                    <tr>
+                        <td>@row.AccountCode</td>
+                        <td>@row.AccountName</td>
+                        <td>@row.AccountType</td>
+                        <td class="amount">@row.Balance.ToString("N2")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="3">Net Income</th>
+                    <th class="amount">@rows.Sum(x => x.AccountType == AccountType.Expense ? -x.Balance : x.Balance).ToString("N2")</th>
+                </tr>
+            </tfoot>
+        </table>
+    }
+</section>
+
+@code {
+    private List<FinancialStatementRowDto> rows = [];
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        rows = await Gl.GetProfitLossAsync();
+        loading = false;
+    }
+}
