@@ -29,7 +29,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Account>().Property(x => x.Name).HasMaxLength(200).IsRequired();
         modelBuilder.Entity<Account>().Property(x => x.Description).HasMaxLength(500);
         modelBuilder.Entity<Account>().Property(x => x.Type).HasConversion<string>().HasMaxLength(30);
+        modelBuilder.Entity<Account>().Property(x => x.IsSystemReserved).HasDefaultValue(false);
+        modelBuilder.Entity<Account>().Property(x => x.AllowManualJournal).HasDefaultValue(true);
         modelBuilder.Entity<Account>().HasIndex(x => new { x.LedgerId, x.Code }).IsUnique();
+
+        modelBuilder.Entity<Ledger>().Property(x => x.AllowDeletePostedJournal).HasDefaultValue(true);
 
         modelBuilder.Entity<JournalEntry>().Property(x => x.JournalNo).HasMaxLength(50).IsRequired();
         modelBuilder.Entity<JournalEntry>().Property(x => x.EntryDate).HasColumnType("timestamp without time zone");

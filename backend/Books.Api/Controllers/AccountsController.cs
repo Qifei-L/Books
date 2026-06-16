@@ -41,7 +41,9 @@ public class AccountsController(AppDbContext db) : ControllerBase
             Name = dto.Name.Trim(),
             Type = dto.Type,
             Description = dto.Description?.Trim() ?? string.Empty,
-            IsActive = dto.IsActive
+            IsActive = dto.IsActive,
+            IsSystemReserved = false,
+            AllowManualJournal = dto.AllowManualJournal
         };
         db.Accounts.Add(account);
         await db.SaveChangesAsync();
@@ -57,11 +59,16 @@ public class AccountsController(AppDbContext db) : ControllerBase
             return NotFound();
         }
 
-        account.Code = dto.Code.Trim();
+        if (!account.IsSystemReserved)
+        {
+            account.Code = dto.Code.Trim();
+            account.Type = dto.Type;
+        }
+
         account.Name = dto.Name.Trim();
-        account.Type = dto.Type;
         account.Description = dto.Description?.Trim() ?? string.Empty;
         account.IsActive = dto.IsActive;
+        account.AllowManualJournal = dto.AllowManualJournal;
         await db.SaveChangesAsync();
         return NoContent();
     }
@@ -73,6 +80,11 @@ public class AccountsController(AppDbContext db) : ControllerBase
         if (account is null)
         {
             return NotFound();
+        }
+
+        if (account.IsSystemReserved)
+        {
+            return BadRequest(new { error = "System reserved accounts cannot be deleted." });
         }
 
         account.IsActive = false;

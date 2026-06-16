@@ -74,6 +74,7 @@
                             {
                                 <button class="text-button" @onclick="() => OpenEntry(entry.Id)">View</button>
                                 <button class="text-button" @onclick="() => Reverse(entry.Id)">Reverse</button>
+                                <button class="text-button quiet" @onclick="() => Delete(entry.Id)">Void</button>
                             }
                             else
                             {
@@ -88,7 +89,7 @@
 </section>
 
 @code {
-    private readonly string[] tabs = ["All", "Draft", "Posted", "Reversed", "Manual"];
+    private readonly string[] tabs = ["All", "Draft", "Posted", "Reversed", "Voided", "Manual"];
     private List<JournalEntryListDto> entries = [];
     private bool loading = true;
     private string activeTab = "All";
@@ -111,6 +112,7 @@
             "Draft" => JournalStatus.Draft,
             "Posted" => JournalStatus.Posted,
             "Reversed" => JournalStatus.Reversed,
+            "Voided" => JournalStatus.Voided,
             _ => null
         };
         entries = await Gl.GetJournalEntriesAsync(status);
@@ -149,7 +151,7 @@
     {
         try
         {
-            await Gl.DeleteDraftJournalAsync(id);
+            await Gl.DeleteJournalAsync(id);
             await Load();
         }
         catch (Exception ex)
@@ -162,6 +164,7 @@
     {
         JournalStatus.Posted => "badge badge-posted",
         JournalStatus.Reversed => "badge badge-reversed",
+        JournalStatus.Voided => "badge badge-inactive",
         _ => "badge badge-draft"
     };
 }

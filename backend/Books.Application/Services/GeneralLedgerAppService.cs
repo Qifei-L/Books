@@ -20,7 +20,7 @@ public class GeneralLedgerAppService(
             return ledger;
         }
 
-        ledger = new Ledger { Name = "Demo Ledger", IsActive = true };
+        ledger = new Ledger { Name = "Demo Ledger", IsActive = true, AllowDeletePostedJournal = true };
         db.Ledgers.Add(ledger);
         await db.SaveChangesAsync();
         return ledger;
@@ -33,7 +33,7 @@ public class GeneralLedgerAppService(
         var draftCount = await db.JournalEntries.CountAsync(x => x.LedgerId == ledger.Id && x.Status == JournalStatus.Draft);
         var postedCount = await db.JournalEntries.CountAsync(x => x.LedgerId == ledger.Id && x.Status == JournalStatus.Posted);
         var latestEntries = await db.JournalEntries
-            .Where(x => x.LedgerId == ledger.Id)
+            .Where(x => x.LedgerId == ledger.Id && x.Status != JournalStatus.Voided)
             .OrderByDescending(x => x.EntryDate)
             .ThenByDescending(x => x.Id)
             .Take(8)
@@ -71,14 +71,19 @@ public class GeneralLedgerAppService(
     {
         var ledger = await GetDefaultLedgerAsync();
         var entity = account.Id.HasValue
-            ? await db.Accounts.FirstAsync(x => x.Id == account.Id.Value)
-            : new Account { LedgerId = ledger.Id };
+            ? await db.Accounts.FirstAsync(x => x.Id == account.Id.Value && x.LedgerId == ledger.Id)
+            : new Account { LedgerId = ledger.Id, IsSystemReserved = false };
 
-        entity.Code = account.Code.Trim();
+        if (!entity.IsSystemReserved)
+        {
+            entity.Code = account.Code.Trim();
+            entity.Type = account.Type;
+        }
+
         entity.Name = account.Name.Trim();
-        entity.Type = account.Type;
         entity.Description = account.Description?.Trim() ?? string.Empty;
         entity.IsActive = account.IsActive;
+        entity.AllowManualJournal = account.AllowManualJournal;
 
         if (!account.Id.HasValue)
         {
@@ -86,6 +91,15 @@ public class GeneralLedgerAppService(
         }
 
         await db.SaveChangesAsync();
+    }
+
+    public async Task<List<Account>> GetManualJournalAccountsAsync()
+    {
+        var ledger = await GetDefaultLedgerAsync();
+        return await db.Accounts
+            .Where(x => x.LedgerId == ledger.Id && x.IsActive && x.AllowManualJournal)
+            .OrderBy(x => x.Code)
+            .ToListAsync();
     }
 
     public async Task ToggleAccountAsync(int id)
@@ -149,7 +163,7 @@ public class GeneralLedgerAppService(
         }
     }
 
-    public async Task DeleteDraftJournalAsync(int id)
+    public async Task DeleteJournalAsync(int id)
     {
         var result = await journalService.DeleteAsync(id);
         if (!result.Success)
@@ -187,8 +201,8 @@ public class GeneralLedgerAppService(
             }).ToList()
         };
 
-        var saved = await journalService.CreateAsync(original.LedgerId, new CreateJournalEntryDto(reversal.JournalNo, reversal.EntryDate, reversal.Description, reversal.Lines.Select(line => new CreateJournalLineDto(line.AccountId, line.Debit, line.Credit, line.Description)).ToList()));
-        var postResult = await journalService.PostAsync(saved.Id);
+        var saved = await journalService.CreateAsync(original.LedgerId, new CreateJournalEntryDto(reversal.JournalNo, reversal.EntryDate, reversal.Description, reversal.Lines.Select(line => new CreateJournalLineDto(line.AccountId, line.Debit, line.Credit, line.Description)).ToList()), enforceManualJournalAllowed: false);
+        var postResult = await journalService.PostAsync(saved.Id, enforceManualJournalAllowed: false);
         if (!postResult.Success)
         {
             throw new InvalidOperationException(postResult.Error ?? "Unable to post reversal entry.");
@@ -225,7 +239,7 @@ public class GeneralLedgerAppService(
     public async Task<LedgerSettingsDto> GetLedgerSettingsAsync()
     {
         var ledger = await GetDefaultLedgerAsync();
-        return new LedgerSettingsDto(ledger.Id, ledger.Name, "USD", "2026-06", ledger.IsActive);
+        return new LedgerSettingsDto(ledger.Id, ledger.Name, "USD", "2026-06", ledger.IsActive, ledger.AllowDeletePostedJournal);
     }
 
     public async Task SaveLedgerSettingsAsync(LedgerSettingsDto settings)
@@ -233,6 +247,7 @@ public class GeneralLedgerAppService(
         var ledger = await db.Ledgers.FirstAsync(x => x.Id == settings.LedgerId);
         ledger.Name = settings.LedgerName.Trim();
         ledger.IsActive = settings.IsActive;
+        ledger.AllowDeletePostedJournal = settings.AllowDeletePostedJournal;
         await db.SaveChangesAsync();
     }
 
@@ -245,8 +260,8 @@ public class GeneralLedgerAppService(
 
 public record DashboardDto(int LedgerId, string LedgerName, string CurrentPeriod, string BaseCurrency, int AccountsCount, int DraftJournalsCount, int PostedJournalsCount, List<JournalEntryListDto> LatestJournalEntries);
 public record JournalEntryListDto(int Id, string JournalNo, DateTime EntryDate, string Description, JournalStatus Status, decimal TotalDebit, decimal TotalCredit);
-public record AccountEditDto(int? Id, string Code, string Name, AccountType Type, string? Description, bool IsActive);
+public record AccountEditDto(int? Id, string Code, string Name, AccountType Type, string? Description, bool IsActive, bool AllowManualJournal);
 public record ManualJournalDto(int? Id, string? JournalNo, DateTime EntryDate, string Period, string Currency, string BaseCurrency, decimal ExchangeRate, string? Description, List<ManualJournalLineDto> Lines);
 public record ManualJournalLineDto(int AccountId, string Direction, decimal Amount, decimal BaseAmount, string? Description);
-public record LedgerSettingsDto(int LedgerId, string LedgerName, string BaseCurrency, string CurrentPeriod, bool IsActive);
+public record LedgerSettingsDto(int LedgerId, string LedgerName, string BaseCurrency, string CurrentPeriod, bool IsActive, bool AllowDeletePostedJournal);
 public record NumberingRuleDto(string DocumentType, string Prefix, string DateFormat, int PaddingLength, string Separator, bool ResetMonthly, bool ResetYearly, bool IsActive);

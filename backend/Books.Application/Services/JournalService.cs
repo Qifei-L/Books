@@ -8,11 +8,11 @@ namespace Books.Application.Services;
 
 public class JournalService(IAppDbContext db)
 {
-    public async Task<JournalEntry> CreateAsync(int ledgerId, CreateJournalEntryDto dto)
+    public async Task<JournalEntry> CreateAsync(int ledgerId, CreateJournalEntryDto dto, bool enforceManualJournalAllowed = true)
     {
         var entry = await MapAsync(ledgerId, dto);
         ValidateLines(entry, requireBalanced: false, minimumLineCount: 1);
-        await ValidateLineAccountsBelongToLedgerAsync(entry);
+        await ValidateLineAccountsAsync(entry, enforceManualJournalAllowed);
         db.JournalEntries.Add(entry);
         await db.SaveChangesAsync();
         return await GetAsync(entry.Id) ?? entry;
@@ -26,7 +26,7 @@ public class JournalService(IAppDbContext db)
             .FirstOrDefaultAsync(x => x.Id == id);
     }
 
-    public async Task<(bool Success, string? Error, JournalEntry? Entry)> UpdateAsync(int id, CreateJournalEntryDto dto)
+    public async Task<(bool Success, string? Error, JournalEntry? Entry)> UpdateAsync(int id, CreateJournalEntryDto dto, bool enforceManualJournalAllowed = true)
     {
         var entry = await db.JournalEntries.Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == id);
         if (entry is null)
@@ -34,9 +34,9 @@ public class JournalService(IAppDbContext db)
             return (false, "Journal entry not found.", null);
         }
 
-        if (entry.Status == JournalStatus.Posted)
+        if (entry.Status != JournalStatus.Draft)
         {
-            return (false, "Posted journal entries cannot be modified.", entry);
+            return (false, "Only draft journal entries can be modified.", entry);
         }
 
         entry.JournalNo = await NormalizeJournalNoAsync(entry.LedgerId, dto.JournalNo, entry.Id);
@@ -55,12 +55,12 @@ public class JournalService(IAppDbContext db)
         }
 
         ValidateLines(entry, requireBalanced: false, minimumLineCount: 1);
-        await ValidateLineAccountsBelongToLedgerAsync(entry);
+        await ValidateLineAccountsAsync(entry, enforceManualJournalAllowed);
         await db.SaveChangesAsync();
         return (true, null, await GetAsync(id));
     }
 
-    public async Task<(bool Success, string? Error, JournalEntry? Entry)> PostAsync(int id)
+    public async Task<(bool Success, string? Error, JournalEntry? Entry)> PostAsync(int id, bool enforceManualJournalAllowed = true)
     {
         var entry = await db.JournalEntries.Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == id);
         if (entry is null)
@@ -68,13 +68,13 @@ public class JournalService(IAppDbContext db)
             return (false, "Journal entry not found.", null);
         }
 
-        if (entry.Status == JournalStatus.Posted)
+        if (entry.Status != JournalStatus.Draft)
         {
-            return (false, "Journal entry has already been posted.", entry);
+            return (false, "Only draft journal entries can be posted.", entry);
         }
 
         ValidateLines(entry, requireBalanced: true, minimumLineCount: 2);
-        await ValidateLineAccountsBelongToLedgerAsync(entry);
+        await ValidateLineAccountsAsync(entry, enforceManualJournalAllowed);
         entry.Status = JournalStatus.Posted;
         await db.SaveChangesAsync();
         return (true, null, await GetAsync(id));
@@ -82,20 +82,34 @@ public class JournalService(IAppDbContext db)
 
     public async Task<(bool Success, string? Error)> DeleteAsync(int id)
     {
-        var entry = await db.JournalEntries.FindAsync(id);
+        var entry = await db.JournalEntries
+            .Include(x => x.Ledger)
+            .FirstOrDefaultAsync(x => x.Id == id);
         if (entry is null)
         {
             return (false, "Journal entry not found.");
         }
 
-        if (entry.Status == JournalStatus.Posted)
+        if (entry.Status == JournalStatus.Draft)
         {
-            return (false, "Posted journal entries cannot be deleted.");
+            db.JournalEntries.Remove(entry);
+            await db.SaveChangesAsync();
+            return (true, null);
         }
 
-        db.JournalEntries.Remove(entry);
-        await db.SaveChangesAsync();
-        return (true, null);
+        if (entry.Status == JournalStatus.Posted)
+        {
+            if (!entry.Ledger.AllowDeletePostedJournal)
+            {
+                return (false, "Posted journal delete is disabled for this ledger.");
+            }
+
+            entry.Status = JournalStatus.Voided;
+            await db.SaveChangesAsync();
+            return (true, null);
+        }
+
+        return (false, "Only draft or posted journal entries can be deleted.");
     }
 
     private async Task<JournalEntry> MapAsync(int ledgerId, CreateJournalEntryDto dto)
@@ -145,22 +159,33 @@ public class JournalService(IAppDbContext db)
         }
     }
 
-    private async Task ValidateLineAccountsBelongToLedgerAsync(JournalEntry entry)
+    private async Task ValidateLineAccountsAsync(JournalEntry entry, bool enforceManualJournalAllowed)
     {
         var accountIds = entry.Lines.Select(x => x.AccountId).Distinct().ToList();
 
-        var existingCount = await db.Accounts.CountAsync(a => accountIds.Contains(a.Id));
-        if (existingCount != accountIds.Count)
+        var accounts = await db.Accounts
+            .Where(a => accountIds.Contains(a.Id))
+            .Select(a => new { a.Id, a.LedgerId, a.IsActive, a.AllowManualJournal })
+            .ToListAsync();
+
+        if (accounts.Count != accountIds.Count)
         {
             throw new InvalidOperationException("Journal entry contains unknown accounts.");
         }
 
-        var invalidAccountExists = await db.Accounts
-            .AnyAsync(a => accountIds.Contains(a.Id) && a.LedgerId != entry.LedgerId);
-
-        if (invalidAccountExists)
+        if (accounts.Any(a => a.LedgerId != entry.LedgerId))
         {
             throw new InvalidOperationException("Journal entry contains accounts from another ledger.");
+        }
+
+        if (enforceManualJournalAllowed && accounts.Any(a => !a.IsActive))
+        {
+            throw new InvalidOperationException("Journal entry contains inactive accounts.");
+        }
+
+        if (enforceManualJournalAllowed && accounts.Any(a => !a.AllowManualJournal))
+        {
+            throw new InvalidOperationException("Journal entry contains accounts that do not allow manual journals.");
         }
     }
 

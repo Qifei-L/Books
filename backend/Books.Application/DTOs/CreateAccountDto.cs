@@ -2,4 +2,11 @@ using Books.Domain.Enums;
 
 namespace Books.Application.DTOs;
 
-public record CreateAccountDto(string Code, string Name, AccountType Type, string? Description, bool IsActive);
+public record CreateAccountDto(
+    string Code,
+    string Name,
+    AccountType Type,
+    string? Description,
+    bool IsActive = true,
+    bool IsSystemReserved = false,
+    bool AllowManualJournal = true);

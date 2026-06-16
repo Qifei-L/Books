@@ -11,25 +11,28 @@ public static class SeedData
         var ledger = await db.Ledgers.SingleOrDefaultAsync(x => x.Name == "Demo Ledger");
         if (ledger is null)
         {
-            ledger = new Ledger { Name = "Demo Ledger", IsActive = true };
+            ledger = new Ledger { Name = "Demo Ledger", IsActive = true, AllowDeletePostedJournal = true };
             db.Ledgers.Add(ledger);
             await db.SaveChangesAsync();
         }
 
         var accountSeeds = new[]
         {
-            new AccountSeed("1000", "Cash", AccountType.Asset),
-            new AccountSeed("1100", "Accounts Receivable", AccountType.Asset),
-            new AccountSeed("2000", "Accounts Payable", AccountType.Liability),
-            new AccountSeed("3000", "Owner Equity", AccountType.Equity),
-            new AccountSeed("4000", "Sales Revenue", AccountType.Revenue),
-            new AccountSeed("5000", "General Expense", AccountType.Expense)
+            new AccountSeed("1000", "Cash", AccountType.Asset, IsSystemReserved: false, AllowManualJournal: true),
+            new AccountSeed("1100", "Accounts Receivable", AccountType.Asset, IsSystemReserved: false, AllowManualJournal: true),
+            new AccountSeed("2000", "Accounts Payable", AccountType.Liability, IsSystemReserved: false, AllowManualJournal: true),
+            new AccountSeed("3000", "Retained Earnings", AccountType.Equity, IsSystemReserved: true, AllowManualJournal: false),
+            new AccountSeed("3100", "Current Year Profit & Loss", AccountType.Equity, IsSystemReserved: true, AllowManualJournal: false),
+            new AccountSeed("4000", "Sales Revenue", AccountType.Revenue, IsSystemReserved: false, AllowManualJournal: true),
+            new AccountSeed("5000", "General Expense", AccountType.Expense, IsSystemReserved: false, AllowManualJournal: true),
+            new AccountSeed("8000", "Exchange Gain or Loss", AccountType.Revenue, IsSystemReserved: true, AllowManualJournal: true),
+            new AccountSeed("9999", "Suspense Account", AccountType.Asset, IsSystemReserved: true, AllowManualJournal: true)
         };
 
         foreach (var seed in accountSeeds)
         {
-            var accountExists = await db.Accounts.AnyAsync(x => x.LedgerId == ledger.Id && x.Code == seed.Code);
-            if (!accountExists)
+            var account = await db.Accounts.FirstOrDefaultAsync(x => x.LedgerId == ledger.Id && x.Code == seed.Code);
+            if (account is null)
             {
                 db.Accounts.Add(new Account
                 {
@@ -37,9 +40,21 @@ public static class SeedData
                     Code = seed.Code,
                     Name = seed.Name,
                     Type = seed.Type,
-                    IsActive = true
+                    IsActive = true,
+                    IsSystemReserved = seed.IsSystemReserved,
+                    AllowManualJournal = seed.AllowManualJournal
                 });
+                continue;
             }
+
+            if (seed.IsSystemReserved)
+            {
+                account.Name = seed.Name;
+                account.Type = seed.Type;
+            }
+
+            account.IsSystemReserved = seed.IsSystemReserved;
+            account.AllowManualJournal = seed.AllowManualJournal;
         }
         await db.SaveChangesAsync();
 
@@ -69,5 +84,10 @@ public static class SeedData
         await db.SaveChangesAsync();
     }
 
-    private sealed record AccountSeed(string Code, string Name, AccountType Type);
+    private sealed record AccountSeed(
+        string Code,
+        string Name,
+        AccountType Type,
+        bool IsSystemReserved,
+        bool AllowManualJournal);
 }

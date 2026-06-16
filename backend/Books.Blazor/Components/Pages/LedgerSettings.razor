@@ -27,11 +27,15 @@ else
             <label>Current Period
                 <input disabled @bind="settings.CurrentPeriod" />
             </label>
-            <label>Status
-                <select @bind="settings.IsActive">
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
-                </select>
+            <label class="check-field">
+                <span>Status</span>
+                <input type="checkbox" @bind="settings.IsActive" />
+                Active
+            </label>
+            <label class="check-field">
+                <span>Posted Delete</span>
+                <input type="checkbox" @bind="settings.AllowDeletePostedJournal" />
+                Void posted journals
             </label>
         </div>
     </section>
@@ -51,14 +55,15 @@ else
             LedgerName = dto.LedgerName,
             BaseCurrency = dto.BaseCurrency,
             CurrentPeriod = dto.CurrentPeriod,
-            IsActive = dto.IsActive
+            IsActive = dto.IsActive,
+            AllowDeletePostedJournal = dto.AllowDeletePostedJournal
         };
         loading = false;
     }
 
     private async Task Save()
     {
-        await Gl.SaveLedgerSettingsAsync(new LedgerSettingsDto(settings.LedgerId, settings.LedgerName, settings.BaseCurrency, settings.CurrentPeriod, settings.IsActive));
+        await Gl.SaveLedgerSettingsAsync(new LedgerSettingsDto(settings.LedgerId, settings.LedgerName, settings.BaseCurrency, settings.CurrentPeriod, settings.IsActive, settings.AllowDeletePostedJournal));
     }
 
     private sealed class LedgerSettingsForm
@@ -68,5 +73,6 @@ else
         public string BaseCurrency { get; set; } = "USD";
         public string CurrentPeriod { get; set; } = "2026-06";
         public bool IsActive { get; set; } = true;
+        public bool AllowDeletePostedJournal { get; set; } = true;
     }
 }

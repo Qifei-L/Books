@@ -77,24 +77,31 @@
             </div>
             <div class="form-grid">
                 <label>Code
-                    <input @bind="editModel.Code" />
+                    <input disabled="@editModel.IsSystemReserved" @bind="editModel.Code" />
                 </label>
                 <label>Name
                     <input @bind="editModel.Name" />
                 </label>
                 <label>Type
-                    <select @bind="editModel.Type">
+                    <select disabled="@editModel.IsSystemReserved" @bind="editModel.Type">
                         @foreach (var type in Enum.GetValues<AccountType>())
                         {
                             <option value="@type">@type</option>
                         }
                     </select>
                 </label>
-                <label>Status
-                    <select @bind="editModel.IsActive">
-                        <option value="true">Active</option>
-                        <option value="false">Inactive</option>
-                    </select>
+                <label class="check-field">
+                    <span>Status</span>
+                    <input type="checkbox" @bind="editModel.IsActive" />
+                    Active
+                </label>
+                <label class="check-field">
+                    <span>Manual Journal</span>
+                    <input type="checkbox" @bind="editModel.AllowManualJournal" />
+                    Allowed
+                </label>
+                <label>System
+                    <input disabled value="@(editModel.IsSystemReserved ? "Reserved" : "Normal")" />
                 </label>
                 <label class="wide">Description
                     <input @bind="editModel.Description" />
@@ -162,6 +169,14 @@
                                     <span class="@(account.IsActive ? "status-pill status-active" : "status-pill status-inactive")">
                                         @(account.IsActive ? "Active" : "Inactive")
                                     </span>
+                                    @if (account.IsSystemReserved)
+                                    {
+                                        <span class="status-pill status-system">System</span>
+                                    }
+                                    @if (!account.AllowManualJournal)
+                                    {
+                                        <span class="status-pill status-locked">Manual blocked</span>
+                                    }
                                 </span>
                                 <span class="row-actions">
                                     <button class="text-button" @onclick="() => EditAccount(account)">Edit</button>
@@ -182,7 +197,6 @@
         AccountType.Asset,
         AccountType.Liability,
         AccountType.Equity,
-        AccountType.Income,
         AccountType.Revenue,
         AccountType.Expense
     ];
@@ -244,7 +258,9 @@
             Name = account.Name,
             Type = account.Type,
             Description = account.Description,
-            IsActive = account.IsActive
+            IsActive = account.IsActive,
+            IsSystemReserved = account.IsSystemReserved,
+            AllowManualJournal = account.AllowManualJournal
         };
         editing = true;
     }
@@ -253,7 +269,7 @@
 
     private async Task SaveAccount()
     {
-        await Gl.SaveAccountAsync(new AccountEditDto(editModel.Id, editModel.Code, editModel.Name, editModel.Type, editModel.Description, editModel.IsActive));
+        await Gl.SaveAccountAsync(new AccountEditDto(editModel.Id, editModel.Code, editModel.Name, editModel.Type, editModel.Description, editModel.IsActive, editModel.AllowManualJournal));
         editing = false;
         await LoadAccounts();
     }
@@ -270,7 +286,6 @@
         AccountType.Asset => "Assets",
         AccountType.Liability => "Liabilities",
         AccountType.Equity => "Equity",
-        AccountType.Income => "Income",
         AccountType.Revenue => "Revenue",
         AccountType.Expense => "Expenses",
         _ => type.ToString()
@@ -288,5 +303,7 @@
         public AccountType Type { get; set; } = AccountType.Asset;
         public string? Description { get; set; }
         public bool IsActive { get; set; } = true;
+        public bool IsSystemReserved { get; set; }
+        public bool AllowManualJournal { get; set; } = true;
     }
 }

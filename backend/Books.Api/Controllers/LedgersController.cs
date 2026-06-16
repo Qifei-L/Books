@@ -26,7 +26,12 @@ public class LedgersController(AppDbContext db) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Ledger>> Create(CreateLedgerDto dto)
     {
-        var ledger = new Ledger { Name = dto.Name.Trim(), IsActive = dto.IsActive };
+        var ledger = new Ledger
+        {
+            Name = dto.Name.Trim(),
+            IsActive = dto.IsActive,
+            AllowDeletePostedJournal = dto.AllowDeletePostedJournal
+        };
         db.Ledgers.Add(ledger);
         await db.SaveChangesAsync();
         return CreatedAtAction(nameof(Get), new { id = ledger.Id }, ledger);
@@ -43,6 +48,7 @@ public class LedgersController(AppDbContext db) : ControllerBase
 
         ledger.Name = dto.Name.Trim();
         ledger.IsActive = dto.IsActive;
+        ledger.AllowDeletePostedJournal = dto.AllowDeletePostedJournal;
         await db.SaveChangesAsync();
         return NoContent();
     }

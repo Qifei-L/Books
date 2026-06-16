@@ -14,7 +14,7 @@ public class ReportService(IAppDbContext db)
         {
             new("trial-balance", "Trial Balance", "Debit and credit balances by account.", $"/api/v1/ledgers/{ledgerId}/reports/trial-balance"),
             new("general-ledger", "General Ledger", "Posted journal lines and running balance for one account.", $"/api/v1/ledgers/{ledgerId}/reports/general-ledger"),
-            new("profit-loss", "Profit & Loss", "Income, revenue, and expense balances.", $"/api/v1/ledgers/{ledgerId}/reports/profit-loss"),
+            new("profit-loss", "Profit & Loss", "Revenue and expense balances.", $"/api/v1/ledgers/{ledgerId}/reports/profit-loss"),
             new("balance-sheet", "Balance Sheet", "Asset, liability, and equity balances.", $"/api/v1/ledgers/{ledgerId}/reports/balance-sheet"),
         };
 
@@ -76,7 +76,7 @@ public class ReportService(IAppDbContext db)
 
     public Task<List<FinancialStatementRowDto>> GetProfitLossAsync(int ledgerId, DateTime? from, DateTime? to)
     {
-        return GetStatementRowsAsync(ledgerId, [AccountType.Income, AccountType.Revenue, AccountType.Expense], from, to);
+        return GetStatementRowsAsync(ledgerId, [AccountType.Revenue, AccountType.Expense], from, to);
     }
 
     public Task<List<FinancialStatementRowDto>> GetBalanceSheetAsync(int ledgerId, DateTime? from, DateTime? to)

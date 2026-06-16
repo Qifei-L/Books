@@ -326,7 +326,6 @@ h2 {
     background: #5e6b8f;
 }
 
-.type-income,
 .type-revenue {
     background: #267148;
 }
@@ -388,6 +387,12 @@ h2 {
     white-space: nowrap;
 }
 
+.account-row > span:nth-child(4) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
 .status-pill {
     align-items: center;
     border: 1px solid transparent;
@@ -409,6 +414,18 @@ h2 {
     background: #fff3df;
     border-color: #f2d8ac;
     color: #75410c;
+}
+
+.status-system {
+    background: #eef1f4;
+    border-color: #d7dee3;
+    color: #4b5b66;
+}
+
+.status-locked {
+    background: #f5eded;
+    border-color: #e5cccc;
+    color: #7a3535;
 }
 
 .row-actions {
@@ -688,6 +705,28 @@ tbody tr:hover {
 
 .wide {
     grid-column: span 2;
+}
+
+.check-field {
+    align-content: start;
+    color: #1d2b34;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 16px 1fr;
+}
+
+.check-field span {
+    color: #697983;
+    font-size: 12px;
+    font-weight: 800;
+    grid-column: 1 / -1;
+}
+
+.check-field input[type="checkbox"] {
+    accent-color: #11615f;
+    height: 16px;
+    margin: 2px 0 0;
+    width: 16px;
 }
 
 .summary-bar {

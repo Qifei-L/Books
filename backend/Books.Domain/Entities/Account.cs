@@ -12,5 +12,7 @@ public class Account
     public AccountType Type { get; set; }
     public string Description { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+    public bool IsSystemReserved { get; set; }
+    public bool AllowManualJournal { get; set; } = true;
     public List<JournalLine> JournalLines { get; set; } = [];
 }

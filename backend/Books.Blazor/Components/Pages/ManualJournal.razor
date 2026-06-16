@@ -78,7 +78,7 @@ else
                                 <option value="0">Select account</option>
                                 @foreach (var account in accounts)
                                 {
-                                    <option value="@account.Id">@account.Code - @account.Name</option>
+                                    <option value="@account.Id" disabled="@(!account.IsActive || !account.AllowManualJournal)">@account.Code - @account.Name</option>
                                 }
                             </select>
                         </td>
@@ -140,7 +140,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        accounts = (await Gl.GetAccountsAsync(null, null, true)).ToList();
+        accounts = await Gl.GetManualJournalAccountsAsync();
         if (Id.HasValue)
         {
             var entry = await Gl.GetJournalEntryAsync(Id.Value);
@@ -168,9 +168,18 @@ else
                         Description = line.Description
                     });
                 }
+
+                foreach (var account in entry.Lines.Select(x => x.Account).OfType<Account>())
+                {
+                    if (accounts.All(x => x.Id != account.Id))
+                    {
+                        accounts.Add(account);
+                    }
+                }
             }
         }
 
+        accounts = accounts.OrderBy(x => x.Code).ToList();
         EnsureTwoLines();
         loading = false;
     }
@@ -254,6 +263,7 @@ else
     {
         JournalStatus.Posted => "badge badge-posted",
         JournalStatus.Reversed => "badge badge-reversed",
+        JournalStatus.Voided => "badge badge-inactive",
         _ => "badge badge-draft"
     };
 
