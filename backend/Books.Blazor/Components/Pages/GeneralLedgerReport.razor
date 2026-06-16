@@ -1,6 +1,7 @@
 @page "/reports/general-ledger"
 @rendermode InteractiveServer
 @inject GeneralLedgerAppService Gl
+@inject ReportService ReportsService
 
 <div class="page-header">
     <div>
@@ -67,14 +68,17 @@
     private List<Account> accounts = [];
     private List<GeneralLedgerRowDto> rows = [];
     private int selectedAccountId;
+    private int ledgerId;
 
     protected override async Task OnInitializedAsync()
     {
+        var ledger = await Gl.GetDefaultLedgerAsync();
+        ledgerId = ledger.Id;
         accounts = await Gl.GetAccountsAsync(null, null, true);
     }
 
     private async Task LoadRows()
     {
-        rows = selectedAccountId > 0 ? await Gl.GetGeneralLedgerAsync(selectedAccountId) : [];
+        rows = selectedAccountId > 0 ? await ReportsService.GetGeneralLedgerAsync(ledgerId, selectedAccountId, null, null) : [];
     }
 }

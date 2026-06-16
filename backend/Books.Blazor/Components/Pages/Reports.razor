@@ -1,0 +1,52 @@
+@page "/reports"
+@rendermode InteractiveServer
+@inject GeneralLedgerAppService Gl
+@inject ReportService ReportsService
+
+<div class="page-header">
+    <div>
+        <p class="eyebrow">Reports</p>
+        <h1>Reports Center</h1>
+    </div>
+</div>
+
+<section class="panel">
+    @if (loading)
+    {
+        <div class="empty">Loading reports...</div>
+    }
+    else
+    {
+        <div class="report-grid">
+            @foreach (var report in reports)
+            {
+                <a class="report-card" href="@ReportHref(report.Code)">
+                    <span class="eyebrow">@report.Code</span>
+                    <strong>@report.Name</strong>
+                    <span>@report.Description</span>
+                </a>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private List<ReportSummaryDto> reports = [];
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ledger = await Gl.GetDefaultLedgerAsync();
+        reports = await ReportsService.GetAvailableReportsAsync(ledger.Id);
+        loading = false;
+    }
+
+    private static string ReportHref(string code) => code switch
+    {
+        "trial-balance" => "/reports/trial-balance",
+        "general-ledger" => "/reports/general-ledger",
+        "profit-loss" => "/reports/profit-loss",
+        "balance-sheet" => "/reports/balance-sheet",
+        _ => "/reports"
+    };
+}

@@ -1,4 +1,5 @@
 using Books.Application.Services;
+using Books.Application.Reports;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Books.Application;

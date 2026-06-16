@@ -1,5 +1,6 @@
 using Books.Application.DTOs;
 using Books.Application.Interfaces;
+using Books.Application.Reports;
 using Books.Domain.Entities;
 using Books.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -207,38 +208,14 @@ public class GeneralLedgerAppService(
 
     public async Task<List<FinancialStatementRowDto>> GetProfitLossAsync()
     {
-        return await GetStatementRowsAsync([AccountType.Income, AccountType.Revenue, AccountType.Expense]);
+        var ledger = await GetDefaultLedgerAsync();
+        return await reportService.GetProfitLossAsync(ledger.Id, null, null);
     }
 
     public async Task<List<FinancialStatementRowDto>> GetBalanceSheetAsync()
     {
-        return await GetStatementRowsAsync([AccountType.Asset, AccountType.Liability, AccountType.Equity]);
-    }
-
-    private async Task<List<FinancialStatementRowDto>> GetStatementRowsAsync(AccountType[] types)
-    {
         var ledger = await GetDefaultLedgerAsync();
-        var accounts = await db.Accounts
-            .Where(x => x.LedgerId == ledger.Id && types.Contains(x.Type))
-            .OrderBy(x => x.Code)
-            .ToListAsync();
-
-        var accountIds = accounts.Select(x => x.Id).ToList();
-        var postedLines = await db.JournalLines
-            .Include(x => x.JournalEntry)
-            .Where(x => accountIds.Contains(x.AccountId) && x.JournalEntry!.Status == JournalStatus.Posted)
-            .ToListAsync();
-
-        return accounts.Select(account =>
-        {
-            var debit = postedLines.Where(line => line.AccountId == account.Id).Sum(line => line.Debit);
-            var credit = postedLines.Where(line => line.AccountId == account.Id).Sum(line => line.Credit);
-            var balance = account.Type is AccountType.Asset or AccountType.Expense
-                ? debit - credit
-                : credit - debit;
-
-            return new FinancialStatementRowDto(account.Code, account.Name, account.Type, debit, credit, balance);
-        }).ToList();
+        return await reportService.GetBalanceSheetAsync(ledger.Id, null, null);
     }
 
     public async Task<LedgerSettingsDto> GetLedgerSettingsAsync()
@@ -269,4 +246,3 @@ public record ManualJournalDto(int? Id, string? JournalNo, DateTime EntryDate, s
 public record ManualJournalLineDto(int AccountId, string Direction, decimal Amount, decimal BaseAmount, string? Description);
 public record LedgerSettingsDto(int LedgerId, string LedgerName, string BaseCurrency, string CurrentPeriod, bool IsActive);
 public record NumberingRuleDto(string DocumentType, string Prefix, string DateFormat, int PaddingLength, string Separator, bool ResetMonthly, bool ResetYearly, bool IsActive);
-public record FinancialStatementRowDto(string AccountCode, string AccountName, AccountType AccountType, decimal Debit, decimal Credit, decimal Balance);

@@ -164,6 +164,38 @@ h2 {
     margin-top: 6px;
 }
 
+.report-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.report-card {
+    border: 1px solid #d9e2e7;
+    border-radius: 8px;
+    color: #1f2933;
+    display: grid;
+    gap: 8px;
+    min-height: 128px;
+    padding: 16px;
+    text-decoration: none;
+}
+
+.report-card:hover {
+    border-color: #11615f;
+    box-shadow: 0 8px 24px rgb(17 97 95 / 10%);
+}
+
+.report-card strong {
+    color: #11615f;
+    font-size: 18px;
+}
+
+.report-card span:last-child {
+    color: #50606b;
+    line-height: 1.4;
+}
+
 .toolbar {
     align-items: end;
     display: grid;
