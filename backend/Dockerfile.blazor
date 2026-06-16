@@ -1,0 +1,27 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+COPY global.json ./
+COPY Books.slnx ./
+COPY Books.Blazor/Books.Blazor.csproj Books.Blazor/
+COPY Books.Application/Books.Application.csproj Books.Application/
+COPY Books.Domain/Books.Domain.csproj Books.Domain/
+COPY Books.Infrastructure/Books.Infrastructure.csproj Books.Infrastructure/
+
+RUN dotnet restore Books.Blazor/Books.Blazor.csproj
+
+COPY . .
+RUN dotnet publish Books.Blazor/Books.Blazor.csproj -c Release -o /app/publish --no-restore --no-self-contained
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+WORKDIR /app
+
+ENV ASPNETCORE_URLS=http://+:8080
+
+COPY --from=build /app/publish .
+
+EXPOSE 8080
+
+ENTRYPOINT ["dotnet", "Books.Blazor.dll"]

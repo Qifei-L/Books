@@ -220,25 +220,54 @@ Books.Api Service:
 
 This repository is a .NET monorepo. The backend directory contains `Books.slnx` and `global.json`, so Railway can use `/backend` as the root directory and restore the backend solution before publishing a specific host project.
 
-Books.Blazor build command:
+### Railway Docker Builds
+
+Use Dockerfile builds instead of Nixpacks/build commands.
+
+Books.Blazor service:
+
+```text
+Root Directory: /backend
+Dockerfile Path: Dockerfile.blazor
+```
+
+Books.Api service:
+
+```text
+Root Directory: /backend
+Dockerfile Path: Dockerfile.api
+```
+
+Frontend service:
+
+```text
+Root Directory: /frontend/books-ui
+Dockerfile Path: Dockerfile
+```
+
+The backend Dockerfiles publish the selected .NET host project and run it from the ASP.NET runtime image. The apps still read Railway's `PORT` variable in `Program.cs`; the Dockerfiles expose `8080` as a local fallback.
+
+The frontend Dockerfile builds Angular and serves the production files with nginx.
+
+Previous non-Docker Books.Blazor build command:
 
 ```bash
 dotnet publish Books.Blazor/Books.Blazor.csproj -c Release -o Books.Blazor/out --no-self-contained
 ```
 
-Books.Blazor start command:
+Previous non-Docker Books.Blazor start command:
 
 ```bash
 dotnet Books.Blazor/out/Books.Blazor.dll
 ```
 
-Books.Api build command:
+Previous non-Docker Books.Api build command:
 
 ```bash
 dotnet publish Books.Api/Books.Api.csproj -c Release -o Books.Api/out --no-self-contained
 ```
 
-Books.Api start command:
+Previous non-Docker Books.Api start command:
 
 ```bash
 dotnet Books.Api/out/Books.Api.dll
@@ -347,7 +376,9 @@ Angular frontend environment values are build-time values. Do not assume the bro
 
 ### Frontend Production Start
 
-The frontend production start command must not use `ng serve`.
+When using Docker, Railway should use `frontend/books-ui/Dockerfile`; no frontend start command is required.
+
+If running without Docker, the frontend production start command must not use `ng serve`.
 
 Current scripts:
 
