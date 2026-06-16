@@ -7,13 +7,16 @@ using Books.Infrastructure.Data;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
-var builder = WebApplication.CreateBuilder(args);
-DotEnv.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrWhiteSpace(port))
 {
-    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+    Environment.SetEnvironmentVariable("ASPNETCORE_HTTP_PORTS", port);
 }
+
+var builder = WebApplication.CreateBuilder(args);
+DotEnv.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
+port = Environment.GetEnvironmentVariable("PORT");
+var usesPlatformHttpPort = !string.IsNullOrWhiteSpace(port);
 
 // Add services to the container.
 builder.Services.AddApplication();
@@ -47,7 +50,10 @@ app.UseWhen(
     ctx => !Path.HasExtension(ctx.Request.Path.Value),
     branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true)
 );
-app.UseHttpsRedirection();
+if (!usesPlatformHttpPort)
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAntiforgery();
 

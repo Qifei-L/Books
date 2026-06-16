@@ -4,14 +4,17 @@ using Books.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 
-var builder = WebApplication.CreateBuilder(args);
-
-DotEnv.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrWhiteSpace(port))
 {
-    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+    Environment.SetEnvironmentVariable("ASPNETCORE_HTTP_PORTS", port);
 }
+
+var builder = WebApplication.CreateBuilder(args);
+
+DotEnv.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
+port = Environment.GetEnvironmentVariable("PORT");
+var usesPlatformHttpPort = !string.IsNullOrWhiteSpace(port);
 
 var allowedOrigins = (Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS")
         ?? "http://localhost:4200,https://laudable-blessing-production-afd7.up.railway.app")
@@ -49,7 +52,10 @@ using (var scope = app.Services.CreateScope())
     await SeedData.InitializeAsync(db);
 }
 
-app.UseHttpsRedirection();
+if (!usesPlatformHttpPort)
+{
+    app.UseHttpsRedirection();
+}
 app.UseCors("AllowFrontend");
 app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
