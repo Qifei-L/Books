@@ -1,5 +1,5 @@
-export type AccountType = 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
-export type JournalStatus = 'Draft' | 'Posted' | 'Voided';
+export type AccountType = 'Asset' | 'Liability' | 'Equity' | 'Income' | 'Revenue' | 'Expense';
+export type JournalStatus = 'Draft' | 'Posted' | 'Reversed' | 'Voided';
 
 export interface Ledger {
   id: number;

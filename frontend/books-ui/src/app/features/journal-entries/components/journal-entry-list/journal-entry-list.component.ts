@@ -29,7 +29,7 @@ export class JournalEntryListComponent {
     status: 'All'
   };
 
-  readonly statuses: Array<JournalStatus | 'All'> = ['All', 'Draft', 'Posted', 'Voided'];
+  readonly statuses: Array<JournalStatus | 'All'> = ['All', 'Draft', 'Posted', 'Reversed', 'Voided'];
 
   get filteredEntries() {
     const search = this.filter.search?.trim().toLowerCase() ?? '';
@@ -88,6 +88,7 @@ export class JournalEntryListComponent {
     return {
       'status-draft': status === 'Draft',
       'status-posted': status === 'Posted',
+      'status-reversed': status === 'Reversed',
       'status-voided': status === 'Voided'
     };
   }

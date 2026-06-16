@@ -57,7 +57,7 @@ import { LedgerNavComponent } from '../../shared/ledger-nav.component';
 export class AccountsPage implements OnInit {
   ledgerId = 0;
   accounts: Account[] = [];
-  accountTypes: AccountType[] = ['Asset', 'Liability', 'Equity', 'Revenue', 'Expense'];
+  accountTypes: AccountType[] = ['Asset', 'Liability', 'Equity', 'Income', 'Revenue', 'Expense'];
   editingId?: number;
   form: SaveAccountRequest = this.emptyForm();
 

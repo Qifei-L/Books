@@ -188,7 +188,11 @@ public class GeneralLedgerAppService(
         };
 
         var saved = await journalService.CreateAsync(original.LedgerId, new CreateJournalEntryDto(reversal.JournalNo, reversal.EntryDate, reversal.Description, reversal.Lines.Select(line => new CreateJournalLineDto(line.AccountId, line.Debit, line.Credit, line.Description)).ToList()));
-        await journalService.PostAsync(saved.Id);
+        var postResult = await journalService.PostAsync(saved.Id);
+        if (!postResult.Success)
+        {
+            throw new InvalidOperationException(postResult.Error ?? "Unable to post reversal entry.");
+        }
 
         original.Status = JournalStatus.Reversed;
         await db.SaveChangesAsync();
