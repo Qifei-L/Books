@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.300 AS build
 
 WORKDIR /src
 
@@ -12,6 +12,7 @@ COPY Books.Infrastructure/Books.Infrastructure.csproj Books.Infrastructure/
 RUN dotnet restore Books.Blazor/Books.Blazor.csproj
 
 COPY . .
+RUN dotnet restore Books.Blazor/Books.Blazor.csproj
 RUN dotnet publish Books.Blazor/Books.Blazor.csproj -c Release -o /app/publish --no-restore --no-self-contained
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
