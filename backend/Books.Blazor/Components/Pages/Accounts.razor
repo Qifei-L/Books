@@ -41,7 +41,7 @@
     <section class="panel account-filter-panel">
         <div class="accounts-toolbar">
             <label class="search-field">Search
-                <input placeholder="Code or account name" @bind="search" />
+                <input placeholder="Code or account name" @bind="search" @bind:event="oninput" />
             </label>
             <label>Type
                 <select @bind="typeFilter">
