@@ -1,0 +1,449 @@
+/* ── Header ──────────────────────────── */
+.coa-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 4px 0 12px;
+}
+
+.coa-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.coa-eyebrow {
+    color: var(--color-text-tertiary);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.coa-title {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 30px;
+    font-weight: 400;
+    color: var(--color-text-primary);
+    line-height: 1.15;
+}
+
+.coa-new-link {
+    color: var(--color-accent);
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    padding-bottom: 3px;
+}
+
+.coa-header-rule {
+    border: none;
+    border-top: 1.5px solid var(--color-text-primary);
+    margin: 0;
+}
+
+/* ── Edit / create form ──────────────── */
+.coa-form-section {
+    border-bottom: 0.5px solid var(--color-border-light);
+    padding: 16px 0 20px;
+}
+
+.coa-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.coa-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 88px;
+}
+
+.coa-form-field--wide {
+    flex: 1;
+    min-width: 160px;
+}
+
+.coa-form-label {
+    color: var(--color-text-tertiary);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.coa-form-input {
+    border: none;
+    border-bottom: 1px solid var(--color-border);
+    border-radius: 0;
+    background: transparent;
+    padding: 4px 0;
+    color: var(--color-text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    min-height: auto;
+    width: 100%;
+}
+
+.coa-form-input:focus {
+    outline: none;
+    border-bottom-color: var(--color-accent);
+}
+
+.coa-form-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    font-weight: 400;
+    cursor: pointer;
+    padding-bottom: 4px;
+    gap: 6px;
+}
+
+.coa-form-checkbox input {
+    width: auto;
+    min-height: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 2px;
+    padding: 0;
+    background: transparent;
+}
+
+.coa-form-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 4px;
+}
+
+.coa-submit-link {
+    color: var(--color-accent);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: underline;
+    background: none;
+    border: none;
+    padding: 0;
+    min-height: auto;
+    font-family: inherit;
+}
+
+.coa-submit-link:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.coa-cancel-link {
+    color: var(--color-text-tertiary);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.coa-cancel-link:hover {
+    text-decoration: underline;
+}
+
+/* ── Filter bar ──────────────────────── */
+.coa-filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+}
+
+.coa-search {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    min-height: auto;
+    font-size: 13px;
+    color: var(--color-text-primary);
+    font-family: inherit;
+    flex: 1;
+    max-width: 360px;
+}
+
+.coa-search::placeholder {
+    color: var(--color-text-tertiary);
+}
+
+.coa-search:focus {
+    outline: none;
+}
+
+.coa-filter-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.coa-filter-dot {
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+}
+
+.coa-filter-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.coa-filter-wrap::after {
+    content: '▾';
+    position: absolute;
+    right: 0;
+    pointer-events: none;
+    color: var(--color-text-tertiary);
+    font-size: 8px;
+    line-height: 1;
+}
+
+.coa-filter-select {
+    -webkit-appearance: none;
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 0 14px 0 0;
+    min-height: auto;
+    width: auto;
+}
+
+.coa-filter-select:focus {
+    outline: none;
+}
+
+.coa-thin-rule {
+    border: none;
+    border-top: 0.5px solid var(--color-border-light);
+    margin: 0 0 20px;
+}
+
+/* ── Account groups ──────────────────── */
+.coa-group {
+    margin-bottom: 20px;
+}
+
+.coa-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    padding: 6px 0;
+    user-select: none;
+}
+
+.coa-group-label {
+    color: var(--color-text-primary);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    white-space: nowrap;
+}
+
+.coa-group-rule {
+    flex: 1;
+    border-top: 1px solid var(--color-border-light);
+    height: 0;
+    display: block;
+}
+
+.coa-group-meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+}
+
+.coa-group-chevron {
+    color: var(--color-text-tertiary);
+    font-size: 10px;
+    width: 12px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* ── Account rows ────────────────────── */
+.coa-row {
+    display: grid;
+    grid-template-columns: 64px 1fr 64px 80px auto;
+    column-gap: 16px;
+    align-items: center;
+    padding: 9px 0;
+    border-top: 0.5px solid var(--color-border-light);
+}
+
+.coa-row--inactive {
+    opacity: 0.5;
+}
+
+.coa-code {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.coa-name {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.coa-balance {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    text-align: right;
+}
+
+.coa-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+}
+
+.coa-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-text-tertiary);
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+.coa-dot--active {
+    background: var(--color-active-dot);
+}
+
+.coa-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    justify-content: flex-end;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.coa-act-link {
+    color: var(--color-accent);
+    cursor: pointer;
+}
+
+.coa-act-link:hover {
+    text-decoration: underline;
+}
+
+.coa-act-sep {
+    color: var(--color-border);
+    font-size: 10px;
+}
+
+.coa-act-stop {
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+}
+
+.coa-act-stop:hover {
+    text-decoration: underline;
+}
+
+.coa-act-off {
+    color: var(--color-text-tertiary);
+    opacity: 0.35;
+}
+
+/* ── Empty state ─────────────────────── */
+.coa-empty {
+    padding: 36px 0;
+    text-align: center;
+    color: var(--color-text-tertiary);
+    font-size: 13px;
+}
+
+/* ── Confirm dialog ──────────────────── */
+.coa-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.32);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+}
+
+.coa-dialog {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 2px;
+    padding: 28px;
+    max-width: 360px;
+    width: calc(100% - 48px);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.14);
+}
+
+.coa-dialog-title {
+    margin: 0 0 10px;
+    font-family: var(--font-serif);
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--color-text-primary);
+}
+
+.coa-dialog-body {
+    margin: 0 0 24px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+}
+
+.coa-dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 20px;
+}
+
+.coa-dialog-cancel {
+    color: var(--color-text-tertiary);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.coa-dialog-cancel:hover {
+    text-decoration: underline;
+}
+
+.coa-dialog-confirm {
+    color: #b42318;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.coa-dialog-confirm:hover {
+    text-decoration: underline;
+}

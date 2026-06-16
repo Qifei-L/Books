@@ -2,156 +2,215 @@
 @rendermode InteractiveServer
 @inject GeneralLedgerAppService Gl
 
-<div class="page-header">
-    <div>
-        <p class="eyebrow">General Ledger</p>
-        <h1>Chart of Accounts</h1>
+<div class="coa-header">
+    <div class="coa-header-left">
+        <span class="coa-eyebrow">GENERAL LEDGER · Period @CurrentPeriod</span>
+        <h1 class="coa-title">Chart of Accounts</h1>
     </div>
-    <button @onclick="NewAccount">New Account</button>
+    <a class="coa-new-link" @onclick="OpenNew">+ New account</a>
 </div>
-
-<section class="panel">
-    <div class="toolbar">
-        <label>Search
-            <input placeholder="Code or name" @bind="search" />
-        </label>
-        <label>Type
-            <select @bind="typeFilter">
-                <option value="">All</option>
-                @foreach (var type in Enum.GetValues<AccountType>())
-                {
-                    <option value="@type">@type</option>
-                }
-            </select>
-        </label>
-        <label>Status
-            <select @bind="statusFilter">
-                <option value="">All</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-            </select>
-        </label>
-        <span></span>
-        <button @onclick="LoadAccounts">Search</button>
-        <button class="secondary" @onclick="ClearFilters">Clear</button>
-    </div>
-</section>
+<hr class="coa-header-rule" />
 
 @if (editing)
 {
-    <section class="panel">
-        <h2>@(editModel.Id.HasValue ? "Edit Account" : "New Account")</h2>
-        <div class="form-grid">
-            <label>Code
-                <input @bind="editModel.Code" />
-            </label>
-            <label>Name
-                <input @bind="editModel.Name" />
-            </label>
-            <label>Type
-                <select @bind="editModel.Type">
-                    @foreach (var type in Enum.GetValues<AccountType>())
+    <div class="coa-form-section">
+        <div class="coa-form">
+            <div class="coa-form-field">
+                <span class="coa-form-label">Code</span>
+                <input class="coa-form-input" @bind="editModel.Code" placeholder="e.g. 1001" />
+            </div>
+            <div class="coa-form-field coa-form-field--wide">
+                <span class="coa-form-label">Name</span>
+                <input class="coa-form-input" @bind="editModel.Name" placeholder="Account name" />
+            </div>
+            <div class="coa-form-field">
+                <span class="coa-form-label">Type</span>
+                <select class="coa-form-input" @bind="editModel.Type">
+                    @foreach (var t in Enum.GetValues<AccountType>())
                     {
-                        <option value="@type">@type</option>
+                        <option value="@t">@t</option>
                     }
                 </select>
+            </div>
+            <div class="coa-form-field coa-form-field--wide">
+                <span class="coa-form-label">Description</span>
+                <input class="coa-form-input" @bind="editModel.Description" placeholder="Optional" />
+            </div>
+            <label class="coa-form-checkbox">
+                <input type="checkbox" @bind="editModel.IsActive" />
+                Active
             </label>
-            <label>Status
-                <select @bind="editModel.IsActive">
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
-                </select>
-            </label>
-            <label class="wide">Description
-                <input @bind="editModel.Description" />
-            </label>
+            <div class="coa-form-actions">
+                <button class="coa-submit-link" disabled="@(!CanSave)" @onclick="SaveAccount">
+                    @(editModel.Id.HasValue ? "Save changes" : "Add account")
+                </button>
+                <a class="coa-cancel-link" @onclick="CancelEdit">Cancel</a>
+            </div>
         </div>
-        <div class="actions-row">
-            <button disabled="@(!CanSaveAccount)" @onclick="SaveAccount">Save Account</button>
-            <button class="secondary" @onclick="CancelEdit">Cancel</button>
-        </div>
-    </section>
+    </div>
 }
 
-<section class="panel">
-    @if (loading)
-    {
-        <div class="empty">Loading accounts...</div>
-    }
-    else if (accounts.Count == 0)
-    {
-        <div class="empty">No accounts found.</div>
-    }
-    else
-    {
-        <table>
-            <thead>
-                <tr>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Normal Balance</th>
-                    <th>Status</th>
-                    <th class="actions">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var account in accounts)
+<div class="coa-filter-bar">
+    <input class="coa-search" placeholder="Filter by code or name…"
+           @bind="searchText" @bind:event="oninput" />
+    <div class="coa-filter-meta">
+        <span class="coa-filter-wrap">
+            <select class="coa-filter-select" @bind="typeFilterStr">
+                <option value="">All types</option>
+                @foreach (var t in Enum.GetValues<AccountType>())
                 {
-                    <tr>
-                        <td>@account.Code</td>
-                        <td>@account.Name</td>
-                        <td>@account.Type</td>
-                        <td>@NormalBalance(account.Type)</td>
-                        <td><span class="@(account.IsActive ? "badge badge-active" : "badge badge-inactive")">@(account.IsActive ? "Active" : "Inactive")</span></td>
-                        <td class="actions">
-                            <button class="text-button" @onclick="() => EditAccount(account)">Edit</button>
-                            <button class="text-button" @onclick="() => ToggleAccount(account.Id)">@(account.IsActive ? "Deactivate" : "Activate")</button>
-                        </td>
-                    </tr>
+                    <option value="@t">@t</option>
                 }
-            </tbody>
-        </table>
-    }
-</section>
+            </select>
+        </span>
+        <span class="coa-filter-dot">·</span>
+        <span class="coa-filter-wrap">
+            <select class="coa-filter-select" @bind="statusFilterStr">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="">All status</option>
+            </select>
+        </span>
+    </div>
+</div>
+<hr class="coa-thin-rule" />
+
+@if (loading)
+{
+    <p class="coa-empty">Loading…</p>
+}
+else if (!VisibleGroups.Any())
+{
+    <p class="coa-empty">No accounts match the current filter.</p>
+}
+else
+{
+    @foreach (var group in VisibleGroups)
+    {
+            <div class="coa-group">
+                <div class="coa-group-header" @onclick="() => ToggleGroup(group.Key)">
+                    <span class="coa-group-label">@group.Label</span>
+                    <span class="coa-group-rule"></span>
+                    <span class="coa-group-meta">@group.Accounts.Count @(group.Accounts.Count == 1 ? "acct" : "accts") · normal @group.NormalBalance</span>
+                    <span class="coa-group-chevron">@(collapsedGroups.Contains(group.Key) ? "▸" : "▾")</span>
+                </div>
+                @if (!collapsedGroups.Contains(group.Key))
+                {
+                    @foreach (var account in group.Accounts)
+                    {
+                        <div class="coa-row @(!account.IsActive ? "coa-row--inactive" : "")">
+                            <span class="coa-code">@account.Code</span>
+                            <span class="coa-name">@account.Name</span>
+                            <span class="coa-balance">@group.NormalBalance</span>
+                            <span class="coa-status">
+                                <span class="coa-dot @(account.IsActive ? "coa-dot--active" : "")"></span>
+                                @(account.IsActive ? "Active" : "Inactive")
+                            </span>
+                            <span class="coa-row-actions">
+                                <a class="coa-act-link" @onclick="() => EditAccount(account)">Edit</a>
+                                <span class="coa-act-sep">|</span>
+                                @if (account.IsActive)
+                                {
+                                    <a class="coa-act-stop" @onclick="() => RequestStop(account)">Stop</a>
+                                }
+                                else
+                                {
+                                    <span class="coa-act-off">Stop</span>
+                                }
+                            </span>
+                        </div>
+                    }
+                }
+            </div>
+        }
+}
+
+@if (confirmStopAccount is not null)
+{
+    <div class="coa-overlay" @onclick="CancelStop">
+        <div class="coa-dialog" @onclick:stopPropagation="true">
+            <p class="coa-dialog-title">Deactivate account?</p>
+            <p class="coa-dialog-body">
+                <strong>@confirmStopAccount.Code</strong> · @confirmStopAccount.Name will be marked inactive.
+            </p>
+            <div class="coa-dialog-footer">
+                <a class="coa-dialog-cancel" @onclick="CancelStop">Keep active</a>
+                <a class="coa-dialog-confirm" @onclick="ConfirmStop">Deactivate</a>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private List<Account> accounts = [];
     private bool loading = true;
     private bool editing;
-    private string? search;
-    private string? typeFilter;
-    private string? statusFilter;
+    private string searchText = "";
+    private string typeFilterStr = "";
+    private string statusFilterStr = "active";
+    private Account? confirmStopAccount;
+    private HashSet<string> collapsedGroups = [];
     private AccountForm editModel = new();
 
-    private bool CanSaveAccount => !string.IsNullOrWhiteSpace(editModel.Code) && !string.IsNullOrWhiteSpace(editModel.Name);
+    private static readonly (string Key, string Label, string NormalBalance, Func<AccountType, bool> Matches)[] GroupDefs =
+    [
+        ("assets",      "ASSETS",      "Dr", t => t == AccountType.Asset),
+        ("liabilities", "LIABILITIES", "Cr", t => t == AccountType.Liability),
+        ("equity",      "EQUITY",      "Cr", t => t == AccountType.Equity),
+        ("revenue",     "REVENUE",     "Cr", t => t is AccountType.Revenue or AccountType.Income),
+        ("expenses",    "EXPENSES",    "Dr", t => t == AccountType.Expense),
+    ];
+
+    private AccountType? TypeFilter =>
+        Enum.TryParse<AccountType>(typeFilterStr, out var t) ? t : null;
+
+    private bool? StatusFilter => statusFilterStr switch
+    {
+        "active" => true,
+        "inactive" => false,
+        _ => null
+    };
+
+    private string CurrentPeriod => $"{DateTime.Now:yyyy-MM}";
+
+    private bool CanSave =>
+        !string.IsNullOrWhiteSpace(editModel.Code) && !string.IsNullOrWhiteSpace(editModel.Name);
+
+    private record GroupResult(string Key, string Label, string NormalBalance, List<Account> Accounts);
+
+    private IEnumerable<GroupResult> VisibleGroups
+    {
+        get
+        {
+            var text = searchText.Trim();
+            var typeFilter = TypeFilter;
+            var activeFilter = StatusFilter;
+
+            var filtered = accounts.Where(a =>
+                (string.IsNullOrEmpty(text) ||
+                    a.Code.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                    a.Name.Contains(text, StringComparison.OrdinalIgnoreCase)) &&
+                (typeFilter is null || a.Type == typeFilter) &&
+                (activeFilter is null || a.IsActive == activeFilter));
+
+            return GroupDefs
+                .Select(g => new GroupResult(
+                    g.Key, g.Label, g.NormalBalance,
+                    filtered.Where(a => g.Matches(a.Type)).ToList()))
+                .Where(g => g.Accounts.Count > 0);
+        }
+    }
 
     protected override async Task OnInitializedAsync() => await LoadAccounts();
 
     private async Task LoadAccounts()
     {
         loading = true;
-        AccountType? type = Enum.TryParse<AccountType>(typeFilter, out var parsedType) ? parsedType : null;
-        bool? isActive = statusFilter switch
-        {
-            "active" => true,
-            "inactive" => false,
-            _ => null
-        };
-
-        accounts = await Gl.GetAccountsAsync(search, type, isActive);
+        accounts = await Gl.GetAccountsAsync(null, null, null);
         loading = false;
     }
 
-    private async Task ClearFilters()
-    {
-        search = null;
-        typeFilter = null;
-        statusFilter = null;
-        await LoadAccounts();
-    }
-
-    private void NewAccount()
+    private void OpenNew()
     {
         editModel = new AccountForm();
         editing = true;
@@ -175,18 +234,32 @@
 
     private async Task SaveAccount()
     {
-        await Gl.SaveAccountAsync(new AccountEditDto(editModel.Id, editModel.Code, editModel.Name, editModel.Type, editModel.Description, editModel.IsActive));
+        await Gl.SaveAccountAsync(new AccountEditDto(
+            editModel.Id, editModel.Code, editModel.Name,
+            editModel.Type, editModel.Description, editModel.IsActive));
         editing = false;
         await LoadAccounts();
     }
 
-    private async Task ToggleAccount(int id)
+    private void RequestStop(Account account) => confirmStopAccount = account;
+
+    private void CancelStop() => confirmStopAccount = null;
+
+    private async Task ConfirmStop()
     {
-        await Gl.ToggleAccountAsync(id);
-        await LoadAccounts();
+        if (confirmStopAccount is not null)
+        {
+            await Gl.ToggleAccountAsync(confirmStopAccount.Id);
+            confirmStopAccount = null;
+            await LoadAccounts();
+        }
     }
 
-    private static string NormalBalance(AccountType type) => type is AccountType.Asset or AccountType.Expense ? "Debit" : "Credit";
+    private void ToggleGroup(string key)
+    {
+        if (!collapsedGroups.Add(key))
+            collapsedGroups.Remove(key);
+    }
 
     private sealed class AccountForm
     {
