@@ -4,6 +4,7 @@ using Books.Blazor.Services;
 using Books.Blazor.Components;
 using Books.Infrastructure;
 using Books.Infrastructure.Data;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);

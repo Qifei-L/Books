@@ -2,54 +2,50 @@
 @rendermode InteractiveServer
 @inject GeneralLedgerAppService Gl
 
-<div class="page-header">
-    <div>
-        <p class="eyebrow">General Ledger</p>
-        <h1>Chart of Accounts</h1>
-    </div>
-    <button @onclick="NewAccount">New Account</button>
-</div>
+<div class="accounts-page">
+    <section class="accounts-hero">
+        <div>
+            <p class="eyebrow">General Ledger</p>
+            <h1>Chart of Accounts</h1>
+            <p class="hero-copy">Maintain the account structure used across journals, statements, and reporting.</p>
+        </div>
+        <button class="primary-action" @onclick="NewAccount">
+            <span class="button-symbol" aria-hidden="true">+</span>
+            New Account
+        </button>
+    </section>
 
-<section class="panel">
-    <div class="toolbar">
-        <label>Search
-            <input placeholder="Code or name" @bind="search" />
-        </label>
-        <label>Type
-            <select @bind="typeFilter">
-                <option value="">All</option>
-                @foreach (var type in Enum.GetValues<AccountType>())
-                {
-                    <option value="@type">@type</option>
-                }
-            </select>
-        </label>
-        <label>Status
-            <select @bind="statusFilter">
-                <option value="">All</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-            </select>
-        </label>
-        <span></span>
-        <button @onclick="LoadAccounts">Search</button>
-        <button class="secondary" @onclick="ClearFilters">Clear</button>
-    </div>
-</section>
+    <section class="account-metrics" aria-label="Account summary">
+        <div class="account-metric">
+            <span>Total Accounts</span>
+            <strong>@accounts.Count</strong>
+        </div>
+        <div class="account-metric">
+            <span>Active</span>
+            <strong>@ActiveAccountCount</strong>
+        </div>
+        <div class="account-metric">
+            <span>Inactive</span>
+            <strong>@InactiveAccountCount</strong>
+        </div>
+        <div class="account-metric">
+            <span>Normal Debit</span>
+            <strong>@DebitNormalCount</strong>
+        </div>
+        <div class="account-metric">
+            <span>Normal Credit</span>
+            <strong>@CreditNormalCount</strong>
+        </div>
+    </section>
 
-@if (editing)
-{
-    <section class="panel">
-        <h2>@(editModel.Id.HasValue ? "Edit Account" : "New Account")</h2>
-        <div class="form-grid">
-            <label>Code
-                <input @bind="editModel.Code" />
-            </label>
-            <label>Name
-                <input @bind="editModel.Name" />
+    <section class="panel account-filter-panel">
+        <div class="accounts-toolbar">
+            <label class="search-field">Search
+                <input placeholder="Code or account name" @bind="search" />
             </label>
             <label>Type
-                <select @bind="editModel.Type">
+                <select @bind="typeFilter">
+                    <option value="">All types</option>
                     @foreach (var type in Enum.GetValues<AccountType>())
                     {
                         <option value="@type">@type</option>
@@ -57,65 +53,140 @@
                 </select>
             </label>
             <label>Status
-                <select @bind="editModel.IsActive">
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
+                <select @bind="statusFilter">
+                    <option value="">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
                 </select>
             </label>
-            <label class="wide">Description
-                <input @bind="editModel.Description" />
-            </label>
-        </div>
-        <div class="actions-row">
-            <button disabled="@(!CanSaveAccount)" @onclick="SaveAccount">Save Account</button>
-            <button class="secondary" @onclick="CancelEdit">Cancel</button>
+            <div class="toolbar-actions">
+                <button @onclick="LoadAccounts">Apply</button>
+                <button class="secondary" @onclick="ClearFilters">Clear</button>
+            </div>
         </div>
     </section>
-}
 
-<section class="panel">
-    @if (loading)
+    @if (editing)
     {
-        <div class="empty">Loading accounts...</div>
+        <section class="panel account-editor">
+            <div class="section-title-row">
+                <div>
+                    <p class="eyebrow">Account Setup</p>
+                    <h2>@(editModel.Id.HasValue ? "Edit Account" : "New Account")</h2>
+                </div>
+            </div>
+            <div class="form-grid">
+                <label>Code
+                    <input @bind="editModel.Code" />
+                </label>
+                <label>Name
+                    <input @bind="editModel.Name" />
+                </label>
+                <label>Type
+                    <select @bind="editModel.Type">
+                        @foreach (var type in Enum.GetValues<AccountType>())
+                        {
+                            <option value="@type">@type</option>
+                        }
+                    </select>
+                </label>
+                <label>Status
+                    <select @bind="editModel.IsActive">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </label>
+                <label class="wide">Description
+                    <input @bind="editModel.Description" />
+                </label>
+            </div>
+            <div class="actions-row">
+                <button disabled="@(!CanSaveAccount)" @onclick="SaveAccount">Save Account</button>
+                <button class="secondary" @onclick="CancelEdit">Cancel</button>
+            </div>
+        </section>
     }
-    else if (accounts.Count == 0)
-    {
-        <div class="empty">No accounts found.</div>
-    }
-    else
-    {
-        <table>
-            <thead>
-                <tr>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Normal Balance</th>
-                    <th>Status</th>
-                    <th class="actions">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var account in accounts)
+
+    <section class="panel accounts-list-panel">
+        <div class="section-title-row">
+            <div>
+                <p class="eyebrow">Accounts</p>
+                <h2>Account Register</h2>
+            </div>
+            <span class="muted-note">@accounts.Count account@(accounts.Count == 1 ? string.Empty : "s") shown</span>
+        </div>
+
+        @if (loading)
+        {
+            <div class="empty">Loading accounts...</div>
+        }
+        else if (accounts.Count == 0)
+        {
+            <div class="empty">No accounts found.</div>
+        }
+        else
+        {
+            <div class="account-groups">
+                @foreach (var group in AccountGroups)
                 {
-                    <tr>
-                        <td>@account.Code</td>
-                        <td>@account.Name</td>
-                        <td>@account.Type</td>
-                        <td>@NormalBalance(account.Type)</td>
-                        <td><span class="@(account.IsActive ? "badge badge-active" : "badge badge-inactive")">@(account.IsActive ? "Active" : "Inactive")</span></td>
-                        <td class="actions">
-                            <button class="text-button" @onclick="() => EditAccount(account)">Edit</button>
-                            <button class="text-button" @onclick="() => ToggleAccount(account.Id)">@(account.IsActive ? "Deactivate" : "Activate")</button>
-                        </td>
-                    </tr>
+                    <section class="account-group">
+                        <header class="account-group-header">
+                            <div class="account-type-title">
+                                <span class="type-indicator @TypeClass(group.Type)"></span>
+                                <strong>@GroupTitle(group.Type)</strong>
+                            </div>
+                            <span>@group.Accounts.Count account@(group.Accounts.Count == 1 ? string.Empty : "s") · normal @NormalBalance(group.Type)</span>
+                        </header>
+
+                        <div class="account-row account-row-head" aria-hidden="true">
+                            <span>Code</span>
+                            <span>Name</span>
+                            <span>Balance</span>
+                            <span>Status</span>
+                            <span>Actions</span>
+                        </div>
+
+                        @foreach (var account in group.Accounts)
+                        {
+                            <div class="account-row">
+                                <span class="account-code">@account.Code</span>
+                                <span class="account-name">
+                                    <strong>@account.Name</strong>
+                                    @if (!string.IsNullOrWhiteSpace(account.Description))
+                                    {
+                                        <small>@account.Description</small>
+                                    }
+                                </span>
+                                <span class="normal-balance">@NormalBalance(account.Type)</span>
+                                <span>
+                                    <span class="@(account.IsActive ? "status-pill status-active" : "status-pill status-inactive")">
+                                        @(account.IsActive ? "Active" : "Inactive")
+                                    </span>
+                                </span>
+                                <span class="row-actions">
+                                    <button class="text-button" @onclick="() => EditAccount(account)">Edit</button>
+                                    <button class="text-button quiet" @onclick="() => ToggleAccount(account.Id)">@(account.IsActive ? "Deactivate" : "Activate")</button>
+                                </span>
+                            </div>
+                        }
+                    </section>
                 }
-            </tbody>
-        </table>
-    }
-</section>
+            </div>
+        }
+    </section>
+</div>
 
 @code {
+    private static readonly AccountType[] AccountTypeOrder =
+    [
+        AccountType.Asset,
+        AccountType.Liability,
+        AccountType.Equity,
+        AccountType.Income,
+        AccountType.Revenue,
+        AccountType.Expense
+    ];
+
     private List<Account> accounts = [];
     private bool loading = true;
     private bool editing;
@@ -125,6 +196,13 @@
     private AccountForm editModel = new();
 
     private bool CanSaveAccount => !string.IsNullOrWhiteSpace(editModel.Code) && !string.IsNullOrWhiteSpace(editModel.Name);
+    private int ActiveAccountCount => accounts.Count(x => x.IsActive);
+    private int InactiveAccountCount => accounts.Count(x => !x.IsActive);
+    private int DebitNormalCount => accounts.Count(x => NormalBalance(x.Type) == "Debit");
+    private int CreditNormalCount => accounts.Count(x => NormalBalance(x.Type) == "Credit");
+    private IEnumerable<AccountGroupView> AccountGroups => AccountTypeOrder
+        .Select(type => new AccountGroupView(type, accounts.Where(account => account.Type == type).OrderBy(account => account.Code).ToList()))
+        .Where(group => group.Accounts.Count > 0);
 
     protected override async Task OnInitializedAsync() => await LoadAccounts();
 
@@ -187,6 +265,20 @@
     }
 
     private static string NormalBalance(AccountType type) => type is AccountType.Asset or AccountType.Expense ? "Debit" : "Credit";
+    private static string GroupTitle(AccountType type) => type switch
+    {
+        AccountType.Asset => "Assets",
+        AccountType.Liability => "Liabilities",
+        AccountType.Equity => "Equity",
+        AccountType.Income => "Income",
+        AccountType.Revenue => "Revenue",
+        AccountType.Expense => "Expenses",
+        _ => type.ToString()
+    };
+
+    private static string TypeClass(AccountType type) => $"type-{type.ToString().ToLowerInvariant()}";
+
+    private sealed record AccountGroupView(AccountType Type, List<Account> Accounts);
 
     private sealed class AccountForm
     {
