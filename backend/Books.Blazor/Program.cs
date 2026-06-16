@@ -37,7 +37,13 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+// Only redirect to not-found page for navigation requests (no file extension).
+// Static assets like /_framework/blazor.web.js must return a real 404, not an HTML page,
+// otherwise the browser gets HTML where it expects JavaScript and Blazor fails to load.
+app.UseWhen(
+    ctx => !Path.HasExtension(ctx.Request.Path.Value),
+    branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true)
+);
 app.UseHttpsRedirection();
 
 app.UseAntiforgery();
