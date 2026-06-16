@@ -23,8 +23,14 @@ public class ReportService(IAppDbContext db)
 
     public async Task<List<TrialBalanceRowDto>> GetTrialBalanceAsync(int ledgerId, DateTime? from, DateTime? to)
     {
+        var entityId = await GetLedgerEntityIdAsync(ledgerId);
+        if (!entityId.HasValue)
+        {
+            return [];
+        }
+
         var accounts = await db.Accounts
-            .Where(x => x.LedgerId == ledgerId)
+            .Where(x => x.EntityId == entityId.Value)
             .OrderBy(x => x.Code)
             .ToListAsync();
 
@@ -45,8 +51,14 @@ public class ReportService(IAppDbContext db)
 
     public async Task<List<GeneralLedgerRowDto>> GetGeneralLedgerAsync(int ledgerId, int accountId, DateTime? from, DateTime? to)
     {
-        var accountBelongsToLedger = await db.Accounts.AnyAsync(x => x.Id == accountId && x.LedgerId == ledgerId);
-        if (!accountBelongsToLedger)
+        var entityId = await GetLedgerEntityIdAsync(ledgerId);
+        if (!entityId.HasValue)
+        {
+            return [];
+        }
+
+        var accountBelongsToEntity = await db.Accounts.AnyAsync(x => x.Id == accountId && x.EntityId == entityId.Value);
+        if (!accountBelongsToEntity)
         {
             return [];
         }
@@ -109,8 +121,14 @@ public class ReportService(IAppDbContext db)
         DateTime? from,
         DateTime? to)
     {
+        var entityId = await GetLedgerEntityIdAsync(ledgerId);
+        if (!entityId.HasValue)
+        {
+            return [];
+        }
+
         var accounts = await db.Accounts
-            .Where(x => x.LedgerId == ledgerId && types.Contains(x.Type))
+            .Where(x => x.EntityId == entityId.Value && types.Contains(x.Type))
             .OrderBy(x => x.Code)
             .ToListAsync();
 
@@ -129,5 +147,13 @@ public class ReportService(IAppDbContext db)
 
             return new FinancialStatementRowDto(account.Code, account.Name, account.Type, debit, credit, balance);
         }).ToList();
+    }
+
+    private async Task<int?> GetLedgerEntityIdAsync(int ledgerId)
+    {
+        return await db.Ledgers
+            .Where(x => x.Id == ledgerId)
+            .Select(x => (int?)x.EntityId)
+            .FirstOrDefaultAsync();
     }
 }

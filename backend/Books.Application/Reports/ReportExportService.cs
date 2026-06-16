@@ -284,12 +284,19 @@ public class ReportExportService(IAppDbContext db, ReportService reports)
     private async Task<Ledger> GetLedgerAsync(int ledgerId)
     {
         return await db.Ledgers.FirstOrDefaultAsync(x => x.Id == ledgerId)
-            ?? new Ledger { Id = ledgerId, Name = $"Ledger {ledgerId}", IsActive = true };
+            ?? new Ledger { Id = ledgerId, Code = $"L{ledgerId}", Name = $"Ledger {ledgerId}", IsActive = true };
     }
 
     private async Task<Account?> GetAccountAsync(int ledgerId, int accountId)
     {
-        return await db.Accounts.FirstOrDefaultAsync(x => x.Id == accountId && x.LedgerId == ledgerId);
+        var entityId = await db.Ledgers
+            .Where(x => x.Id == ledgerId)
+            .Select(x => (int?)x.EntityId)
+            .FirstOrDefaultAsync();
+
+        return entityId.HasValue
+            ? await db.Accounts.FirstOrDefaultAsync(x => x.Id == accountId && x.EntityId == entityId.Value)
+            : null;
     }
 
     private static string PeriodLabel(DateTime? from, DateTime? to)

@@ -7,6 +7,7 @@ namespace Books.Infrastructure.Data;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options), IAppDbContext, IDataProtectionKeyContext
 {
+    public DbSet<Entity> Entities => Set<Entity>();
     public DbSet<Ledger> Ledgers => Set<Ledger>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
@@ -15,11 +16,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<Ledger>().Property(x => x.Name).HasMaxLength(200).IsRequired();
-        modelBuilder.Entity<Ledger>()
+        modelBuilder.Entity<Entity>().Property(x => x.Code).HasMaxLength(30).IsRequired();
+        modelBuilder.Entity<Entity>().Property(x => x.Name).HasMaxLength(200).IsRequired();
+        modelBuilder.Entity<Entity>().HasIndex(x => x.Code).IsUnique();
+        modelBuilder.Entity<Entity>()
             .HasMany(x => x.Accounts)
-            .WithOne(x => x.Ledger)
-            .HasForeignKey(x => x.LedgerId);
+            .WithOne(x => x.Entity)
+            .HasForeignKey(x => x.EntityId);
+        modelBuilder.Entity<Entity>()
+            .HasMany(x => x.Ledgers)
+            .WithOne(x => x.Entity)
+            .HasForeignKey(x => x.EntityId);
+
+        modelBuilder.Entity<Ledger>().Property(x => x.Code).HasMaxLength(30).IsRequired();
+        modelBuilder.Entity<Ledger>().Property(x => x.Name).HasMaxLength(200).IsRequired();
+        modelBuilder.Entity<Ledger>().Property(x => x.LedgerType).HasConversion<string>().HasMaxLength(30);
+        modelBuilder.Entity<Ledger>().Property(x => x.AllowDeletePostedJournal).HasDefaultValue(true);
+        modelBuilder.Entity<Ledger>().HasIndex(x => new { x.EntityId, x.Code }).IsUnique();
         modelBuilder.Entity<Ledger>()
             .HasMany(x => x.JournalEntries)
             .WithOne(x => x.Ledger)
@@ -31,9 +44,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Account>().Property(x => x.Type).HasConversion<string>().HasMaxLength(30);
         modelBuilder.Entity<Account>().Property(x => x.IsSystemReserved).HasDefaultValue(false);
         modelBuilder.Entity<Account>().Property(x => x.AllowManualJournal).HasDefaultValue(true);
-        modelBuilder.Entity<Account>().HasIndex(x => new { x.LedgerId, x.Code }).IsUnique();
-
-        modelBuilder.Entity<Ledger>().Property(x => x.AllowDeletePostedJournal).HasDefaultValue(true);
+        modelBuilder.Entity<Account>().HasIndex(x => new { x.EntityId, x.Code }).IsUnique();
 
         modelBuilder.Entity<JournalEntry>().Property(x => x.JournalNo).HasMaxLength(50).IsRequired();
         modelBuilder.Entity<JournalEntry>().Property(x => x.EntryDate).HasColumnType("timestamp without time zone");

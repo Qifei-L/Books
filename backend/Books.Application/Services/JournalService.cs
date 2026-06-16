@@ -163,9 +163,19 @@ public class JournalService(IAppDbContext db)
     {
         var accountIds = entry.Lines.Select(x => x.AccountId).Distinct().ToList();
 
+        var ledger = await db.Ledgers
+            .Where(l => l.Id == entry.LedgerId)
+            .Select(l => new { l.Id, l.EntityId })
+            .FirstOrDefaultAsync();
+
+        if (ledger is null)
+        {
+            throw new InvalidOperationException("Journal entry references an unknown ledger.");
+        }
+
         var accounts = await db.Accounts
             .Where(a => accountIds.Contains(a.Id))
-            .Select(a => new { a.Id, a.LedgerId, a.IsActive, a.AllowManualJournal })
+            .Select(a => new { a.Id, a.EntityId, a.IsActive, a.AllowManualJournal })
             .ToListAsync();
 
         if (accounts.Count != accountIds.Count)
@@ -173,9 +183,9 @@ public class JournalService(IAppDbContext db)
             throw new InvalidOperationException("Journal entry contains unknown accounts.");
         }
 
-        if (accounts.Any(a => a.LedgerId != entry.LedgerId))
+        if (accounts.Any(a => a.EntityId != ledger.EntityId))
         {
-            throw new InvalidOperationException("Journal entry contains accounts from another ledger.");
+            throw new InvalidOperationException("Journal entry contains accounts from another entity.");
         }
 
         if (enforceManualJournalAllowed && accounts.Any(a => !a.IsActive))

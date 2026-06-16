@@ -12,15 +12,50 @@ public class GeneralLedgerAppService(
     JournalService journalService,
     ReportService reportService)
 {
+    public async Task<Entity> GetDefaultEntityAsync()
+    {
+        var entity = await db.Entities
+            .OrderByDescending(x => x.Code == "DEMO")
+            .ThenBy(x => x.Id)
+            .FirstOrDefaultAsync();
+        if (entity is not null)
+        {
+            return entity;
+        }
+
+        entity = new Entity
+        {
+            Code = "DEMO",
+            Name = "Demo Company",
+            IsActive = true
+        };
+        db.Entities.Add(entity);
+        await db.SaveChangesAsync();
+        return entity;
+    }
+
     public async Task<Ledger> GetDefaultLedgerAsync()
     {
-        var ledger = await db.Ledgers.OrderBy(x => x.Id).FirstOrDefaultAsync();
+        var entity = await GetDefaultEntityAsync();
+        var ledger = await db.Ledgers
+            .Where(x => x.EntityId == entity.Id)
+            .OrderByDescending(x => x.Code == "MAIN")
+            .ThenBy(x => x.Id)
+            .FirstOrDefaultAsync();
         if (ledger is not null)
         {
             return ledger;
         }
 
-        ledger = new Ledger { Name = "Demo Ledger", IsActive = true, AllowDeletePostedJournal = true };
+        ledger = new Ledger
+        {
+            EntityId = entity.Id,
+            Code = "MAIN",
+            Name = "Main Ledger",
+            LedgerType = LedgerType.Main,
+            IsActive = true,
+            AllowDeletePostedJournal = true
+        };
         db.Ledgers.Add(ledger);
         await db.SaveChangesAsync();
         return ledger;
@@ -29,7 +64,7 @@ public class GeneralLedgerAppService(
     public async Task<DashboardDto> GetDashboardAsync()
     {
         var ledger = await GetDefaultLedgerAsync();
-        var accountsCount = await db.Accounts.CountAsync(x => x.LedgerId == ledger.Id);
+        var accountsCount = await db.Accounts.CountAsync(x => x.EntityId == ledger.EntityId);
         var draftCount = await db.JournalEntries.CountAsync(x => x.LedgerId == ledger.Id && x.Status == JournalStatus.Draft);
         var postedCount = await db.JournalEntries.CountAsync(x => x.LedgerId == ledger.Id && x.Status == JournalStatus.Posted);
         var latestEntries = await db.JournalEntries
@@ -46,7 +81,7 @@ public class GeneralLedgerAppService(
     public async Task<List<Account>> GetAccountsAsync(string? search, AccountType? type, bool? isActive)
     {
         var ledger = await GetDefaultLedgerAsync();
-        var query = db.Accounts.Where(x => x.LedgerId == ledger.Id);
+        var query = db.Accounts.Where(x => x.EntityId == ledger.EntityId);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -71,8 +106,8 @@ public class GeneralLedgerAppService(
     {
         var ledger = await GetDefaultLedgerAsync();
         var entity = account.Id.HasValue
-            ? await db.Accounts.FirstAsync(x => x.Id == account.Id.Value && x.LedgerId == ledger.Id)
-            : new Account { LedgerId = ledger.Id, IsSystemReserved = false };
+            ? await db.Accounts.FirstAsync(x => x.Id == account.Id.Value && x.EntityId == ledger.EntityId)
+            : new Account { EntityId = ledger.EntityId, IsSystemReserved = false };
 
         if (!entity.IsSystemReserved)
         {
@@ -97,14 +132,15 @@ public class GeneralLedgerAppService(
     {
         var ledger = await GetDefaultLedgerAsync();
         return await db.Accounts
-            .Where(x => x.LedgerId == ledger.Id && x.IsActive && x.AllowManualJournal)
+            .Where(x => x.EntityId == ledger.EntityId && x.IsActive && x.AllowManualJournal)
             .OrderBy(x => x.Code)
             .ToListAsync();
     }
 
     public async Task ToggleAccountAsync(int id)
     {
-        var account = await db.Accounts.FirstAsync(x => x.Id == id);
+        var ledger = await GetDefaultLedgerAsync();
+        var account = await db.Accounts.FirstAsync(x => x.Id == id && x.EntityId == ledger.EntityId);
         account.IsActive = !account.IsActive;
         await db.SaveChangesAsync();
     }
@@ -239,13 +275,29 @@ public class GeneralLedgerAppService(
     public async Task<LedgerSettingsDto> GetLedgerSettingsAsync()
     {
         var ledger = await GetDefaultLedgerAsync();
-        return new LedgerSettingsDto(ledger.Id, ledger.Name, "USD", "2026-06", ledger.IsActive, ledger.AllowDeletePostedJournal);
+        var entity = await db.Entities.FirstAsync(x => x.Id == ledger.EntityId);
+        return new LedgerSettingsDto(
+            entity.Id,
+            entity.Code,
+            entity.Name,
+            ledger.Id,
+            ledger.Code,
+            ledger.Name,
+            ledger.LedgerType,
+            "USD",
+            "2026-06",
+            ledger.IsActive,
+            ledger.AllowDeletePostedJournal);
     }
 
     public async Task SaveLedgerSettingsAsync(LedgerSettingsDto settings)
     {
-        var ledger = await db.Ledgers.FirstAsync(x => x.Id == settings.LedgerId);
+        var ledger = await db.Ledgers.Include(x => x.Entity).FirstAsync(x => x.Id == settings.LedgerId);
+        ledger.Entity!.Code = settings.EntityCode.Trim();
+        ledger.Entity.Name = settings.EntityName.Trim();
+        ledger.Code = settings.LedgerCode.Trim();
         ledger.Name = settings.LedgerName.Trim();
+        ledger.LedgerType = settings.LedgerType;
         ledger.IsActive = settings.IsActive;
         ledger.AllowDeletePostedJournal = settings.AllowDeletePostedJournal;
         await db.SaveChangesAsync();
@@ -263,5 +315,16 @@ public record JournalEntryListDto(int Id, string JournalNo, DateTime EntryDate, 
 public record AccountEditDto(int? Id, string Code, string Name, AccountType Type, string? Description, bool IsActive, bool AllowManualJournal);
 public record ManualJournalDto(int? Id, string? JournalNo, DateTime EntryDate, string Period, string Currency, string BaseCurrency, decimal ExchangeRate, string? Description, List<ManualJournalLineDto> Lines);
 public record ManualJournalLineDto(int AccountId, string Direction, decimal Amount, decimal BaseAmount, string? Description);
-public record LedgerSettingsDto(int LedgerId, string LedgerName, string BaseCurrency, string CurrentPeriod, bool IsActive, bool AllowDeletePostedJournal);
+public record LedgerSettingsDto(
+    int EntityId,
+    string EntityCode,
+    string EntityName,
+    int LedgerId,
+    string LedgerCode,
+    string LedgerName,
+    LedgerType LedgerType,
+    string BaseCurrency,
+    string CurrentPeriod,
+    bool IsActive,
+    bool AllowDeletePostedJournal);
 public record NumberingRuleDto(string DocumentType, string Prefix, string DateFormat, int PaddingLength, string Separator, bool ResetMonthly, bool ResetYearly, bool IsActive);

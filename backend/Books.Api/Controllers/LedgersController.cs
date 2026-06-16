@@ -1,6 +1,6 @@
-using Books.Infrastructure.Data;
 using Books.Application.DTOs;
 using Books.Domain.Entities;
+using Books.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,9 +11,18 @@ namespace Books.Api.Controllers;
 public class LedgersController(AppDbContext db) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<List<Ledger>>> GetAll()
+    public async Task<ActionResult<List<Ledger>>> GetAll([FromQuery] int? entityId = null)
     {
-        return await db.Ledgers.OrderBy(x => x.Name).ToListAsync();
+        var query = db.Ledgers.AsQueryable();
+        if (entityId.HasValue)
+        {
+            query = query.Where(x => x.EntityId == entityId.Value);
+        }
+
+        return await query
+            .OrderBy(x => x.EntityId)
+            .ThenBy(x => x.Code)
+            .ToListAsync();
     }
 
     [HttpGet("{id:int}")]
@@ -26,9 +35,18 @@ public class LedgersController(AppDbContext db) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Ledger>> Create(CreateLedgerDto dto)
     {
+        var entityExists = await db.Entities.AnyAsync(x => x.Id == dto.EntityId);
+        if (!entityExists)
+        {
+            return NotFound(new { error = "Entity not found." });
+        }
+
         var ledger = new Ledger
         {
+            EntityId = dto.EntityId,
+            Code = dto.Code.Trim(),
             Name = dto.Name.Trim(),
+            LedgerType = dto.LedgerType,
             IsActive = dto.IsActive,
             AllowDeletePostedJournal = dto.AllowDeletePostedJournal
         };
@@ -46,7 +64,16 @@ public class LedgersController(AppDbContext db) : ControllerBase
             return NotFound();
         }
 
+        var entityExists = await db.Entities.AnyAsync(x => x.Id == dto.EntityId);
+        if (!entityExists)
+        {
+            return NotFound(new { error = "Entity not found." });
+        }
+
+        ledger.EntityId = dto.EntityId;
+        ledger.Code = dto.Code.Trim();
         ledger.Name = dto.Name.Trim();
+        ledger.LedgerType = dto.LedgerType;
         ledger.IsActive = dto.IsActive;
         ledger.AllowDeletePostedJournal = dto.AllowDeletePostedJournal;
         await db.SaveChangesAsync();

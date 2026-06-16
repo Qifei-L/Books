@@ -1,6 +1,6 @@
-using Books.Infrastructure.Data;
 using Books.Application.DTOs;
 using Books.Domain.Entities;
+using Books.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,13 +9,28 @@ namespace Books.Api.Controllers;
 [ApiController]
 public class AccountsController(AppDbContext db) : ControllerBase
 {
+    [HttpGet("api/v1/entities/{entityId:int}/accounts")]
+    public async Task<ActionResult<List<Account>>> GetByEntity(int entityId)
+    {
+        var entityExists = await db.Entities.AnyAsync(x => x.Id == entityId);
+        if (!entityExists)
+        {
+            return NotFound(new { error = "Entity not found." });
+        }
+
+        return await QueryAccountsByEntity(entityId).ToListAsync();
+    }
+
     [HttpGet("api/v1/ledgers/{ledgerId:int}/accounts")]
     public async Task<ActionResult<List<Account>>> GetByLedger(int ledgerId)
     {
-        return await db.Accounts
-            .Where(x => x.LedgerId == ledgerId)
-            .OrderBy(x => x.Code)
-            .ToListAsync();
+        var entityId = await GetLedgerEntityIdAsync(ledgerId);
+        if (!entityId.HasValue)
+        {
+            return NotFound(new { error = "Ledger not found." });
+        }
+
+        return await QueryAccountsByEntity(entityId.Value).ToListAsync();
     }
 
     [HttpGet("api/v1/accounts/{id:int}")]
@@ -25,29 +40,28 @@ public class AccountsController(AppDbContext db) : ControllerBase
         return account is null ? NotFound() : account;
     }
 
-    [HttpPost("api/v1/ledgers/{ledgerId:int}/accounts")]
-    public async Task<ActionResult<Account>> Create(int ledgerId, CreateAccountDto dto)
+    [HttpPost("api/v1/entities/{entityId:int}/accounts")]
+    public async Task<ActionResult<Account>> CreateForEntity(int entityId, CreateAccountDto dto)
     {
-        var ledgerExists = await db.Ledgers.AnyAsync(x => x.Id == ledgerId);
-        if (!ledgerExists)
+        var entityExists = await db.Entities.AnyAsync(x => x.Id == entityId);
+        if (!entityExists)
+        {
+            return NotFound(new { error = "Entity not found." });
+        }
+
+        return await CreateAccountAsync(entityId, dto);
+    }
+
+    [HttpPost("api/v1/ledgers/{ledgerId:int}/accounts")]
+    public async Task<ActionResult<Account>> CreateForLedger(int ledgerId, CreateAccountDto dto)
+    {
+        var entityId = await GetLedgerEntityIdAsync(ledgerId);
+        if (!entityId.HasValue)
         {
             return NotFound(new { error = "Ledger not found." });
         }
 
-        var account = new Account
-        {
-            LedgerId = ledgerId,
-            Code = dto.Code.Trim(),
-            Name = dto.Name.Trim(),
-            Type = dto.Type,
-            Description = dto.Description?.Trim() ?? string.Empty,
-            IsActive = dto.IsActive,
-            IsSystemReserved = false,
-            AllowManualJournal = dto.AllowManualJournal
-        };
-        db.Accounts.Add(account);
-        await db.SaveChangesAsync();
-        return CreatedAtAction(nameof(Get), new { id = account.Id }, account);
+        return await CreateAccountAsync(entityId.Value, dto);
     }
 
     [HttpPut("api/v1/accounts/{id:int}")]
@@ -90,5 +104,38 @@ public class AccountsController(AppDbContext db) : ControllerBase
         account.IsActive = false;
         await db.SaveChangesAsync();
         return NoContent();
+    }
+
+    private IQueryable<Account> QueryAccountsByEntity(int entityId)
+    {
+        return db.Accounts
+            .Where(x => x.EntityId == entityId)
+            .OrderBy(x => x.Code);
+    }
+
+    private async Task<ActionResult<Account>> CreateAccountAsync(int entityId, CreateAccountDto dto)
+    {
+        var account = new Account
+        {
+            EntityId = entityId,
+            Code = dto.Code.Trim(),
+            Name = dto.Name.Trim(),
+            Type = dto.Type,
+            Description = dto.Description?.Trim() ?? string.Empty,
+            IsActive = dto.IsActive,
+            IsSystemReserved = false,
+            AllowManualJournal = dto.AllowManualJournal
+        };
+        db.Accounts.Add(account);
+        await db.SaveChangesAsync();
+        return CreatedAtAction(nameof(Get), new { id = account.Id }, account);
+    }
+
+    private async Task<int?> GetLedgerEntityIdAsync(int ledgerId)
+    {
+        return await db.Ledgers
+            .Where(x => x.Id == ledgerId)
+            .Select(x => (int?)x.EntityId)
+            .FirstOrDefaultAsync();
     }
 }

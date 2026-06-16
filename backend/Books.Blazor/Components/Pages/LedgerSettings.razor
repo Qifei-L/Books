@@ -18,8 +18,25 @@ else
 {
     <section class="panel">
         <div class="form-grid">
+            <label>Entity Code
+                <input @bind="settings.EntityCode" />
+            </label>
+            <label>Entity Name
+                <input @bind="settings.EntityName" />
+            </label>
+            <label>Ledger Code
+                <input @bind="settings.LedgerCode" />
+            </label>
             <label>Ledger Name
                 <input @bind="settings.LedgerName" />
+            </label>
+            <label>Ledger Type
+                <select @bind="settings.LedgerType">
+                    @foreach (var value in Enum.GetValues<LedgerType>())
+                    {
+                        <option value="@value">@value</option>
+                    }
+                </select>
             </label>
             <label>Base Currency
                 <input disabled @bind="settings.BaseCurrency" />
@@ -44,15 +61,24 @@ else
 @code {
     private LedgerSettingsForm settings = new();
     private bool loading = true;
-    private bool canSave => !string.IsNullOrWhiteSpace(settings.LedgerName);
+    private bool canSave =>
+        !string.IsNullOrWhiteSpace(settings.EntityCode) &&
+        !string.IsNullOrWhiteSpace(settings.EntityName) &&
+        !string.IsNullOrWhiteSpace(settings.LedgerCode) &&
+        !string.IsNullOrWhiteSpace(settings.LedgerName);
 
     protected override async Task OnInitializedAsync()
     {
         var dto = await Gl.GetLedgerSettingsAsync();
         settings = new LedgerSettingsForm
         {
+            EntityId = dto.EntityId,
+            EntityCode = dto.EntityCode,
+            EntityName = dto.EntityName,
             LedgerId = dto.LedgerId,
+            LedgerCode = dto.LedgerCode,
             LedgerName = dto.LedgerName,
+            LedgerType = dto.LedgerType,
             BaseCurrency = dto.BaseCurrency,
             CurrentPeriod = dto.CurrentPeriod,
             IsActive = dto.IsActive,
@@ -63,13 +89,29 @@ else
 
     private async Task Save()
     {
-        await Gl.SaveLedgerSettingsAsync(new LedgerSettingsDto(settings.LedgerId, settings.LedgerName, settings.BaseCurrency, settings.CurrentPeriod, settings.IsActive, settings.AllowDeletePostedJournal));
+        await Gl.SaveLedgerSettingsAsync(new LedgerSettingsDto(
+            settings.EntityId,
+            settings.EntityCode,
+            settings.EntityName,
+            settings.LedgerId,
+            settings.LedgerCode,
+            settings.LedgerName,
+            settings.LedgerType,
+            settings.BaseCurrency,
+            settings.CurrentPeriod,
+            settings.IsActive,
+            settings.AllowDeletePostedJournal));
     }
 
     private sealed class LedgerSettingsForm
     {
+        public int EntityId { get; set; }
+        public string EntityCode { get; set; } = string.Empty;
+        public string EntityName { get; set; } = string.Empty;
         public int LedgerId { get; set; }
+        public string LedgerCode { get; set; } = string.Empty;
         public string LedgerName { get; set; } = string.Empty;
+        public LedgerType LedgerType { get; set; } = LedgerType.Main;
         public string BaseCurrency { get; set; } = "USD";
         public string CurrentPeriod { get; set; } = "2026-06";
         public bool IsActive { get; set; } = true;

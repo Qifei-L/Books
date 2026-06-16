@@ -5,6 +5,7 @@ namespace Books.Application.Interfaces;
 
 public interface IAppDbContext
 {
+    DbSet<Entity> Entities { get; }
     DbSet<Ledger> Ledgers { get; }
     DbSet<Account> Accounts { get; }
     DbSet<JournalEntry> JournalEntries { get; }
