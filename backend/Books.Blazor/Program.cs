@@ -18,6 +18,8 @@ if (!string.IsNullOrWhiteSpace(port))
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<ReportDownloadService>();
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<AppDbContext>();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
