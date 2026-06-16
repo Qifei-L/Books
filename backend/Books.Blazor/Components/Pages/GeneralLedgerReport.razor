@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @inject GeneralLedgerAppService Gl
 @inject ReportService ReportsService
+@inject ReportExportService Exports
 @inject ReportDownloadService Downloads
 
 <div class="page-header">
@@ -105,14 +106,10 @@
         exportError = null;
         try
         {
-            var account = accounts.FirstOrDefault(x => x.Id == selectedAccountId);
-            var accountSlug = Slug(account?.Name ?? "account");
-            var contentType = ContentType(format);
-            var extension = format == "excel" ? "xlsx" : "pdf";
-            await Downloads.DownloadAsync(
-                $"/api/v1/reports/general-ledger/export?ledgerId={ledgerId}&accountId={selectedAccountId}&format={format}",
-                $"general-ledger-{accountSlug}-{DateTime.Today:yyyy-MM}.{extension}",
-                contentType);
+            var result = format == "excel"
+                ? await Exports.ExportGeneralLedgerExcelAsync(ledgerId, selectedAccountId, null, null)
+                : await Exports.ExportGeneralLedgerPdfAsync(ledgerId, selectedAccountId, null, null);
+            await Downloads.DownloadAsync(result);
         }
         catch (Exception ex)
         {
@@ -123,9 +120,6 @@
             exportingFormat = null;
         }
     }
-
-    private static string ContentType(string format) =>
-        format == "excel" ? ReportDownloadService.ExcelContentType : ReportDownloadService.PdfContentType;
 
     private static string Slug(string value)
     {

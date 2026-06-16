@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @inject GeneralLedgerAppService Gl
 @inject ReportService ReportsService
+@inject ReportExportService Exports
 @inject ReportDownloadService Downloads
 
 <div class="page-header">
@@ -89,12 +90,10 @@
         exportError = null;
         try
         {
-            var contentType = ContentType(format);
-            var extension = format == "excel" ? "xlsx" : "pdf";
-            await Downloads.DownloadAsync(
-                $"/api/v1/reports/profit-and-loss/export?ledgerId={ledgerId}&format={format}",
-                $"profit-and-loss-{DateTime.Today:yyyy-MM}.{extension}",
-                contentType);
+            var result = format == "excel"
+                ? await Exports.ExportProfitLossExcelAsync(ledgerId, null, null)
+                : await Exports.ExportProfitLossPdfAsync(ledgerId, null, null);
+            await Downloads.DownloadAsync(result);
         }
         catch (Exception ex)
         {
@@ -105,9 +104,6 @@
             exportingFormat = null;
         }
     }
-
-    private static string ContentType(string format) =>
-        format == "excel" ? ReportDownloadService.ExcelContentType : ReportDownloadService.PdfContentType;
 
     private Task ExportExcel() => Export("excel");
     private Task ExportPdf() => Export("pdf");

@@ -17,7 +17,6 @@ if (!string.IsNullOrWhiteSpace(port))
 // Add services to the container.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddHttpClient();
 builder.Services.AddScoped<ReportDownloadService>();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
