@@ -196,6 +196,64 @@ h2 {
     line-height: 1.4;
 }
 
+.report-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.inline-actions {
+    justify-content: flex-start;
+}
+
+.export-button {
+    gap: 7px;
+    min-width: 128px;
+}
+
+.export-icon {
+    align-items: center;
+    border-radius: 4px;
+    display: inline-flex;
+    font-size: 10px;
+    font-weight: 900;
+    height: 20px;
+    justify-content: center;
+    letter-spacing: .02em;
+    width: 30px;
+}
+
+.excel-icon {
+    background: #dbeee6;
+    color: #17633c;
+}
+
+.pdf-icon {
+    background: #f1dedc;
+    color: #8a2d24;
+}
+
+.plum-mark {
+    color: #7f5964;
+    display: inline-block;
+    font-size: 15px;
+    font-weight: 400;
+    margin-left: 6px;
+    vertical-align: 10%;
+}
+
+.error-note {
+    background: #fff5f3;
+    border: 1px solid #f1c6c1;
+    border-radius: 6px;
+    color: #8a2d24;
+    font-size: 13px;
+    margin-bottom: 12px;
+    padding: 8px 10px;
+}
+
 .toolbar {
     align-items: end;
     display: grid;

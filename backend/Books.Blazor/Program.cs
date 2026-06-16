@@ -1,4 +1,5 @@
 using Books.Application;
+using Books.Blazor.Services;
 using Books.Blazor.Components;
 using Books.Infrastructure;
 using Books.Infrastructure.Data;
@@ -15,6 +16,8 @@ if (!string.IsNullOrWhiteSpace(port))
 // Add services to the container.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<ReportDownloadService>();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -39,6 +42,7 @@ app.UseHttpsRedirection();
 
 app.UseAntiforgery();
 
+app.MapReportExportEndpoints();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

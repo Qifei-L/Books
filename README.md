@@ -441,3 +441,7 @@ Seed data is idempotent. Re-running the API will not duplicate `Demo Ledger`, ac
 - `GET /api/v1/ledgers/{ledgerId}/reports/general-ledger?accountId={accountId}`
 - `GET /api/v1/ledgers/{ledgerId}/reports/profit-loss`
 - `GET /api/v1/ledgers/{ledgerId}/reports/balance-sheet`
+- `GET /api/v1/reports/trial-balance/export?ledgerId={ledgerId}&format=excel|pdf`
+- `GET /api/v1/reports/general-ledger/export?ledgerId={ledgerId}&accountId={accountId}&format=excel|pdf`
+- `GET /api/v1/reports/profit-and-loss/export?ledgerId={ledgerId}&format=excel|pdf`
+- `GET /api/v1/reports/balance-sheet/export?ledgerId={ledgerId}&format=excel|pdf`

@@ -2,14 +2,30 @@
 @rendermode InteractiveServer
 @inject GeneralLedgerAppService Gl
 @inject ReportService ReportsService
+@inject ReportDownloadService Downloads
 
 <div class="page-header">
     <div>
         <p class="eyebrow">Reports</p>
-        <h1>Balance Sheet</h1>
+        <h1>Balance Sheet <span class="plum-mark" aria-hidden="true">✣</span></h1>
     </div>
-    <button class="secondary" @onclick="Load">Refresh</button>
+    <div class="report-actions">
+        <button class="secondary export-button" disabled="@IsExporting" @onclick="ExportExcel">
+            <span class="export-icon excel-icon">XLS</span>
+            @(exportingFormat == "excel" ? "Exporting..." : "Export Excel")
+        </button>
+        <button class="secondary export-button" disabled="@IsExporting" @onclick="ExportPdf">
+            <span class="export-icon pdf-icon">PDF</span>
+            @(exportingFormat == "pdf" ? "Exporting..." : "Export PDF")
+        </button>
+        <button class="secondary" @onclick="Load" disabled="@IsExporting">Refresh</button>
+    </div>
 </div>
+
+@if (!string.IsNullOrWhiteSpace(exportError))
+{
+    <div class="error-note">@exportError</div>
+}
 
 <section class="panel">
     @if (loading)
@@ -55,6 +71,10 @@
 @code {
     private List<FinancialStatementRowDto> rows = [];
     private bool loading = true;
+    private int ledgerId;
+    private string? exportingFormat;
+    private string? exportError;
+    private bool IsExporting => !string.IsNullOrWhiteSpace(exportingFormat);
 
     protected override async Task OnInitializedAsync() => await Load();
 
@@ -62,9 +82,39 @@
     {
         loading = true;
         var ledger = await Gl.GetDefaultLedgerAsync();
+        ledgerId = ledger.Id;
         rows = await ReportsService.GetBalanceSheetAsync(ledger.Id, null, null);
         loading = false;
     }
 
     private decimal Total(AccountType type) => rows.Where(x => x.AccountType == type).Sum(x => x.Balance);
+
+    private async Task Export(string format)
+    {
+        exportingFormat = format;
+        exportError = null;
+        try
+        {
+            var contentType = ContentType(format);
+            var extension = format == "excel" ? "xlsx" : "pdf";
+            await Downloads.DownloadAsync(
+                $"/api/v1/reports/balance-sheet/export?ledgerId={ledgerId}&format={format}",
+                $"balance-sheet-{DateTime.Today:yyyy-MM-dd}.{extension}",
+                contentType);
+        }
+        catch (Exception ex)
+        {
+            exportError = ex.Message;
+        }
+        finally
+        {
+            exportingFormat = null;
+        }
+    }
+
+    private static string ContentType(string format) =>
+        format == "excel" ? ReportDownloadService.ExcelContentType : ReportDownloadService.PdfContentType;
+
+    private Task ExportExcel() => Export("excel");
+    private Task ExportPdf() => Export("pdf");
 }

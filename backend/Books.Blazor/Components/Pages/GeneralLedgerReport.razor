@@ -2,11 +2,12 @@
 @rendermode InteractiveServer
 @inject GeneralLedgerAppService Gl
 @inject ReportService ReportsService
+@inject ReportDownloadService Downloads
 
 <div class="page-header">
     <div>
         <p class="eyebrow">Reports</p>
-        <h1>General Ledger Report</h1>
+        <h1>General Ledger Report <span class="plum-mark" aria-hidden="true">✣</span></h1>
     </div>
 </div>
 
@@ -25,8 +26,21 @@
         <span></span>
         <span></span>
         <button @onclick="LoadRows">Run Report</button>
-        <span></span>
+        <div class="report-actions inline-actions">
+            <button class="secondary export-button" disabled="@(!CanExport)" @onclick="ExportExcel">
+                <span class="export-icon excel-icon">XLS</span>
+                @(exportingFormat == "excel" ? "Exporting..." : "Export Excel")
+            </button>
+            <button class="secondary export-button" disabled="@(!CanExport)" @onclick="ExportPdf">
+                <span class="export-icon pdf-icon">PDF</span>
+                @(exportingFormat == "pdf" ? "Exporting..." : "Export PDF")
+            </button>
+        </div>
     </div>
+    @if (!string.IsNullOrWhiteSpace(exportError))
+    {
+        <div class="error-note">@exportError</div>
+    }
 </section>
 
 <section class="panel">
@@ -69,6 +83,9 @@
     private List<GeneralLedgerRowDto> rows = [];
     private int selectedAccountId;
     private int ledgerId;
+    private string? exportingFormat;
+    private string? exportError;
+    private bool CanExport => selectedAccountId > 0 && string.IsNullOrWhiteSpace(exportingFormat);
 
     protected override async Task OnInitializedAsync()
     {
@@ -81,4 +98,41 @@
     {
         rows = selectedAccountId > 0 ? await ReportsService.GetGeneralLedgerAsync(ledgerId, selectedAccountId, null, null) : [];
     }
+
+    private async Task Export(string format)
+    {
+        exportingFormat = format;
+        exportError = null;
+        try
+        {
+            var account = accounts.FirstOrDefault(x => x.Id == selectedAccountId);
+            var accountSlug = Slug(account?.Name ?? "account");
+            var contentType = ContentType(format);
+            var extension = format == "excel" ? "xlsx" : "pdf";
+            await Downloads.DownloadAsync(
+                $"/api/v1/reports/general-ledger/export?ledgerId={ledgerId}&accountId={selectedAccountId}&format={format}",
+                $"general-ledger-{accountSlug}-{DateTime.Today:yyyy-MM}.{extension}",
+                contentType);
+        }
+        catch (Exception ex)
+        {
+            exportError = ex.Message;
+        }
+        finally
+        {
+            exportingFormat = null;
+        }
+    }
+
+    private static string ContentType(string format) =>
+        format == "excel" ? ReportDownloadService.ExcelContentType : ReportDownloadService.PdfContentType;
+
+    private static string Slug(string value)
+    {
+        var chars = value.ToLowerInvariant().Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray();
+        return string.Join('-', new string(chars).Split('-', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private Task ExportExcel() => Export("excel");
+    private Task ExportPdf() => Export("pdf");
 }
