@@ -1,18 +1,25 @@
 @page "/gl/accounts"
+@page "/entities/{EntityId:int}/accounts"
 @rendermode InteractiveServer
 @inject GeneralLedgerAppService Gl
 
 <div class="accounts-page">
     <section class="accounts-hero">
         <div>
-            <p class="eyebrow">General Ledger</p>
+            <p class="eyebrow">Entity Accounts</p>
             <h1>Chart of Accounts</h1>
-            <p class="hero-copy">Maintain the account structure used across journals, statements, and reporting.</p>
+            <p class="hero-copy">@SelectedEntityLabel</p>
         </div>
-        <button class="primary-action" @onclick="NewAccount">
-            <span class="button-symbol" aria-hidden="true">+</span>
-            New Account
-        </button>
+        <div class="actions-row compact">
+            @if (selectedEntity is not null)
+            {
+                <a class="button-link secondary" href="@($"/entities/{selectedEntity.Id}")">Entity Detail</a>
+            }
+            <button class="primary-action" disabled="@(selectedEntityId == 0)" @onclick="NewAccount">
+                <span class="button-symbol" aria-hidden="true">+</span>
+                New Account
+            </button>
+        </div>
     </section>
 
     <section class="account-metrics" aria-label="Account summary">
@@ -39,7 +46,15 @@
     </section>
 
     <section class="panel account-filter-panel">
-        <div class="accounts-toolbar">
+        <div class="accounts-toolbar entity-toolbar">
+            <label>Entity
+                <select value="@selectedEntityId" @onchange="ChangeEntity">
+                    @foreach (var entity in entities)
+                    {
+                        <option value="@entity.Id">@entity.Code - @entity.Name</option>
+                    }
+                </select>
+            </label>
             <label class="search-field">Search
                 <input placeholder="Code or account name" @bind="search" @bind:event="oninput" />
             </label>
@@ -192,6 +207,8 @@
 </div>
 
 @code {
+    [Parameter] public int? EntityId { get; set; }
+
     private static readonly AccountType[] AccountTypeOrder =
     [
         AccountType.Asset,
@@ -201,6 +218,9 @@
         AccountType.Expense
     ];
 
+    private List<Entity> entities = [];
+    private Entity? selectedEntity;
+    private int selectedEntityId;
     private List<Account> accounts = [];
     private bool loading = true;
     private bool editing;
@@ -210,6 +230,9 @@
     private AccountForm editModel = new();
 
     private bool CanSaveAccount => !string.IsNullOrWhiteSpace(editModel.Code) && !string.IsNullOrWhiteSpace(editModel.Name);
+    private string SelectedEntityLabel => selectedEntity is null
+        ? "Select an entity to maintain its account structure."
+        : $"Maintain account structure for {selectedEntity.Code} - {selectedEntity.Name}.";
     private int ActiveAccountCount => accounts.Count(x => x.IsActive);
     private int InactiveAccountCount => accounts.Count(x => !x.IsActive);
     private int DebitNormalCount => accounts.Count(x => NormalBalance(x.Type) == "Debit");
@@ -218,7 +241,28 @@
         .Select(type => new AccountGroupView(type, accounts.Where(account => account.Type == type).OrderBy(account => account.Code).ToList()))
         .Where(group => group.Accounts.Count > 0);
 
-    protected override async Task OnInitializedAsync() => await LoadAccounts();
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadEntities();
+        await LoadAccounts();
+    }
+
+    private async Task LoadEntities()
+    {
+        entities = await Gl.GetEntitiesAsync();
+        if (entities.Count == 0)
+        {
+            entities.Add(await Gl.GetDefaultEntityAsync());
+        }
+
+        selectedEntityId = EntityId ?? selectedEntityId;
+        if (selectedEntityId == 0 || entities.All(x => x.Id != selectedEntityId))
+        {
+            selectedEntityId = entities[0].Id;
+        }
+
+        selectedEntity = entities.FirstOrDefault(x => x.Id == selectedEntityId);
+    }
 
     private async Task LoadAccounts()
     {
@@ -231,8 +275,21 @@
             _ => null
         };
 
-        accounts = await Gl.GetAccountsAsync(search, type, isActive);
+        accounts = selectedEntityId == 0
+            ? []
+            : await Gl.GetAccountsAsync(selectedEntityId, search, type, isActive);
         loading = false;
+    }
+
+    private async Task ChangeEntity(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var entityId))
+        {
+            selectedEntityId = entityId;
+            selectedEntity = entities.FirstOrDefault(x => x.Id == selectedEntityId);
+            editing = false;
+            await LoadAccounts();
+        }
     }
 
     private async Task ClearFilters()
@@ -269,14 +326,14 @@
 
     private async Task SaveAccount()
     {
-        await Gl.SaveAccountAsync(new AccountEditDto(editModel.Id, editModel.Code, editModel.Name, editModel.Type, editModel.Description, editModel.IsActive, editModel.AllowManualJournal));
+        await Gl.SaveAccountAsync(new AccountEditDto(editModel.Id, selectedEntityId, editModel.Code, editModel.Name, editModel.Type, editModel.Description, editModel.IsActive, editModel.AllowManualJournal));
         editing = false;
         await LoadAccounts();
     }
 
     private async Task ToggleAccount(int id)
     {
-        await Gl.ToggleAccountAsync(id);
+        await Gl.ToggleAccountAsync(selectedEntityId, id);
         await LoadAccounts();
     }
 

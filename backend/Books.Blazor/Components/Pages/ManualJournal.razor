@@ -1,5 +1,6 @@
 @page "/gl/journal-entries/new"
 @page "/gl/journal-entries/{Id:int}"
+@page "/ledgers/{RouteLedgerId:int}/journal-entries/new"
 @rendermode InteractiveServer
 @inject GeneralLedgerAppService Gl
 @inject NavigationManager Nav
@@ -32,6 +33,14 @@ else
 
     <section class="panel">
         <div class="form-grid">
+            <label>Ledger
+                <select disabled="@(!CanChangeLedger)" value="@model.LedgerId" @onchange="SetLedger">
+                    @foreach (var ledger in ledgers)
+                    {
+                        <option value="@ledger.Id">@ledger.Code - @ledger.Name</option>
+                    }
+                </select>
+            </label>
             <label>Journal No
                 <input placeholder="Auto generated if empty" disabled="@(!CanEdit)" @bind="model.JournalNo" />
             </label>
@@ -121,26 +130,35 @@ else
 
 @code {
     [Parameter] public int? Id { get; set; }
+    [Parameter] public int? RouteLedgerId { get; set; }
+    [SupplyParameterFromQuery(Name = "ledgerId")] public int? QueryLedgerId { get; set; }
 
     private readonly ManualJournalForm model = new();
+    private List<Ledger> ledgers = [];
     private List<Account> accounts = [];
     private JournalStatus status = JournalStatus.Draft;
     private bool loading = true;
     private string? error;
 
     private bool CanEdit => status == JournalStatus.Draft;
+    private bool CanChangeLedger => CanEdit && !Id.HasValue;
     private decimal DebitTotal => model.Lines.Where(x => x.Direction == "Debit").Sum(x => x.BaseAmount);
     private decimal CreditTotal => model.Lines.Where(x => x.Direction == "Credit").Sum(x => x.BaseAmount);
     private decimal Difference => DebitTotal - CreditTotal;
     private bool IsBalanced => Difference == 0;
     private int ValidLineCount => model.Lines.Count(IsLineValid);
-    private bool CanSaveDraft => model.Lines.Any(x => x.AccountId > 0 || x.Amount > 0 || !string.IsNullOrWhiteSpace(x.Description));
+    private bool CanSaveDraft => model.LedgerId > 0 && model.Lines.Any(x => x.AccountId > 0 || x.Amount > 0 || !string.IsNullOrWhiteSpace(x.Description));
     private bool CanPost => CanSaveDraft && ValidLineCount >= 2 && IsBalanced && model.Lines.All(IsLineValidOrEmpty);
     private string PostHint => CanPost ? "Post journal" : ValidLineCount < 2 ? "Need at least two valid lines" : !IsBalanced ? "Not balanced" : "Missing account or invalid line";
 
     protected override async Task OnInitializedAsync()
     {
-        accounts = await Gl.GetManualJournalAccountsAsync();
+        ledgers = await Gl.GetLedgersAsync();
+        if (ledgers.Count == 0)
+        {
+            ledgers.Add(await Gl.GetDefaultLedgerAsync());
+        }
+
         if (Id.HasValue)
         {
             var entry = await Gl.GetJournalEntryAsync(Id.Value);
@@ -152,9 +170,11 @@ else
             {
                 status = entry.Status;
                 model.Id = entry.Id;
+                model.LedgerId = entry.LedgerId;
                 model.JournalNo = entry.JournalNo;
                 model.EntryDate = entry.EntryDate;
                 model.Description = entry.Description;
+                await LoadAccountsForLedger(model.LedgerId);
                 model.Lines.Clear();
                 foreach (var line in entry.Lines)
                 {
@@ -169,13 +189,24 @@ else
                     });
                 }
 
-                foreach (var account in entry.Lines.Select(x => x.Account).OfType<Account>())
+                if (!CanEdit)
                 {
-                    if (accounts.All(x => x.Id != account.Id))
+                    foreach (var account in entry.Lines.Select(x => x.Account).OfType<Account>())
                     {
-                        accounts.Add(account);
+                        if (accounts.All(x => x.Id != account.Id))
+                        {
+                            accounts.Add(account);
+                        }
                     }
                 }
+            }
+        }
+        else
+        {
+            model.LedgerId = RouteLedgerId ?? QueryLedgerId ?? ledgers.FirstOrDefault()?.Id ?? 0;
+            if (model.LedgerId > 0)
+            {
+                await LoadAccountsForLedger(model.LedgerId);
             }
         }
 
@@ -203,12 +234,33 @@ else
         {
             var saved = await Gl.SaveJournalAsync(ToDto());
             await Gl.PostJournalAsync(saved.Id);
-            Nav.NavigateTo("/gl/journal-entries");
+            Nav.NavigateTo($"/ledgers/{saved.LedgerId}/journal-entries");
         }
         catch (Exception ex)
         {
             error = ex.Message;
         }
+    }
+
+    private async Task SetLedger(ChangeEventArgs args)
+    {
+        if (!int.TryParse(args.Value?.ToString(), out var ledgerId) || ledgerId == model.LedgerId)
+        {
+            return;
+        }
+
+        model.LedgerId = ledgerId;
+        await LoadAccountsForLedger(model.LedgerId);
+        var accountIds = accounts.Select(x => x.Id).ToHashSet();
+        foreach (var line in model.Lines.Where(line => line.AccountId > 0 && !accountIds.Contains(line.AccountId)))
+        {
+            line.AccountId = 0;
+        }
+    }
+
+    private async Task LoadAccountsForLedger(int ledgerId)
+    {
+        accounts = await Gl.GetManualJournalAccountsAsync(ledgerId);
     }
 
     private void SetEntryDate(ChangeEventArgs args)
@@ -238,7 +290,7 @@ else
             .Select(x => new ManualJournalLineDto(x.AccountId, x.Direction, x.Amount, x.BaseAmount, x.Description))
             .ToList();
 
-        return new ManualJournalDto(model.Id, model.JournalNo, model.EntryDate, model.Period, model.Currency, model.BaseCurrency, model.ExchangeRate, model.Description, lines);
+        return new ManualJournalDto(model.Id, model.LedgerId, model.JournalNo, model.EntryDate, model.Period, model.Currency, model.BaseCurrency, model.ExchangeRate, model.Description, lines);
     }
 
     private static bool IsLineEmpty(ManualJournalLineForm line) =>
@@ -257,7 +309,16 @@ else
         }
     }
 
-    private void Back() => Nav.NavigateTo("/gl/journal-entries");
+    private void Back()
+    {
+        if (model.LedgerId > 0)
+        {
+            Nav.NavigateTo($"/ledgers/{model.LedgerId}/journal-entries");
+            return;
+        }
+
+        Nav.NavigateTo("/gl/journal-entries");
+    }
 
     private static string StatusClass(JournalStatus value) => value switch
     {
@@ -270,6 +331,7 @@ else
     private sealed class ManualJournalForm
     {
         public int? Id { get; set; }
+        public int LedgerId { get; set; }
         public string? JournalNo { get; set; }
         public DateTime EntryDate { get; set; } = DateTime.Today;
         public string Period { get; set; } = DateTime.Today.ToString("yyyy-MM");

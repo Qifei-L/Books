@@ -61,6 +61,85 @@ public class GeneralLedgerAppService(
         return ledger;
     }
 
+    public async Task<List<Entity>> GetEntitiesAsync()
+    {
+        return await db.Entities
+            .OrderBy(x => x.Code)
+            .ToListAsync();
+    }
+
+    public async Task<Entity?> GetEntityAsync(int entityId)
+    {
+        return await db.Entities.FirstOrDefaultAsync(x => x.Id == entityId);
+    }
+
+    public async Task<Entity> SaveEntityAsync(EntityEditDto entity)
+    {
+        var target = entity.Id.HasValue
+            ? await db.Entities.FirstAsync(x => x.Id == entity.Id.Value)
+            : new Entity();
+
+        target.Code = entity.Code.Trim();
+        target.Name = entity.Name.Trim();
+        target.IsActive = entity.IsActive;
+
+        if (!entity.Id.HasValue)
+        {
+            db.Entities.Add(target);
+        }
+
+        await db.SaveChangesAsync();
+        return target;
+    }
+
+    public async Task<List<Ledger>> GetLedgersAsync(int? entityId = null)
+    {
+        var query = db.Ledgers.AsQueryable();
+        if (entityId.HasValue)
+        {
+            query = query.Where(x => x.EntityId == entityId.Value);
+        }
+
+        return await query
+            .OrderBy(x => x.EntityId)
+            .ThenBy(x => x.LedgerType == LedgerType.Main ? 0 : 1)
+            .ThenBy(x => x.Code)
+            .ToListAsync();
+    }
+
+    public async Task<Ledger?> GetLedgerAsync(int ledgerId)
+    {
+        return await db.Ledgers.FirstOrDefaultAsync(x => x.Id == ledgerId);
+    }
+
+    public async Task<Ledger> SaveLedgerAsync(LedgerEditDto ledger)
+    {
+        var entityExists = await db.Entities.AnyAsync(x => x.Id == ledger.EntityId);
+        if (!entityExists)
+        {
+            throw new InvalidOperationException("Entity not found.");
+        }
+
+        var target = ledger.Id.HasValue
+            ? await db.Ledgers.FirstAsync(x => x.Id == ledger.Id.Value)
+            : new Ledger { EntityId = ledger.EntityId };
+
+        target.EntityId = ledger.EntityId;
+        target.Code = ledger.Code.Trim();
+        target.Name = ledger.Name.Trim();
+        target.LedgerType = ledger.LedgerType;
+        target.IsActive = ledger.IsActive;
+        target.AllowDeletePostedJournal = ledger.AllowDeletePostedJournal;
+
+        if (!ledger.Id.HasValue)
+        {
+            db.Ledgers.Add(target);
+        }
+
+        await db.SaveChangesAsync();
+        return target;
+    }
+
     public async Task<DashboardDto> GetDashboardAsync()
     {
         var ledger = await GetDefaultLedgerAsync();
@@ -81,7 +160,12 @@ public class GeneralLedgerAppService(
     public async Task<List<Account>> GetAccountsAsync(string? search, AccountType? type, bool? isActive)
     {
         var ledger = await GetDefaultLedgerAsync();
-        var query = db.Accounts.Where(x => x.EntityId == ledger.EntityId);
+        return await GetAccountsAsync(ledger.EntityId, search, type, isActive);
+    }
+
+    public async Task<List<Account>> GetAccountsAsync(int entityId, string? search, AccountType? type, bool? isActive)
+    {
+        var query = db.Accounts.Where(x => x.EntityId == entityId);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -104,10 +188,15 @@ public class GeneralLedgerAppService(
 
     public async Task SaveAccountAsync(AccountEditDto account)
     {
-        var ledger = await GetDefaultLedgerAsync();
+        var entityExists = await db.Entities.AnyAsync(x => x.Id == account.EntityId);
+        if (!entityExists)
+        {
+            throw new InvalidOperationException("Entity not found.");
+        }
+
         var entity = account.Id.HasValue
-            ? await db.Accounts.FirstAsync(x => x.Id == account.Id.Value && x.EntityId == ledger.EntityId)
-            : new Account { EntityId = ledger.EntityId, IsSystemReserved = false };
+            ? await db.Accounts.FirstAsync(x => x.Id == account.Id.Value && x.EntityId == account.EntityId)
+            : new Account { EntityId = account.EntityId, IsSystemReserved = false };
 
         if (!entity.IsSystemReserved)
         {
@@ -131,6 +220,12 @@ public class GeneralLedgerAppService(
     public async Task<List<Account>> GetManualJournalAccountsAsync()
     {
         var ledger = await GetDefaultLedgerAsync();
+        return await GetManualJournalAccountsAsync(ledger.Id);
+    }
+
+    public async Task<List<Account>> GetManualJournalAccountsAsync(int ledgerId)
+    {
+        var ledger = await db.Ledgers.FirstAsync(x => x.Id == ledgerId);
         return await db.Accounts
             .Where(x => x.EntityId == ledger.EntityId && x.IsActive && x.AllowManualJournal)
             .OrderBy(x => x.Code)
@@ -140,7 +235,12 @@ public class GeneralLedgerAppService(
     public async Task ToggleAccountAsync(int id)
     {
         var ledger = await GetDefaultLedgerAsync();
-        var account = await db.Accounts.FirstAsync(x => x.Id == id && x.EntityId == ledger.EntityId);
+        await ToggleAccountAsync(ledger.EntityId, id);
+    }
+
+    public async Task ToggleAccountAsync(int entityId, int id)
+    {
+        var account = await db.Accounts.FirstAsync(x => x.Id == id && x.EntityId == entityId);
         account.IsActive = !account.IsActive;
         await db.SaveChangesAsync();
     }
@@ -148,7 +248,12 @@ public class GeneralLedgerAppService(
     public async Task<List<JournalEntryListDto>> GetJournalEntriesAsync(JournalStatus? status = null)
     {
         var ledger = await GetDefaultLedgerAsync();
-        var query = db.JournalEntries.Where(x => x.LedgerId == ledger.Id);
+        return await GetJournalEntriesAsync(ledger.Id, status);
+    }
+
+    public async Task<List<JournalEntryListDto>> GetJournalEntriesAsync(int ledgerId, JournalStatus? status = null)
+    {
+        var query = db.JournalEntries.Where(x => x.LedgerId == ledgerId);
 
         if (status.HasValue)
         {
@@ -169,7 +274,11 @@ public class GeneralLedgerAppService(
 
     public async Task<JournalEntry> SaveJournalAsync(ManualJournalDto journal)
     {
-        var ledger = await GetDefaultLedgerAsync();
+        if (journal.LedgerId <= 0)
+        {
+            throw new InvalidOperationException("Ledger is required.");
+        }
+
         var request = new CreateJournalEntryDto(
             journal.JournalNo ?? string.Empty,
             journal.EntryDate,
@@ -187,7 +296,7 @@ public class GeneralLedgerAppService(
             return result.Entry ?? await journalService.GetAsync(journal.Id.Value) ?? throw new InvalidOperationException("Journal not found.");
         }
 
-        return await journalService.CreateAsync(ledger.Id, request);
+        return await journalService.CreateAsync(journal.LedgerId, request);
     }
 
     public async Task PostJournalAsync(int id)
@@ -312,8 +421,10 @@ public class GeneralLedgerAppService(
 
 public record DashboardDto(int LedgerId, string LedgerName, string CurrentPeriod, string BaseCurrency, int AccountsCount, int DraftJournalsCount, int PostedJournalsCount, List<JournalEntryListDto> LatestJournalEntries);
 public record JournalEntryListDto(int Id, string JournalNo, DateTime EntryDate, string Description, JournalStatus Status, decimal TotalDebit, decimal TotalCredit);
-public record AccountEditDto(int? Id, string Code, string Name, AccountType Type, string? Description, bool IsActive, bool AllowManualJournal);
-public record ManualJournalDto(int? Id, string? JournalNo, DateTime EntryDate, string Period, string Currency, string BaseCurrency, decimal ExchangeRate, string? Description, List<ManualJournalLineDto> Lines);
+public record EntityEditDto(int? Id, string Code, string Name, bool IsActive);
+public record LedgerEditDto(int? Id, int EntityId, string Code, string Name, LedgerType LedgerType, bool IsActive, bool AllowDeletePostedJournal);
+public record AccountEditDto(int? Id, int EntityId, string Code, string Name, AccountType Type, string? Description, bool IsActive, bool AllowManualJournal);
+public record ManualJournalDto(int? Id, int LedgerId, string? JournalNo, DateTime EntryDate, string Period, string Currency, string BaseCurrency, decimal ExchangeRate, string? Description, List<ManualJournalLineDto> Lines);
 public record ManualJournalLineDto(int AccountId, string Direction, decimal Amount, decimal BaseAmount, string? Description);
 public record LedgerSettingsDto(
     int EntityId,
