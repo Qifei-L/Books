@@ -1,6 +1,8 @@
 @page "/reports/general-ledger"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject GeneralLedgerAppService Gl
+@inject AccountingContextService Context
 @inject ReportService ReportsService
 @inject ReportExportService Exports
 @inject ReportDownloadService Downloads
@@ -90,9 +92,21 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var ledger = await Gl.GetDefaultLedgerAsync();
-        ledgerId = ledger.Id;
-        accounts = await Gl.GetAccountsAsync(null, null, true);
+        Context.Changed += ReloadFromContext;
+        await Context.InitializeAsync();
+        await LoadAccounts();
+    }
+
+    private async Task LoadAccounts()
+    {
+        ledgerId = Context.CurrentLedgerId;
+        var entityId = Context.CurrentEntityId;
+        accounts = entityId == 0 ? [] : await Gl.GetAccountsAsync(entityId, null, null, true);
+        if (accounts.All(x => x.Id != selectedAccountId))
+        {
+            selectedAccountId = 0;
+            rows = [];
+        }
     }
 
     private async Task LoadRows()
@@ -129,4 +143,12 @@
 
     private Task ExportExcel() => Export("excel");
     private Task ExportPdf() => Export("pdf");
+
+    private async Task ReloadFromContext()
+    {
+        await LoadAccounts();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Context.Changed -= ReloadFromContext;
 }

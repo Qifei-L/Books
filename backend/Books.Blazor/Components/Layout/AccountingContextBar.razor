@@ -1,0 +1,57 @@
+@rendermode InteractiveServer
+@implements IDisposable
+@inject AccountingContextService Context
+
+<div class="accounting-context">
+    <label>Entity
+        <select value="@Context.CurrentEntityId" @onchange="ChangeEntity">
+            @foreach (var entity in Context.Entities)
+            {
+                <option value="@entity.Id">@entity.Code - @entity.Name</option>
+            }
+        </select>
+    </label>
+    <label>Ledger
+        <select value="@Context.CurrentLedgerId" @onchange="ChangeLedger" disabled="@(Context.Ledgers.Count == 0)">
+            @foreach (var ledger in Context.Ledgers)
+            {
+                <option value="@ledger.Id">@ledger.Code - @ledger.Name</option>
+            }
+        </select>
+    </label>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Context.Changed += Refresh;
+        await Context.InitializeAsync();
+    }
+
+    private async Task ChangeEntity(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var entityId))
+        {
+            await Context.SetEntityAsync(entityId);
+        }
+    }
+
+    private async Task ChangeLedger(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var ledgerId))
+        {
+            await Context.SetLedgerAsync(ledgerId);
+        }
+    }
+
+    private Task Refresh()
+    {
+        InvokeAsync(StateHasChanged);
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        Context.Changed -= Refresh;
+    }
+}

@@ -71,20 +71,28 @@ a {
     border-bottom: 1px solid #d9e2e7;
     display: grid;
     gap: 16px;
-    grid-template-columns: auto minmax(220px, 420px) auto;
+    grid-template-columns: minmax(360px, 760px) auto;
     justify-content: space-between;
     min-height: 58px;
     padding: 10px 22px;
 }
 
-.ledger-context {
+.accounting-context {
+    align-items: end;
     display: grid;
-    gap: 2px;
+    gap: 10px;
+    grid-template-columns: minmax(180px, 280px) minmax(220px, 360px);
 }
 
-.ledger-context span {
-    color: #697983;
-    font-size: 12px;
+.accounting-context label {
+    font-size: 11px;
+    gap: 4px;
+    text-transform: uppercase;
+}
+
+.accounting-context select {
+    min-height: 32px;
+    padding: 5px 8px;
 }
 
 .top-search,
@@ -808,6 +816,7 @@ tfoot th {
     }
 
     .topbar,
+    .accounting-context,
     .toolbar,
     .context-toolbar,
     .context-actions,

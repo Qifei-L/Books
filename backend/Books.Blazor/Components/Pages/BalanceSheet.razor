@@ -1,6 +1,8 @@
 @page "/reports/balance-sheet"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject GeneralLedgerAppService Gl
+@inject AccountingContextService Context
 @inject ReportService ReportsService
 @inject ReportExportService Exports
 @inject ReportDownloadService Downloads
@@ -77,16 +79,28 @@
     private string? exportError;
     private bool IsExporting => !string.IsNullOrWhiteSpace(exportingFormat);
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        Context.Changed += ReloadFromContext;
+        await Context.InitializeAsync();
+        await Load();
+    }
 
     private async Task Load()
     {
         loading = true;
-        var ledger = await Gl.GetDefaultLedgerAsync();
-        ledgerId = ledger.Id;
-        rows = await ReportsService.GetBalanceSheetAsync(ledger.Id, null, null);
+        ledgerId = Context.CurrentLedgerId;
+        rows = ledgerId == 0 ? [] : await ReportsService.GetBalanceSheetAsync(ledgerId, null, null);
         loading = false;
     }
+
+    private async Task ReloadFromContext()
+    {
+        await Load();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Context.Changed -= ReloadFromContext;
 
     private decimal Total(AccountType type) => rows.Where(x => x.AccountType == type).Sum(x => x.Balance);
 

@@ -1,6 +1,7 @@
 @page "/reports"
 @rendermode InteractiveServer
 @inject GeneralLedgerAppService Gl
+@inject AccountingContextService Context
 @inject ReportService ReportsService
 
 <div class="page-header">
@@ -36,8 +37,10 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var ledger = await Gl.GetDefaultLedgerAsync();
-        reports = await ReportsService.GetAvailableReportsAsync(ledger.Id);
+        await Context.InitializeAsync();
+        reports = Context.CurrentLedgerId == 0
+            ? []
+            : await ReportsService.GetAvailableReportsAsync(Context.CurrentLedgerId);
         loading = false;
     }
 

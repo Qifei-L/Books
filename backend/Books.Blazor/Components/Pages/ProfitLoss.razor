@@ -1,6 +1,8 @@
 @page "/reports/profit-loss"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject GeneralLedgerAppService Gl
+@inject AccountingContextService Context
 @inject ReportService ReportsService
 @inject ReportExportService Exports
 @inject ReportDownloadService Downloads
@@ -73,16 +75,28 @@
     private string? exportError;
     private bool IsExporting => !string.IsNullOrWhiteSpace(exportingFormat);
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        Context.Changed += ReloadFromContext;
+        await Context.InitializeAsync();
+        await Load();
+    }
 
     private async Task Load()
     {
         loading = true;
-        var ledger = await Gl.GetDefaultLedgerAsync();
-        ledgerId = ledger.Id;
-        rows = await ReportsService.GetProfitLossAsync(ledger.Id, null, null);
+        ledgerId = Context.CurrentLedgerId;
+        rows = ledgerId == 0 ? [] : await ReportsService.GetProfitLossAsync(ledgerId, null, null);
         loading = false;
     }
+
+    private async Task ReloadFromContext()
+    {
+        await Load();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Context.Changed -= ReloadFromContext;
 
     private async Task Export(string format)
     {

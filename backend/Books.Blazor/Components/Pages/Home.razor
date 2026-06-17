@@ -1,6 +1,8 @@
 @page "/"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject GeneralLedgerAppService Gl
+@inject AccountingContextService Context
 @inject NavigationManager Nav
 
 <div class="page-header">
@@ -8,7 +10,7 @@
         <p class="eyebrow">General Ledger</p>
         <h1>Dashboard</h1>
     </div>
-    <button @onclick='() => Nav.NavigateTo("/gl/journal-entries/new")'>New Manual Journal</button>
+    <button disabled="@(Context.CurrentLedgerId == 0)" @onclick='() => Nav.NavigateTo("/journals/manual")'>New Manual Journal</button>
 </div>
 
 @if (loading)
@@ -28,7 +30,7 @@ else if (dashboard is not null)
     <section class="panel">
         <div class="page-header">
             <h2>Latest Journals</h2>
-            <a class="button-link secondary" href="/gl/journal-entries">View All</a>
+            <a class="button-link secondary" href="/journals">View All</a>
         </div>
         @if (dashboard.LatestJournalEntries.Count == 0)
         {
@@ -71,9 +73,27 @@ else if (dashboard is not null)
 
     protected override async Task OnInitializedAsync()
     {
-        dashboard = await Gl.GetDashboardAsync();
+        Context.Changed += ReloadFromContext;
+        await Context.InitializeAsync();
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        dashboard = Context.CurrentLedgerId == 0
+            ? null
+            : await Gl.GetDashboardAsync(Context.CurrentLedgerId);
         loading = false;
     }
+
+    private async Task ReloadFromContext()
+    {
+        await Load();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Context.Changed -= ReloadFromContext;
 
     private static string FormatDate(DateTime value) => value.ToString("yyyy-MM-dd");
     private static string FormatMoney(decimal value) => value.ToString("N2");

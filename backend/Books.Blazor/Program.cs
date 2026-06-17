@@ -21,6 +21,7 @@ var usesPlatformHttpPort = !string.IsNullOrWhiteSpace(port);
 // Add services to the container.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddScoped<AccountingContextService>();
 builder.Services.AddScoped<ReportDownloadService>();
 builder.Services.AddDataProtection()
     .PersistKeysToDbContext<AppDbContext>();

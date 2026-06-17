@@ -143,6 +143,12 @@ public class GeneralLedgerAppService(
     public async Task<DashboardDto> GetDashboardAsync()
     {
         var ledger = await GetDefaultLedgerAsync();
+        return await GetDashboardAsync(ledger.Id);
+    }
+
+    public async Task<DashboardDto> GetDashboardAsync(int ledgerId)
+    {
+        var ledger = await db.Ledgers.FirstAsync(x => x.Id == ledgerId);
         var accountsCount = await db.Accounts.CountAsync(x => x.EntityId == ledger.EntityId);
         var draftCount = await db.JournalEntries.CountAsync(x => x.LedgerId == ledger.Id && x.Status == JournalStatus.Draft);
         var postedCount = await db.JournalEntries.CountAsync(x => x.LedgerId == ledger.Id && x.Status == JournalStatus.Posted);
@@ -360,30 +366,56 @@ public class GeneralLedgerAppService(
     public async Task<List<TrialBalanceRowDto>> GetTrialBalanceAsync()
     {
         var ledger = await GetDefaultLedgerAsync();
-        return await reportService.GetTrialBalanceAsync(ledger.Id, null, null);
+        return await GetTrialBalanceAsync(ledger.Id);
+    }
+
+    public Task<List<TrialBalanceRowDto>> GetTrialBalanceAsync(int ledgerId)
+    {
+        return reportService.GetTrialBalanceAsync(ledgerId, null, null);
     }
 
     public async Task<List<GeneralLedgerRowDto>> GetGeneralLedgerAsync(int accountId)
     {
         var ledger = await GetDefaultLedgerAsync();
-        return await reportService.GetGeneralLedgerAsync(ledger.Id, accountId, null, null);
+        return await GetGeneralLedgerAsync(ledger.Id, accountId);
+    }
+
+    public Task<List<GeneralLedgerRowDto>> GetGeneralLedgerAsync(int ledgerId, int accountId)
+    {
+        return reportService.GetGeneralLedgerAsync(ledgerId, accountId, null, null);
     }
 
     public async Task<List<FinancialStatementRowDto>> GetProfitLossAsync()
     {
         var ledger = await GetDefaultLedgerAsync();
-        return await reportService.GetProfitLossAsync(ledger.Id, null, null);
+        return await GetProfitLossAsync(ledger.Id);
+    }
+
+    public Task<List<FinancialStatementRowDto>> GetProfitLossAsync(int ledgerId)
+    {
+        return reportService.GetProfitLossAsync(ledgerId, null, null);
     }
 
     public async Task<List<FinancialStatementRowDto>> GetBalanceSheetAsync()
     {
         var ledger = await GetDefaultLedgerAsync();
-        return await reportService.GetBalanceSheetAsync(ledger.Id, null, null);
+        return await GetBalanceSheetAsync(ledger.Id);
+    }
+
+    public Task<List<FinancialStatementRowDto>> GetBalanceSheetAsync(int ledgerId)
+    {
+        return reportService.GetBalanceSheetAsync(ledgerId, null, null);
     }
 
     public async Task<LedgerSettingsDto> GetLedgerSettingsAsync()
     {
         var ledger = await GetDefaultLedgerAsync();
+        return await GetLedgerSettingsAsync(ledger.Id);
+    }
+
+    public async Task<LedgerSettingsDto> GetLedgerSettingsAsync(int ledgerId)
+    {
+        var ledger = await db.Ledgers.FirstAsync(x => x.Id == ledgerId);
         var entity = await db.Entities.FirstAsync(x => x.Id == ledger.EntityId);
         return new LedgerSettingsDto(
             entity.Id,

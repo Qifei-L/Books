@@ -1,6 +1,8 @@
 @page "/setup/ledger"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject GeneralLedgerAppService Gl
+@inject AccountingContextService Context
 
 <div class="page-header">
     <div>
@@ -69,7 +71,22 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var dto = await Gl.GetLedgerSettingsAsync();
+        Context.Changed += ReloadFromContext;
+        await Context.InitializeAsync();
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        if (Context.CurrentLedgerId == 0)
+        {
+            settings = new LedgerSettingsForm();
+            loading = false;
+            return;
+        }
+
+        var dto = await Gl.GetLedgerSettingsAsync(Context.CurrentLedgerId);
         settings = new LedgerSettingsForm
         {
             EntityId = dto.EntityId,
@@ -101,7 +118,16 @@ else
             settings.CurrentPeriod,
             settings.IsActive,
             settings.AllowDeletePostedJournal));
+        await Context.SetLedgerAsync(settings.LedgerId);
     }
+
+    private async Task ReloadFromContext()
+    {
+        await Load();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Context.Changed -= ReloadFromContext;
 
     private sealed class LedgerSettingsForm
     {

@@ -1,7 +1,10 @@
+@page "/accounts"
 @page "/gl/accounts"
 @page "/entities/{EntityId:int}/accounts"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject GeneralLedgerAppService Gl
+@inject AccountingContextService Context
 
 <div class="accounts-page">
     <section class="accounts-hero">
@@ -13,7 +16,7 @@
         <div class="actions-row compact">
             @if (selectedEntity is not null)
             {
-                <a class="button-link secondary" href="@($"/entities/{selectedEntity.Id}")">Entity Detail</a>
+                <a class="button-link secondary" href="/setup/ledgers">Ledgers</a>
             }
             <button class="primary-action" disabled="@(selectedEntityId == 0)" @onclick="NewAccount">
                 <span class="button-symbol" aria-hidden="true">+</span>
@@ -46,15 +49,7 @@
     </section>
 
     <section class="panel account-filter-panel">
-        <div class="accounts-toolbar entity-toolbar">
-            <label>Entity
-                <select value="@selectedEntityId" @onchange="ChangeEntity">
-                    @foreach (var entity in entities)
-                    {
-                        <option value="@entity.Id">@entity.Code - @entity.Name</option>
-                    }
-                </select>
-            </label>
+        <div class="accounts-toolbar">
             <label class="search-field">Search
                 <input placeholder="Code or account name" @bind="search" @bind:event="oninput" />
             </label>
@@ -218,7 +213,6 @@
         AccountType.Expense
     ];
 
-    private List<Entity> entities = [];
     private Entity? selectedEntity;
     private int selectedEntityId;
     private List<Account> accounts = [];
@@ -241,32 +235,23 @@
         .Select(type => new AccountGroupView(type, accounts.Where(account => account.Type == type).OrderBy(account => account.Code).ToList()))
         .Where(group => group.Accounts.Count > 0);
 
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnInitializedAsync()
     {
-        await LoadEntities();
+        Context.Changed += ReloadFromContext;
+        await Context.InitializeAsync();
+        if (EntityId.HasValue && Context.Entities.Any(x => x.Id == EntityId.Value))
+        {
+            await Context.SetEntityAsync(EntityId.Value);
+        }
+
         await LoadAccounts();
-    }
-
-    private async Task LoadEntities()
-    {
-        entities = await Gl.GetEntitiesAsync();
-        if (entities.Count == 0)
-        {
-            entities.Add(await Gl.GetDefaultEntityAsync());
-        }
-
-        selectedEntityId = EntityId ?? selectedEntityId;
-        if (selectedEntityId == 0 || entities.All(x => x.Id != selectedEntityId))
-        {
-            selectedEntityId = entities[0].Id;
-        }
-
-        selectedEntity = entities.FirstOrDefault(x => x.Id == selectedEntityId);
     }
 
     private async Task LoadAccounts()
     {
         loading = true;
+        selectedEntityId = Context.CurrentEntityId;
+        selectedEntity = Context.CurrentEntity;
         AccountType? type = Enum.TryParse<AccountType>(typeFilter, out var parsedType) ? parsedType : null;
         bool? isActive = statusFilter switch
         {
@@ -279,17 +264,6 @@
             ? []
             : await Gl.GetAccountsAsync(selectedEntityId, search, type, isActive);
         loading = false;
-    }
-
-    private async Task ChangeEntity(ChangeEventArgs args)
-    {
-        if (int.TryParse(args.Value?.ToString(), out var entityId))
-        {
-            selectedEntityId = entityId;
-            selectedEntity = entities.FirstOrDefault(x => x.Id == selectedEntityId);
-            editing = false;
-            await LoadAccounts();
-        }
     }
 
     private async Task ClearFilters()
@@ -336,6 +310,15 @@
         await Gl.ToggleAccountAsync(selectedEntityId, id);
         await LoadAccounts();
     }
+
+    private async Task ReloadFromContext()
+    {
+        editing = false;
+        await LoadAccounts();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Context.Changed -= ReloadFromContext;
 
     private static string NormalBalance(AccountType type) => type is AccountType.Asset or AccountType.Expense ? "Debit" : "Credit";
     private static string GroupTitle(AccountType type) => type switch

@@ -1,7 +1,10 @@
+@page "/journals"
 @page "/gl/journal-entries"
 @page "/ledgers/{LedgerId:int}/journal-entries"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject GeneralLedgerAppService Gl
+@inject AccountingContextService Context
 @inject NavigationManager Nav
 
 <div class="page-header">
@@ -13,17 +16,6 @@
 </div>
 
 <section class="panel">
-    <div class="context-toolbar">
-        <label>Ledger
-            <select value="@selectedLedgerId" @onchange="ChangeLedger">
-                @foreach (var ledger in ledgers)
-                {
-                    <option value="@ledger.Id">@ledger.Code - @ledger.Name</option>
-                }
-            </select>
-        </label>
-        <span class="muted-note">@SelectedLedgerNote</span>
-    </div>
     <div class="tabs">
         @foreach (var tab in tabs)
         {
@@ -104,30 +96,22 @@
     [Parameter] public int? LedgerId { get; set; }
 
     private readonly string[] tabs = ["All", "Draft", "Posted", "Reversed", "Voided", "Manual"];
-    private List<Ledger> ledgers = [];
     private List<JournalEntryListDto> entries = [];
     private int selectedLedgerId;
     private bool loading = true;
     private string activeTab = "All";
     private string? error;
-    private string SelectedLedgerNote => ledgers.FirstOrDefault(x => x.Id == selectedLedgerId) is { } ledger
-        ? $"{ledger.LedgerType} · {ledger.Name}"
-        : "Select a ledger";
 
     protected override async Task OnParametersSetAsync()
     {
-        await LoadLedgers();
-        await Load();
-    }
-
-    private async Task LoadLedgers()
-    {
-        ledgers = await Gl.GetLedgersAsync();
-        selectedLedgerId = LedgerId ?? selectedLedgerId;
-        if (selectedLedgerId == 0 || ledgers.All(x => x.Id != selectedLedgerId))
+        Context.Changed += ReloadFromContext;
+        await Context.InitializeAsync();
+        if (LedgerId.HasValue)
         {
-            selectedLedgerId = ledgers.FirstOrDefault()?.Id ?? 0;
+            await Context.SetLedgerAsync(LedgerId.Value);
         }
+
+        await Load();
     }
 
     private async Task SetTab(string tab)
@@ -148,24 +132,24 @@
             "Voided" => JournalStatus.Voided,
             _ => null
         };
+        selectedLedgerId = Context.CurrentLedgerId;
         entries = selectedLedgerId == 0
             ? []
             : await Gl.GetJournalEntriesAsync(selectedLedgerId, status);
         loading = false;
     }
 
-    private async Task ChangeLedger(ChangeEventArgs args)
-    {
-        if (int.TryParse(args.Value?.ToString(), out var ledgerId))
-        {
-            selectedLedgerId = ledgerId;
-            await Load();
-        }
-    }
-
-    private void NewJournal() => Nav.NavigateTo($"/gl/journal-entries/new?ledgerId={selectedLedgerId}");
+    private void NewJournal() => Nav.NavigateTo("/journals/manual");
 
     private void OpenEntry(int id) => Nav.NavigateTo($"/gl/journal-entries/{id}");
+
+    private async Task ReloadFromContext()
+    {
+        await Load();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Context.Changed -= ReloadFromContext;
 
     private async Task Post(int id)
     {

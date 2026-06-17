@@ -1,0 +1,120 @@
+@page "/reports/financial-statements"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject AccountingContextService Context
+@inject ReportService ReportsService
+
+<div class="page-header">
+    <div>
+        <p class="eyebrow">Reports</p>
+        <h1>Financial Statements <span class="plum-mark" aria-hidden="true">✣</span></h1>
+    </div>
+    <button class="secondary" @onclick="Load">Refresh</button>
+</div>
+
+@if (loading)
+{
+    <div class="panel empty">Loading financial statements...</div>
+}
+else
+{
+    <section class="panel">
+        <div class="section-title-row">
+            <div>
+                <p class="eyebrow">Statement</p>
+                <h2>Profit &amp; Loss</h2>
+            </div>
+            <a class="button-link secondary" href="/reports/profit-loss">Open</a>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th class="amount">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in profitLossRows)
+                {
+                    <tr>
+                        <td>@row.AccountCode</td>
+                        <td>@row.AccountName</td>
+                        <td>@row.AccountType</td>
+                        <td class="amount">@row.Balance.ToString("N2")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section class="panel">
+        <div class="section-title-row">
+            <div>
+                <p class="eyebrow">Statement</p>
+                <h2>Balance Sheet</h2>
+            </div>
+            <a class="button-link secondary" href="/reports/balance-sheet">Open</a>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th class="amount">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in balanceSheetRows)
+                {
+                    <tr>
+                        <td>@row.AccountCode</td>
+                        <td>@row.AccountName</td>
+                        <td>@row.AccountType</td>
+                        <td class="amount">@row.Balance.ToString("N2")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+
+@code {
+    private List<FinancialStatementRowDto> profitLossRows = [];
+    private List<FinancialStatementRowDto> balanceSheetRows = [];
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Context.Changed += ReloadFromContext;
+        await Context.InitializeAsync();
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        if (Context.CurrentLedgerId == 0)
+        {
+            profitLossRows = [];
+            balanceSheetRows = [];
+        }
+        else
+        {
+            profitLossRows = await ReportsService.GetProfitLossAsync(Context.CurrentLedgerId, null, null);
+            balanceSheetRows = await ReportsService.GetBalanceSheetAsync(Context.CurrentLedgerId, null, null);
+        }
+
+        loading = false;
+    }
+
+    private async Task ReloadFromContext()
+    {
+        await Load();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Context.Changed -= ReloadFromContext;
+}

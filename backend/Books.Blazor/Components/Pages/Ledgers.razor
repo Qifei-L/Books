@@ -1,0 +1,167 @@
+@page "/setup/ledgers"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject GeneralLedgerAppService Gl
+@inject AccountingContextService Context
+
+<div class="page-header">
+    <div>
+        <p class="eyebrow">Setup</p>
+        <h1>Ledgers</h1>
+    </div>
+    <button disabled="@(Context.CurrentEntityId == 0)" @onclick="NewLedger">New Ledger</button>
+</div>
+
+@if (editing)
+{
+    <section class="panel">
+        <div class="form-grid">
+            <label>Code
+                <input @bind="form.Code" />
+            </label>
+            <label class="wide">Name
+                <input @bind="form.Name" />
+            </label>
+            <label>Ledger Type
+                <select @bind="form.LedgerType">
+                    @foreach (var value in Enum.GetValues<LedgerType>())
+                    {
+                        <option value="@value">@value</option>
+                    }
+                </select>
+            </label>
+            <label class="check-field">
+                <span>Status</span>
+                <input type="checkbox" @bind="form.IsActive" />
+                Active
+            </label>
+            <label class="check-field">
+                <span>Posted Delete</span>
+                <input type="checkbox" @bind="form.AllowDeletePostedJournal" />
+                Void posted journals
+            </label>
+        </div>
+        <div class="actions-row">
+            <button disabled="@(!CanSave)" @onclick="SaveLedger">Save Ledger</button>
+            <button class="secondary" @onclick="Cancel">Cancel</button>
+        </div>
+    </section>
+}
+
+<section class="panel">
+    @if (loading)
+    {
+        <div class="empty">Loading ledgers...</div>
+    }
+    else if (ledgers.Count == 0)
+    {
+        <div class="empty">No ledgers found for the current entity.</div>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>LedgerType</th>
+                    <th>IsActive</th>
+                    <th>AllowDeletePostedJournal</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var ledger in ledgers)
+                {
+                    <tr>
+                        <td>@ledger.Code</td>
+                        <td>@ledger.Name</td>
+                        <td>@ledger.LedgerType</td>
+                        <td><span class="@(ledger.IsActive ? "badge badge-active" : "badge badge-inactive")">@(ledger.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>@(ledger.AllowDeletePostedJournal ? "Yes" : "No")</td>
+                        <td class="actions">
+                            <button class="text-button" @onclick="() => SelectLedger(ledger.Id)">Select</button>
+                            <button class="text-button" @onclick="() => EditLedger(ledger)">Edit</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    private List<Ledger> ledgers = [];
+    private LedgerForm form = new();
+    private bool loading = true;
+    private bool editing;
+    private bool CanSave => !string.IsNullOrWhiteSpace(form.Code) && !string.IsNullOrWhiteSpace(form.Name);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Context.Changed += ReloadFromContext;
+        await Context.InitializeAsync();
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        ledgers = Context.CurrentEntityId == 0 ? [] : await Gl.GetLedgersAsync(Context.CurrentEntityId);
+        loading = false;
+    }
+
+    private void NewLedger()
+    {
+        form = new LedgerForm();
+        editing = true;
+    }
+
+    private void EditLedger(Ledger ledger)
+    {
+        form = new LedgerForm
+        {
+            Id = ledger.Id,
+            Code = ledger.Code,
+            Name = ledger.Name,
+            LedgerType = ledger.LedgerType,
+            IsActive = ledger.IsActive,
+            AllowDeletePostedJournal = ledger.AllowDeletePostedJournal
+        };
+        editing = true;
+    }
+
+    private void Cancel() => editing = false;
+
+    private async Task SaveLedger()
+    {
+        var saved = await Gl.SaveLedgerAsync(new LedgerEditDto(form.Id, Context.CurrentEntityId, form.Code, form.Name, form.LedgerType, form.IsActive, form.AllowDeletePostedJournal));
+        editing = false;
+        await Context.SetLedgerAsync(saved.Id);
+        await Load();
+    }
+
+    private async Task SelectLedger(int ledgerId)
+    {
+        await Context.SetLedgerAsync(ledgerId);
+    }
+
+    private async Task ReloadFromContext()
+    {
+        editing = false;
+        await Load();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Context.Changed -= ReloadFromContext;
+
+    private sealed class LedgerForm
+    {
+        public int? Id { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public LedgerType LedgerType { get; set; } = LedgerType.Main;
+        public bool IsActive { get; set; } = true;
+        public bool AllowDeletePostedJournal { get; set; } = true;
+    }
+}
