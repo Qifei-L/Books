@@ -11,8 +11,11 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = DatabaseConnection.GetDatabaseConnectionString(configuration);
-        services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
-        services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+        services.AddDbContext<AppDbContext>(
+            options => options.UseNpgsql(connectionString),
+            ServiceLifetime.Transient,
+            ServiceLifetime.Transient);
+        services.AddTransient<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         return services;
     }
 }

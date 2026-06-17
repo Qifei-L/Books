@@ -8,10 +8,10 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        services.AddScoped<JournalService>();
-        services.AddScoped<ReportService>();
-        services.AddScoped<ReportExportService>();
-        services.AddScoped<GeneralLedgerAppService>();
+        services.AddTransient<JournalService>();
+        services.AddTransient<ReportService>();
+        services.AddTransient<ReportExportService>();
+        services.AddTransient<GeneralLedgerAppService>();
         return services;
     }
 }

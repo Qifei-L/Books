@@ -5,6 +5,7 @@ namespace Books.Blazor.Services;
 
 public class AccountingContextService(GeneralLedgerAppService gl)
 {
+    private readonly SemaphoreSlim gate = new(1, 1);
     private bool initialized;
 
     public event Func<Task>? Changed;
@@ -18,16 +19,83 @@ public class AccountingContextService(GeneralLedgerAppService gl)
 
     public async Task InitializeAsync()
     {
-        if (initialized)
+        await gate.WaitAsync();
+        try
         {
-            return;
-        }
+            if (initialized)
+            {
+                return;
+            }
 
-        initialized = true;
-        await ReloadEntitiesAsync();
+            await ReloadEntitiesCoreAsync();
+            initialized = true;
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
-    public async Task ReloadEntitiesAsync()
+    public async Task ReloadEntitiesAsync(bool notify = true)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            await ReloadEntitiesCoreAsync();
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        if (notify)
+        {
+            await NotifyAsync();
+        }
+    }
+
+    public async Task SetEntityAsync(int entityId, bool notify = true)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            await SetEntityCoreAsync(entityId);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        if (notify)
+        {
+            await NotifyAsync();
+        }
+    }
+
+    public async Task SetLedgerAsync(int ledgerId)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            CurrentLedger = Ledgers.FirstOrDefault(x => x.Id == ledgerId)
+                ?? await gl.GetLedgerAsync(ledgerId);
+
+            if (CurrentLedger is not null && CurrentEntity?.Id != CurrentLedger.EntityId)
+            {
+                CurrentEntity = Entities.FirstOrDefault(x => x.Id == CurrentLedger.EntityId)
+                    ?? await gl.GetEntityAsync(CurrentLedger.EntityId);
+                Ledgers = CurrentEntity is null ? [] : await gl.GetLedgersAsync(CurrentEntity.Id);
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        await NotifyAsync();
+    }
+
+    private async Task ReloadEntitiesCoreAsync()
     {
         Entities = (await gl.GetEntitiesAsync())
             .Where(x => x.IsActive)
@@ -42,10 +110,10 @@ public class AccountingContextService(GeneralLedgerAppService gl)
         var entityId = CurrentEntityId != 0 && Entities.Any(x => x.Id == CurrentEntityId)
             ? CurrentEntityId
             : Entities[0].Id;
-        await SetEntityAsync(entityId);
+        await SetEntityCoreAsync(entityId);
     }
 
-    public async Task SetEntityAsync(int entityId)
+    private async Task SetEntityCoreAsync(int entityId)
     {
         CurrentEntity = Entities.FirstOrDefault(x => x.Id == entityId)
             ?? await gl.GetEntityAsync(entityId);
@@ -54,30 +122,12 @@ public class AccountingContextService(GeneralLedgerAppService gl)
         {
             Ledgers = [];
             CurrentLedger = null;
-            await NotifyAsync();
             return;
         }
 
         Ledgers = await gl.GetLedgersAsync(CurrentEntity.Id);
         CurrentLedger = Ledgers.FirstOrDefault(x => string.Equals(x.Code, "MAIN", StringComparison.OrdinalIgnoreCase))
             ?? Ledgers.FirstOrDefault();
-
-        await NotifyAsync();
-    }
-
-    public async Task SetLedgerAsync(int ledgerId)
-    {
-        CurrentLedger = Ledgers.FirstOrDefault(x => x.Id == ledgerId)
-            ?? await gl.GetLedgerAsync(ledgerId);
-
-        if (CurrentLedger is not null && CurrentEntity?.Id != CurrentLedger.EntityId)
-        {
-            CurrentEntity = Entities.FirstOrDefault(x => x.Id == CurrentLedger.EntityId)
-                ?? await gl.GetEntityAsync(CurrentLedger.EntityId);
-            Ledgers = CurrentEntity is null ? [] : await gl.GetLedgersAsync(CurrentEntity.Id);
-        }
-
-        await NotifyAsync();
     }
 
     private async Task NotifyAsync()

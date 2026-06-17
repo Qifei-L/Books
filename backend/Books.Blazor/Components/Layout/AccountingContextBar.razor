@@ -44,10 +44,9 @@
         }
     }
 
-    private Task Refresh()
+    private async Task Refresh()
     {
-        InvokeAsync(StateHasChanged);
-        return Task.CompletedTask;
+        await InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
