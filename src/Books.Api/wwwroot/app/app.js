@@ -105,6 +105,7 @@ async function chooseLedger(ledger) {
     + (ledger.closed_through ? `closed through ${ledger.closed_through}` : "not closed");
   await renderChart();
   await renderJournals();
+  await renderSetup();
   for (const id of ["tb-out", "gl-out", "pl-out", "bs-out"]) $(id).innerHTML = "";
 }
 
@@ -204,6 +205,33 @@ $("gl-form").addEventListener("submit", async (event) => {
     showError(error);
   }
 });
+
+async function renderSetup() {
+  const [parties, taxCodes, banks, items, transfers] = await Promise.all([
+    api(`${ledgerUrl()}/parties`), api(`${ledgerUrl()}/tax-codes`), api(`${ledgerUrl()}/bank-accounts`),
+    api(`${ledgerUrl()}/items`), api(`${ledgerUrl()}/transfers`),
+  ]);
+  const roles = (p) => [p.is_customer ? "customer" : null, p.is_supplier ? "supplier" : null].filter(Boolean).join(", ");
+  const taxName = (id) => taxCodes.find((t) => t.id === id)?.name ?? "";
+  $("tab-setup").innerHTML = `
+    <h3>Parties</h3>
+    <table><tr><th>Name</th><th>Role</th><th>Tax ID</th><th>Contact</th><th class="num">Terms (days)</th></tr>
+    ${parties.map((p) => `<tr><td>${esc(p.name)}</td><td>${roles(p)}</td><td>${esc(p.tax_id)}</td><td>${esc(p.contact_name)}</td><td class="num">${p.payment_terms_days ?? ""}</td></tr>`).join("")}</table>
+    <h3 style="margin-top:16px">Tax codes</h3>
+    <table><tr><th>Name</th><th>Kind</th><th class="num">Rate %</th><th>Account</th><th>Effective</th></tr>
+    ${taxCodes.map((t) => `<tr><td>${esc(t.name)}</td><td>${t.kind.replaceAll("_", " ")}</td><td class="num">${t.rate}</td><td>${t.account_id ? esc(accountName(t.account_id)) : ""}</td>
+      <td>${t.effective_from ? `from ${t.effective_from}` : ""}${t.effective_to ? ` to ${t.effective_to}` : ""}</td></tr>`).join("")}</table>
+    <h3 style="margin-top:16px">Bank accounts</h3>
+    <table><tr><th>Account</th><th>Bank</th><th>Number</th><th>Currency</th></tr>
+    ${banks.map((b) => `<tr><td>${esc(b.code)} ${esc(b.name)}</td><td>${esc(b.bank_name)}</td><td>${esc(b.account_number)}</td><td>${b.currency}</td></tr>`).join("")}</table>
+    <h3 style="margin-top:16px">Bank transfers</h3>
+    <table><tr><th>No.</th><th>Date</th><th>From</th><th>To</th><th class="num">Amount</th><th class="num">Fee</th><th>Journal</th></tr>
+    ${transfers.map((t) => `<tr><td>${t.transfer_no}</td><td>${t.date}</td><td>${esc(accountName(t.from_account_id))}</td><td>${esc(accountName(t.to_account_id))}</td>
+      <td class="num">${t.amount}</td><td class="num">${t.fee_amount}</td><td>${t.deleted ? "deleted" : `No. ${t.journal_no}`}</td></tr>`).join("")}</table>
+    <h3 style="margin-top:16px">Items</h3>
+    <table><tr><th>Item</th><th>Unit</th><th>Suggests account</th><th>Suggests tax</th></tr>
+    ${items.map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.unit)}</td><td>${i.default_account_id ? esc(accountName(i.default_account_id)) : ""}</td><td>${esc(taxName(i.default_tax_code_id))}</td></tr>`).join("")}</table>`;
+}
 
 // Statements: nested groups with a subtotal at every level.
 function statementRows(lines, level) {
