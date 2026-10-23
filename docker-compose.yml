@@ -1,0 +1,19 @@
+# Local development database only. The password is a throwaway local default.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: books
+      POSTGRES_USER: books
+      POSTGRES_PASSWORD: ${BOOKS_DB_PASSWORD:-books}
+    ports:
+      - "5432:5432"
+    volumes:
+      - books-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U books -d books"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  books-pg:
