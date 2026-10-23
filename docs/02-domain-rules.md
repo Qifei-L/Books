@@ -28,7 +28,7 @@ Single source of truth · Consistency by design · Traceability · Secure by def
 ## Accounts
 
 14. Five types: Assets, Liabilities, Equity, Income, Cost & Expense. P&L = Income (add) − Cost & Expense (subtract), keeping signed and contra balances.
-15. Accounts form a tree within one ledger and type. Only leaf accounts take postings. **[T]**
+15. The chart has groups and accounts, as in Manager.io. Groups are headings that never take postings and may sit inside a group of the same type. Accounts sit under at most one group of the same type in the same ledger and never contain other accounts. **[T]**
 16. Code is user-entered and editable, unique within a ledger ignoring letter case. The stable Account ID is what journals reference.
 17. System purposes: Retained Earnings, Opening Balance Clearing (must be zero after setup), Rounding Differences (only if needed).
 18. Control accounts (AR, AP) are posted only by documents, and every line on them carries a Party. **[T]** *(default)*

@@ -62,6 +62,7 @@ internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
         b.ToTable("accounts", t => t.HasCheckConstraint(
             "ck_accounts_type", "type IN ('assets', 'liabilities', 'equity', 'income', 'cost_and_expense')"));
         b.Property(x => x.Id).ValueGeneratedNever();
+        b.Ignore(x => x.Postable);
         b.Property(x => x.Code).HasMaxLength(Account.MaxCodeLength);
         b.Property(x => x.Name).HasMaxLength(200);
         b.Property(x => x.Currency).HasMaxLength(3).IsFixedLength();
@@ -71,8 +72,27 @@ internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
         b.HasOne<Ledger>().WithMany()
             .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
-        // The composite key keeps a parent inside the same ledger.
-        b.HasOne<Account>().WithMany()
+        // The composite key keeps the group of an account inside the same ledger.
+        b.HasOne<AccountGroup>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.GroupId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class AccountGroupConfiguration : IEntityTypeConfiguration<AccountGroup>
+{
+    public void Configure(EntityTypeBuilder<AccountGroup> b)
+    {
+        b.ToTable("account_groups", t => t.HasCheckConstraint(
+            "ck_account_groups_type", "type IN ('assets', 'liabilities', 'equity', 'income', 'cost_and_expense')"));
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Name).HasMaxLength(200);
+        b.HasAlternateKey(x => new { x.LedgerId, x.Id });
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        // The composite key keeps a parent group inside the same ledger.
+        b.HasOne<AccountGroup>().WithMany()
             .HasForeignKey(x => new { x.LedgerId, x.ParentId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
     }

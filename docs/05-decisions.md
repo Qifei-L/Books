@@ -28,6 +28,7 @@
 | 2026-10-23 | Emails match ignoring case, the whole address. |
 | 2026-10-23 | Administrators see member emails in the member list. |
 | 2026-10-23 | Removing a member also invalidates pending invitations addressed to them. |
+| 2026-10-23 | Chart structure as in Manager.io: groups are headings that never take postings; accounts sit under groups and do not nest (rule 15). |
 | 2026-10-23 | `docs/16-ledger-accounting-policy.md` dropped; 01–06 are the only current documents. |
 
 ## Proposed defaults (accept or change)

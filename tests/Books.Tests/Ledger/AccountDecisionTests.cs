@@ -57,24 +57,6 @@ public sealed class AccountDecisionTests(TestHost host)
         Assert.Equal(1, await db.AuditEvents.CountAsync(a => a.TargetId == cash.Id() && a.Action == "account.deleted", Ct));
     }
 
-    [Fact]
-    public async Task Accounts_with_sub_accounts_cannot_be_deleted_and_readers_cannot_delete()
-    {
-        var (admin, orgId, ledger) = await new AccountTests(host).LedgerAsync();
-        var parent = await AccountTests.CreateAsync(admin, orgId, ledger, "1000", "Assets", "assets");
-        var child = await AccountTests.CreateAsync(admin, orgId, ledger, "1010", "Cash", "assets", parent.Id());
-        using var reader = host.Client(Ids.Subject("reader"));
-        var membership = await host.AddMemberAsync(orgId, reader);
-        await (await admin.WriteAsync(HttpMethod.Put, $"/api/v1/organizations/{orgId}/memberships/{membership}/access",
-            new { role = "member", grants = new[] { new { ledger_id = ledger, access = "read" } } }, ifMatch: 1)).DataAsync();
-
-        var withChildren = await admin.WriteAsync(HttpMethod.Delete, AccountUrl(orgId, ledger, parent.Id()), null, ifMatch: 1);
-        var byReader = await reader.WriteAsync(HttpMethod.Delete, AccountUrl(orgId, ledger, child.Id()), null, ifMatch: 1);
-
-        await withChildren.AssertProblemAsync(HttpStatusCode.Conflict, "ACCOUNT_HAS_CHILDREN");
-        await byReader.AssertProblemAsync(HttpStatusCode.Forbidden, "FORBIDDEN");
-    }
-
     private static string AccountUrl(Guid orgId, Guid ledgerId, Guid accountId) =>
         $"/api/v1/organizations/{orgId}/ledgers/{ledgerId}/accounts/{accountId}";
 }

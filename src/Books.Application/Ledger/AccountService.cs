@@ -7,15 +7,15 @@ using Microsoft.EntityFrameworkCore;
 namespace Books.Application.Ledgers;
 
 public sealed record AccountDto(
-    Guid Id, Guid LedgerId, Guid? ParentId, string Code, string Name, string Type, bool IsControl, bool IsBank,
-    string? Currency, bool Active, bool IsLeaf, bool Postable, string Version);
+    Guid Id, Guid LedgerId, Guid? GroupId, string Code, string Name, string Type, bool IsControl, bool IsBank,
+    string? Currency, bool Active, bool Postable, string Version);
 
-/// <param name="ParentChanges">True when parent_id was sent; ParentId null then means the top level.</param>
-public sealed record UpdateAccount(string? Code, string? Name, AccountType? Type, bool? Active, bool ParentChanges, Guid? ParentId);
+/// <param name="GroupChanges">True when group_id was sent; GroupId null then means no group.</param>
+public sealed record UpdateAccount(string? Code, string? Name, AccountType? Type, bool? Active, bool GroupChanges, Guid? GroupId);
 
-public sealed record CreateAccount(string Code, string Name, AccountType Type, Guid? ParentId, bool IsControl, bool IsBank, string? Currency);
+public sealed record CreateAccount(string Code, string Name, AccountType Type, Guid? GroupId, bool IsControl, bool IsBank, string? Currency);
 
-/// <summary>Chart of accounts. Reading needs ledger read access; changes need edit access.</summary>
+/// <summary>Accounts of a chart. Reading needs ledger read access; changes need edit access.</summary>
 public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner reads)
 {
     public Task<IReadOnlyList<AccountDto>> ListAsync(Principal principal, Guid orgId, Guid ledgerId, CancellationToken ct) =>
@@ -30,11 +30,8 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
-            var parent = command.ParentId is { } parentId
-                ? await db.Accounts.SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Id == parentId, ct)
-                    ?? throw BooksProblem.Invalid("parent_id must be an account in the same ledger.")
-                : null;
-            var account = new Account(Guid.CreateVersion7(), ledger, command.Code, command.Name, command.Type, parent,
+            var group = await FindGroupAsync(ledgerId, command.GroupId, ct);
+            var account = new Account(Guid.CreateVersion7(), ledger, command.Code, command.Name, command.Type, group,
                 command.IsControl, command.IsBank, command.Currency, scope.Now);
             await EnsureCodeFreeAsync(ledgerId, account.Code, account.Id, ct);
 
@@ -45,7 +42,7 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
                 code = account.Code,
                 name = account.Name,
                 type = Text.Of(account.Type),
-                parent_id = account.ParentId,
+                group_id = account.GroupId,
             });
             await db.SaveChangesAsync(ct);
             return WriteResult.Of(201, (await LoadAsync(ledgerId, account.Id, ct)).Single(), account.Version);
@@ -53,7 +50,7 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
 
     /// <summary>
     /// Partial update: omitted fields stay unchanged. The Id never changes, so journals keep pointing at the
-    /// same account when its code changes (rule 16). A new parent may not be the account or one of its descendants.
+    /// same account when its code changes (rule 16).
     /// </summary>
     public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid accountId, UpdateAccount command, CancellationToken ct) =>
         writes.RunAsync(principal, new WriteRequest("account.update", orgId, meta), async scope =>
@@ -63,15 +60,8 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
             scope.CheckVersion(account.Version);
             var before = (await LoadAsync(ledgerId, account.Id, ct)).Single();
 
-            Account? parent = null;
-            if (command.ParentChanges && command.ParentId is { } parentId)
-            {
-                parent = await db.Accounts.SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Id == parentId, ct)
-                    ?? throw BooksProblem.Invalid("parent_id must be an account in the same ledger.");
-                await EnsureNotDescendantAsync(account.Id, parent, ct);
-            }
-            var hasChildren = await db.Accounts.AnyAsync(a => a.LedgerId == ledgerId && a.ParentId == account.Id, ct);
-            account.Update(command.Code, command.Name, command.Type, command.Active, hasChildren, command.ParentChanges, parent);
+            var group = await FindGroupAsync(ledgerId, command.GroupChanges ? command.GroupId : account.GroupId, ct);
+            account.Update(command.Code, command.Name, command.Type, command.Active, command.GroupChanges, group);
             await EnsureCodeFreeAsync(ledgerId, account.Code, account.Id, ct);
 
             await db.SaveChangesAsync(ct);
@@ -81,8 +71,8 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
         }, ct);
 
     /// <summary>
-    /// Deletes an account that was never used (rule 19). An account with sub-accounts cannot be deleted.
-    /// M1 has no postings yet; M2 must also refuse accounts referenced by any journal line.
+    /// Deletes an account that was never used (rule 19).
+    /// M1 has no postings yet; M2 must refuse accounts referenced by any journal line.
     /// </summary>
     public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid accountId, CancellationToken ct) =>
         writes.RunAsync(principal, new WriteRequest("account.delete", orgId, meta), async scope =>
@@ -90,28 +80,17 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var account = await db.Accounts.SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Id == accountId, ct) ?? throw BooksProblem.NotFound();
             scope.CheckVersion(account.Version);
-            if (await db.Accounts.AnyAsync(a => a.LedgerId == ledgerId && a.ParentId == account.Id, ct))
-            {
-                throw BooksProblem.Conflict("ACCOUNT_HAS_CHILDREN", "Move or delete its sub-accounts first.");
-            }
             var before = (await LoadAsync(ledgerId, account.Id, ct)).Single();
             db.Accounts.Remove(account);
             scope.Audit("account.deleted", "account", account.Id, new { before });
             return WriteResult.Of(200, new { id = account.Id, deleted = true });
         }, ct);
 
-    private async Task EnsureNotDescendantAsync(Guid accountId, Account newParent, CancellationToken ct)
-    {
-        var parents = await db.Accounts.AsNoTracking().Where(a => a.LedgerId == newParent.LedgerId)
-            .ToDictionaryAsync(a => a.Id, a => a.ParentId, ct);
-        for (Guid? current = newParent.Id; current is { } id; current = parents.GetValueOrDefault(id))
-        {
-            if (id == accountId)
-            {
-                throw BooksProblem.Invalid("An account cannot be moved under itself or one of its sub-accounts.");
-            }
-        }
-    }
+    private async Task<AccountGroup?> FindGroupAsync(Guid ledgerId, Guid? groupId, CancellationToken ct) =>
+        groupId is { } id
+            ? await db.AccountGroups.SingleOrDefaultAsync(g => g.LedgerId == ledgerId && g.Id == id, ct)
+                ?? throw BooksProblem.Invalid("group_id must be a group in the same ledger.")
+            : null;
 
     /// <summary>Rule 16 (case-insensitive), checked under the organization lock; the unique index is the final guard.</summary>
     private async Task EnsureCodeFreeAsync(Guid ledgerId, string code, Guid accountId, CancellationToken ct)
@@ -125,13 +104,12 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
 
     private async Task<IReadOnlyList<AccountDto>> LoadAsync(Guid ledgerId, Guid? accountId, CancellationToken ct)
     {
-        var rows = await db.Accounts.AsNoTracking()
+        var accounts = await db.Accounts.AsNoTracking()
             .Where(a => a.LedgerId == ledgerId && (accountId == null || a.Id == accountId))
-            .Select(a => new { a, HasChildren = db.Accounts.Any(c => c.LedgerId == a.LedgerId && c.ParentId == a.Id) })
-            .OrderBy(x => x.a.Code)
+            .OrderBy(a => a.Code)
             .ToListAsync(ct);
-        return rows.Select(x => new AccountDto(
-            x.a.Id, x.a.LedgerId, x.a.ParentId, x.a.Code, x.a.Name, Text.Of(x.a.Type), x.a.IsControl, x.a.IsBank, x.a.Currency,
-            x.a.Active, !x.HasChildren, Account.CanPost(x.a.Active, x.HasChildren), x.a.Version.ToString())).ToList();
+        return accounts.Select(a => new AccountDto(
+            a.Id, a.LedgerId, a.GroupId, a.Code, a.Name, Text.Of(a.Type), a.IsControl, a.IsBank, a.Currency,
+            a.Active, a.Postable, a.Version.ToString())).ToList();
     }
 }

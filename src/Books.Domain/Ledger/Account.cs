@@ -6,9 +6,62 @@ namespace Books.Domain.Ledgers;
 public enum AccountType { Assets, Liabilities, Equity, Income, CostAndExpense }
 
 /// <summary>
-/// An account in one ledger's chart. Accounts form a tree within one ledger and type, and only leaf accounts
-/// take postings (rule 15). Code is user-entered, editable and unique within the ledger; journals reference the
-/// stable Id (rule 16).
+/// A heading in one ledger's chart, like a Manager.io group. Groups never take postings; they may sit inside
+/// another group of the same type (rule 15).
+/// </summary>
+public sealed class AccountGroup
+{
+    private AccountGroup() { }
+
+    public AccountGroup(Guid id, Ledger ledger, string name, AccountType type, AccountGroup? parent, DateTimeOffset createdAt)
+    {
+        Id = id;
+        OrgId = ledger.OrgId;
+        LedgerId = ledger.Id;
+        Name = Names.Require(name);
+        Type = type;
+        CreatedAt = createdAt;
+        MoveUnder(parent);
+    }
+
+    public Guid Id { get; private set; }
+    public Guid OrgId { get; private set; }
+    public Guid LedgerId { get; private set; }
+    public Guid? ParentId { get; private set; }
+    public string Name { get; private set; } = "";
+    public AccountType Type { get; private set; }
+    public DateTimeOffset CreatedAt { get; private set; }
+    public long Version { get; private set; } = 1;
+
+    /// <summary>Partial update. The caller has already checked that a new parent is not inside this group.</summary>
+    public void Update(string? name, bool parentChanges, AccountGroup? parent)
+    {
+        if (parentChanges)
+        {
+            if (parent?.Id == Id)
+            {
+                throw new DomainException("A group cannot be inside itself.");
+            }
+            MoveUnder(parent);
+        }
+        Name = name is null ? Name : Names.Require(name);
+        Version++;
+    }
+
+    private void MoveUnder(AccountGroup? parent)
+    {
+        if (parent is not null && (parent.LedgerId != LedgerId || parent.Type != Type))
+        {
+            throw new DomainException("A parent group must be in the same ledger and of the same type.");
+        }
+        ParentId = parent?.Id;
+    }
+}
+
+/// <summary>
+/// An account in one ledger's chart. Accounts sit directly under an optional group of the same type and never
+/// contain other accounts, so every active account can take postings (rule 15). Code is user-entered, editable
+/// and unique within the ledger ignoring case; journals reference the stable Id (rule 16).
 /// </summary>
 public sealed class Account
 {
@@ -16,7 +69,7 @@ public sealed class Account
 
     private Account() { }
 
-    public Account(Guid id, Ledger ledger, string code, string name, AccountType type, Account? parent,
+    public Account(Guid id, Ledger ledger, string code, string name, AccountType type, AccountGroup? group,
         bool isControl, bool isBank, string? currency, DateTimeOffset createdAt)
     {
         Id = id;
@@ -29,13 +82,13 @@ public sealed class Account
         IsBank = isBank;
         Currency = currency is null ? null : Currencies.Require(currency).Code;
         CreatedAt = createdAt;
-        MoveUnder(parent);
+        PlaceIn(group);
     }
 
     public Guid Id { get; private set; }
     public Guid OrgId { get; private set; }
     public Guid LedgerId { get; private set; }
-    public Guid? ParentId { get; private set; }
+    public Guid? GroupId { get; private set; }
     public string Code { get; private set; } = "";
     public string Name { get; private set; } = "";
     public AccountType Type { get; private set; }
@@ -52,8 +105,8 @@ public sealed class Account
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
 
-    /// <summary>Only active leaf accounts may be posted to.</summary>
-    public static bool CanPost(bool active, bool hasChildren) => active && !hasChildren;
+    /// <summary>Only active accounts take postings; groups never do.</summary>
+    public bool Postable => Active;
 
     public static string RequireCode(string? code)
     {
@@ -63,32 +116,17 @@ public sealed class Account
             : trimmed;
     }
 
-    /// <summary>
-    /// Applies a partial update; null arguments leave a field unchanged. The caller decides whether the parent
-    /// changes and has already checked that the new parent is not a descendant.
-    /// </summary>
-    public void Update(string? code, string? name, AccountType? type, bool? active, bool hasChildren, bool parentChanges, Account? parent)
+    /// <summary>Partial update; null arguments leave a field unchanged.</summary>
+    public void Update(string? code, string? name, AccountType? type, bool? active, bool groupChanges, AccountGroup? group)
     {
-        var typeChanges = type is { } newType && newType != Type;
-        if (typeChanges)
+        Type = type ?? Type;
+        if (groupChanges)
         {
-            if (hasChildren)
-            {
-                throw new DomainException("The type of an account with sub-accounts cannot change.");
-            }
-            Type = type!.Value;
+            PlaceIn(group);
         }
-        if (parentChanges)
+        else if (GroupId is not null && type is not null && group?.Type != Type)
         {
-            if (parent?.Id == Id)
-            {
-                throw new DomainException("An account cannot be its own parent.");
-            }
-            MoveUnder(parent);
-        }
-        else if (typeChanges && ParentId is not null)
-        {
-            throw new DomainException("A parent account must be in the same ledger and of the same type.");
+            throw new DomainException("An account must be of the same type as its group; move it to a group of that type.");
         }
         Code = code is null ? Code : RequireCode(code);
         Name = name is null ? Name : Names.Require(name);
@@ -96,12 +134,12 @@ public sealed class Account
         Version++;
     }
 
-    private void MoveUnder(Account? parent)
+    private void PlaceIn(AccountGroup? group)
     {
-        if (parent is not null && (parent.LedgerId != LedgerId || parent.Type != Type))
+        if (group is not null && (group.LedgerId != LedgerId || group.Type != Type))
         {
-            throw new DomainException("A parent account must be in the same ledger and of the same type.");
+            throw new DomainException("A group must be in the same ledger and of the same type as the account.");
         }
-        ParentId = parent?.Id;
+        GroupId = group?.Id;
     }
 }
