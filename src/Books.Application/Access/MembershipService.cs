@@ -41,6 +41,9 @@ public sealed class MembershipService(IBooksDb db, WriteRunner writes, ReadRunne
             }
 
             var before = new { role = Text.Of(target.Role), grants = await GrantsOfAsync(target, ct) };
+            var invalidated = target.IsActiveAdmin && role != MembershipRole.Admin
+                ? await InvalidateInvitationsAsync(target, addressedToTarget: false, ct)
+                : [];
             await db.LedgerGrants.Where(g => g.MembershipId == target.Id).ExecuteDeleteAsync(ct);
             target.ChangeRole(role);
             foreach (var grant in grants)
@@ -48,7 +51,7 @@ public sealed class MembershipService(IBooksDb db, WriteRunner writes, ReadRunne
                 db.LedgerGrants.Add(new LedgerGrant(target, grant.LedgerId, grant.Access, principal.UserId, scope.Now));
             }
             var after = new { role = Text.Of(role), grants = grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access))).ToList() };
-            scope.Audit("membership.access_changed", "membership", target.Id, new { before, after });
+            scope.Audit("membership.access_changed", "membership", target.Id, new { before, after, invalidated_invitations = invalidated });
             await db.SaveChangesAsync(ct);
             return WriteResult.Of(200, (await LoadAsync(orgId, target.Id, ct)).Single(), target.Version);
         }, ct);
@@ -72,10 +75,28 @@ public sealed class MembershipService(IBooksDb db, WriteRunner writes, ReadRunne
         {
             await EnsureAnotherAdminAsync(target.OrgId, target.Id, ct);
         }
+        var invalidated = await InvalidateInvitationsAsync(target, addressedToTarget: true, ct);
         await db.LedgerGrants.Where(g => g.MembershipId == target.Id).ExecuteDeleteAsync(ct);
         target.Remove(scope.Now);
-        scope.Audit(action, "membership", target.Id, new { user_id = target.UserId, role = Text.Of(target.Role) });
+        scope.Audit(action, "membership", target.Id, new { user_id = target.UserId, role = Text.Of(target.Role), invalidated_invitations = invalidated });
         return WriteResult.Of(200, new { id = target.Id, status = Text.Of(target.Status), removed_at = target.RemovedAt }, target.Version);
+    }
+
+    /// <summary>
+    /// Rule 6: pending invitations sent by someone who stops being an administrator become invalid for good.
+    /// Removing a member also invalidates pending invitations addressed to them, so a new one must be issued.
+    /// </summary>
+    private async Task<List<Guid>> InvalidateInvitationsAsync(Membership target, bool addressedToTarget, CancellationToken ct)
+    {
+        var emails = addressedToTarget
+            ? await db.Identities.Where(i => i.UserId == target.UserId && i.VerifiedEmail != null).Select(i => i.VerifiedEmail!).ToListAsync(ct)
+            : [];
+        var invitations = await db.Invitations
+            .Where(i => i.OrgId == target.OrgId && i.Status == InvitationStatus.Pending
+                && ((target.Role == MembershipRole.Admin && i.InviterMembershipId == target.Id) || emails.Contains(i.TargetEmailKey)))
+            .ToListAsync(ct);
+        invitations.ForEach(i => i.Invalidate());
+        return invitations.Select(i => i.Id).ToList();
     }
 
     /// <summary>Administrators hold no grants; a member's grants name distinct ledgers of this organization.</summary>
