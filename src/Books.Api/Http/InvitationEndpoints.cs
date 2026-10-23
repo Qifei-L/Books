@@ -28,5 +28,8 @@ public static class InvitationEndpoints
 
         api.MapGet("/me/invitations", async (PrincipalAccessor principals, InvitationService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.InboxAsync(await principals.GetAsync(ct), ct)));
+
+        api.MapPost("/me/invitations/{invitationId:guid}/accept", async (Guid invitationId, PrincipalAccessor principals, InvitationService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.AcceptAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), invitationId, ct)));
     }
 }

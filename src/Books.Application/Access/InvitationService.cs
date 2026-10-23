@@ -99,6 +99,70 @@ public sealed class InvitationService(IBooksDb db, WriteRunner writes, ReadRunne
         return await LoadAsync(i => i.TargetEmailKey == email && i.Status == InvitationStatus.Pending && i.ExpiresAt > now, ct);
     }
 
+    /// <summary>
+    /// The recipient explicitly accepts. Under the organization lock: the invitation is still pending and unexpired,
+    /// the caller's current verified email matches, and the inviter is still an administrator. Then the membership
+    /// is created (or a removed one rejoins with a new generation), only the offered grants are written, and the
+    /// invitation is consumed.
+    /// </summary>
+    public async Task<WriteResult> AcceptAsync(Principal principal, WriteMeta meta, Guid invitationId, CancellationToken ct)
+    {
+        var email = principal.VerifiedEmail ?? throw BooksProblem.EmailNotVerified();
+        var orgId = await db.Invitations.AsNoTracking()
+            .Where(i => i.Id == invitationId && i.TargetEmailKey == email)
+            .Select(i => (Guid?)i.OrgId).SingleOrDefaultAsync(ct) ?? throw BooksProblem.NotFound();
+
+        return await writes.RunAsync(principal, new WriteRequest("invitation.accept", orgId, meta), async scope =>
+        {
+            var invitation = await db.Invitations.SingleAsync(i => i.Id == invitationId, ct);
+            scope.CheckVersion(invitation.Version);
+            if (invitation.StatusAt(scope.Now) != InvitationStatus.Pending || scope.Organization.State != OrganizationState.Active)
+            {
+                throw Unavailable();
+            }
+            var inviter = await db.Memberships.SingleAsync(m => m.Id == invitation.InviterMembershipId, ct);
+            if (!inviter.IsActiveAdmin)
+            {
+                throw Unavailable();
+            }
+
+            var membership = await db.Memberships.SingleOrDefaultAsync(m => m.OrgId == orgId && m.UserId == principal.UserId, ct);
+            if (membership?.Status == MembershipStatus.Active)
+            {
+                throw BooksProblem.Conflict("ALREADY_MEMBER", "You are already a member of this organization.");
+            }
+            if (membership is null)
+            {
+                membership = new Membership(Guid.CreateVersion7(), orgId, principal.UserId, invitation.ProposedRole, scope.Now);
+                db.Memberships.Add(membership);
+            }
+            else
+            {
+                membership.Rejoin(invitation.ProposedRole, scope.Now);
+            }
+
+            var grants = await GrantsOfAsync(invitation.Id, ct);
+            db.LedgerGrants.AddRange(grants.Select(g => new LedgerGrant(membership, g.LedgerId, g.Access, inviter.UserId, scope.Now)));
+            invitation.Accept(principal.UserId, scope.Now);
+            scope.Audit("invitation.accepted", "invitation", invitation.Id, new { membership_id = membership.Id });
+            scope.Audit("membership.joined", "membership", membership.Id, new
+            {
+                user_id = principal.UserId,
+                role = Text.Of(membership.Role),
+                generation = membership.Generation,
+                grants = grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access))),
+            });
+
+            var displayName = await db.Users.Where(u => u.Id == principal.UserId).Select(u => u.DisplayName).SingleAsync(ct);
+            return WriteResult.Of(200, new
+            {
+                membership = new MemberDto(membership.Id, principal.UserId, displayName, Text.Of(membership.Role), Text.Of(membership.Status),
+                    membership.Generation, grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access))).ToList(), membership.Version.ToString()),
+                organization_id = orgId,
+            }, membership.Version);
+        }, ct);
+    }
+
     internal static BooksProblem Unavailable() =>
         new(410, "INVITE_UNAVAILABLE", "The invitation has expired, was revoked, or is no longer valid.");
 

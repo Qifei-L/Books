@@ -74,6 +74,17 @@ public sealed class Membership
         RemovedAt = at;
         Version++;
     }
+
+    /// <summary>A removed member accepts a new invitation: a new generation, so earlier grants stay dead.</summary>
+    public void Rejoin(MembershipRole role, DateTimeOffset at)
+    {
+        Status = MembershipStatus.Active;
+        Role = role;
+        Generation++;
+        JoinedAt = at;
+        RemovedAt = null;
+        Version++;
+    }
 }
 
 /// <summary>
