@@ -85,7 +85,8 @@ internal sealed class IdempotencyRecordConfiguration : IEntityTypeConfiguration<
         b.Property(x => x.ScopeKey).HasMaxLength(50);
         b.Property(x => x.Operation).HasMaxLength(100);
         b.Property(x => x.RequestHash).HasMaxLength(64);
-        b.Property(x => x.ResponseBody).HasColumnType("jsonb");
+        // text, not jsonb: a replay returns the original response byte for byte.
+        b.Property(x => x.ResponseBody).HasColumnType("text");
         b.HasIndex(x => x.ExpiresAt);
     }
 }
