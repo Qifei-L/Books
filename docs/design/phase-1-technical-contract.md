@@ -1,17 +1,17 @@
 # 首期多组织基础：详细技术设计与接口契约
 
-版本：0.2；日期：2026-10-23；状态：**技术提案，待审阅，未实施**。
+版本：0.3；日期：2026-10-23；状态：**C# 技术路线已确认；具体技术提案待审阅，未实施**。
 
-依据：Qifei-L/Books 的 docs/requirements-review，基准提交 480cd008223dd311093ea16ab8b38e640026e41f；[Draft PR #1](https://github.com/Qifei-L/Books/pull/1)。本文承接多组织权限设计，不替代已经确认的业务规则。本文的参数、技术栈及路径均为建议，不表示用户已经批准实施或部署。
+依据：Qifei-L/Books 的 docs/requirements-review，基准提交 ffdd3fa820caa32a2eef32608a0a75bfe7a34968；[Draft PR #1](https://github.com/Qifei-L/Books/pull/1)。本文承接多组织权限设计，不替代已经确认的业务规则。C# 路线已确认；本文的具体版本、参数、身份供应商及接口路径仍为建议，不表示用户已经批准实施或部署。
 
 ## 1. 结论与实施前关口
 
-建议采用 **Go 模块化单体后端 + PostgreSQL + 标准外部 OIDC/OAuth 身份服务**。HTTP API 和 MCP 只是两种适配入口，共用应用服务、授权策略、事务和数据访问；不拆微服务，不引入 Redis、消息队列、独立权限引擎或自制 OAuth 授权服务器。
+已按用户要求改为 **C# + ASP.NET Core + EF Core + PostgreSQL**，采用模块化单体，首期 API/MCP 优先，**不引入 ABP**。标准 OIDC/OAuth 身份服务仍需单独选定。HTTP API 和 MCP 只是两种适配入口，共用应用服务、授权策略、事务和数据访问；不拆微服务，不引入 Redis、消息队列、独立权限引擎或自制 OAuth 授权服务器。
 
-身份服务的明确首选提案为 **Keycloak**，先在隔离测试环境验证，再决定实际采用。理由是用户注册、验证、登录、恢复及 OAuth 由成熟产品承担，Books 专注组织权限；代价是多一个服务及其数据库、升级、备份、邮件配置和安全维护。对小项目这可能偏重，不能包装成零成本依赖。若已有合适的组织身份平台，应优先评估复用，但不要在没有确认的情况下增加付费账号或创建新服务。
+身份服务尚未选定，保留 **Keycloak** 作为验证候选提案，先在隔离测试环境验证，再决定实际采用。理由是用户注册、验证、登录、恢复及 OAuth 由成熟产品承担，Books 专注组织权限；代价是多一个服务及其数据库、升级、备份、邮件配置和安全维护。对小项目这可能偏重，不能包装成零成本依赖。若已有合适的组织身份平台，应优先评估复用，但不要在没有确认的情况下增加付费账号或创建新服务。
 
 真正需要用户审阅的关口：
-1. 同意本首期范围、推荐栈及 Keycloak 验证方向；身份供应商与运维承担者仍待选定。
+1. C# 路线已经确认，无需重复确认。具体版本组合、首期契约细节及 Keycloak 验证方向仍待审阅；身份供应商与运维承担者尚未选定。
 2. 技术文档审阅后，**另外明确批准开始编码**；本次“继续技术设计”不构成编码批准。
 3. 生产供应商、区域、费用、域名、备份和发布计划另行批准；不随技术栈一起默认批准。
 
@@ -36,17 +36,27 @@
 
 | 部分 | 推荐 | 边界与理由 |
 | --- | --- | --- |
-| 运行时 | Go 1.27 系列，实施时锁定经确认的安全补丁 | 官方页面在本次检查列出 1.27.3；不使用浮动 latest。标准库 net/http、encoding/json、slog、testing 为主。 |
-| 数据库 | PostgreSQL 18 系列，实施时锁定补丁/镜像摘要 | 本次官方版本表为 18.6；事务、复合外键、行锁适合租户隔离及并发授权。不要选候选发布版。 |
-| SQL 驱动 | pgx v5 | 显式参数化 SQL 与事务，少量清晰 repository；首期不引入 ORM。精确依赖版本在实施时核对兼容性并固定。 |
-| 数据迁移 | golang-migrate v4 的版本化 SQL | 与应用进程启动分离执行，不让每个实例自动抢跑迁移；首期只设计迁移，不运行。 |
-| 认证 | Keycloak 候选 + 标准 OIDC/OAuth 库 | 不存 Books 密码；OIDC 客户端与 API access-token 验证是不同职责，不能拿 ID token 当 API 凭证。 |
-| MCP | 官方 modelcontextprotocol/go-sdk | HTTP Streamable HTTP 适配，同一进程，不另设超级账号；具体 SDK 版本实施前固定并做协议兼容测试。 |
-| 契约/测试 | OpenAPI 3.1、JSON Schema；Go 测试 + 真 PostgreSQL 集成测试 | 不用 SQLite 代替外键、锁和并发测试；不需要首期 UI。 |
+| 语言与宿主 | C# + ASP.NET Core；建议 .NET 10 LTS | .NET 10 当前处于支持期；本次官方表列补丁 10.0.13，但仅作核对记录，不作为已批准锁定版本。实施前复核安全补丁并固定 SDK/运行时，避免浮动 latest。 |
+| 数据访问 | EF Core 10 + Npgsql.EntityFrameworkCore.PostgreSQL 10 系列候选 | EF Core 10 要求 .NET 10；Npgsql 官方已有对应 EF 10 提供程序。精确包版本及传递依赖实施时核对兼容范围并锁定，不假定相同补丁号必然匹配。 |
+| 数据库 | PostgreSQL，18 系列仍为候选 | 保留事务、复合外键、行锁方案；实施前复核支持期、补丁与镜像摘要，不采用预发布版本。 |
+| 数据迁移 | EF Core Migrations + 审阅后的 PostgreSQL SQL/迁移 bundle | 生成迁移后检查实际 SQL；必要的延迟约束、触发器等用显式 SQL 纳入同一版本化迁移。独立发布步骤运行，不在应用启动时自动迁移；本次不生成或执行迁移。 |
+| 认证 | ASP.NET Core JWT bearer/OIDC 集成 + 待选标准身份服务 | Keycloak 仍为候选，不因改 C# 而改用自制认证。API 验证 access token，不接受 ID token 代替；ASP.NET Core Identity 是账号管理组件，本身不是完整 OAuth/OIDC 授权服务器。 |
+| MCP | 官方 modelcontextprotocol/csharp-sdk，HTTP 宿主采用 ModelContextProtocol.AspNetCore | Streamable HTTP 适配与 API 同进程；保留委托、受众和当前权限校验，不设超级账号。SDK 精确版本及目标协议兼容实施前验证和固定。 |
+| 契约/测试 | OpenAPI 3.1、JSON Schema；建议 xUnit + ASP.NET Core 集成测试 + 真 PostgreSQL | 使用 dotnet test 运行单元/集成测试；不以 EF InMemory 或 SQLite 代替复合外键、锁和并发验证。具体测试包版本待锁定，首期不做 Books Web UI。 |
 
-来源：[Go 发布记录](https://go.dev/doc/devel/release)、[PostgreSQL 支持表](https://www.postgresql.org/support/versioning/)、[pgx](https://pkg.go.dev/github.com/jackc/pgx/v5)、[迁移工具](https://github.com/golang-migrate/migrate)、[官方 MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk)。日期为本次查阅，不承诺未来最新；本稿未安装依赖或完成兼容验证。
+官方核对来源（2026-10-23）：[.NET 支持政策](https://dotnet.microsoft.com/en-us/platform/support/policy)、[EF Core 10 要求与支持](https://learn.microsoft.com/en-us/ef/core/what-is-new/ef-core-10.0/whatsnew)、[Npgsql EF Core 10](https://www.npgsql.org/efcore/release-notes/10.0.html)、[Npgsql provider](https://www.npgsql.org/efcore/)、[EF 迁移发布](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/applying)、[官方 MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)、[ASP.NET Core Identity 的职责](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/identity?view=aspnetcore-10.0)。版本细节不是用户批准的部署清单，尚未安装依赖或运行兼容验证。
 
-建议模块：transport/http、transport/mcp、identity、organizations、companies、memberships、invitations、authorization、audit、persistence。路由解析、DTO、服务、repository 分开；授权在服务内强制执行，不能只在 HTTP middleware 执行。MCP 不能直接引用数据库 repository。所有写入应用命令都接受服务端建立的 Principal，而不是来自请求体的 actor_user_id。
+### EF Core 接入不能削弱原有安全约束
+
+建议 DbContext 按请求/应用命令作用域使用，不跨并发操作共享。所有读写保留显式组织条件、服务授权和数据库复合外键；全局查询过滤器只能作为辅助，不能作为唯一隔离措施，也不能用 IgnoreQueryFilters 绕过授权。
+
+保留后文 PostgreSQL 显式组织锁与同事务授权检查。必要的 FOR UPDATE/FOR SHARE 和延迟约束可通过参数化 SQL 及审阅迁移实现，与 EF 操作共享连接和事务；不能把单次 SaveChanges 自动事务误当整个业务事务。
+
+保留正 bigint version 及 API 字符串版本契约，建议映射为 EF 并发令牌，明确递增；DbUpdateConcurrencyException 映射为现有版本冲突语义，不覆盖客户端更新，也不改用 SQL Server rowversion。批量更新或原生 SQL 必须显式携带版本及组织条件。依据[EF 并发说明](https://learn.microsoft.com/en-us/ef/core/saving/concurrency)。
+
+若启用连接重试策略，必须重试完整事务并遵循幂等协议，不能只重试中间 SaveChanges 或重复审计。持久化、审计、幂等结果仍按现有原子边界提交；业务权限仍读取最新服务端状态。
+
+建议在一个 .NET solution 内按 API/MCP 适配、Application、Domain、Infrastructure 组织模块，业务模块包括 Identity、Organizations、Companies、Memberships、Invitations、Authorization 和 Audit。先保持轻量模块边界，不为每个实体建立独立服务或引入 ABP。路由/DTO、应用服务与 EF Core 持久化分开；授权在服务内强制执行，不能只在 ASP.NET Core middleware 或端点特性中执行。MCP 不能直接访问 DbContext 或数据库 repository。所有写入应用命令都接受服务端建立的 Principal，而不是来自请求体的 actor_user_id。
 
 ## 4. 身份与认证契约
 
@@ -249,11 +259,11 @@ MCP 按选定协议版本2025-11-25设计，实施时核验目标客户端支持
 
 | 阶段 | 内容 | 完成判据 |
 | --- | --- | --- |
-| M0 认证与契约验证 | 锁定依赖版本；Keycloak/目标客户端兼容小验证；OpenAPI与MCP schema；不接真实业务数据 | 上述完整认证路径及反例通过；失败则先修订设计，不继续假设 |
-| M1 数据与授权底座 | 版本化迁移；一对一约束；service授权；组织锁；审计与幂等 | 空库迁移通过；直接SQL无法插跨组织关联/孤公司；并发最后管理员保护通过 |
-| M2 组织与公司账套 | me、组织、公司/账套记录CRUD限定集；过滤分页 | 创建原子；org切换隔离；member仅获授权公司；无会计字段默认值 |
+| M0 认证与契约验证 | 锁定 .NET/EF Core/Npgsql/MCP C# SDK 兼容版本；Keycloak/目标客户端兼容小验证；OpenAPI与MCP schema；不接真实业务数据 | 上述完整认证路径及反例通过；失败则先修订设计，不继续假设 |
+| M1 数据与授权底座 | EF Core 模型与审阅后的版本化迁移；一对一约束；应用服务授权；组织锁；审计与幂等 | 空库迁移通过；直接SQL无法插跨组织关联/孤公司；并发最后管理员保护通过 |
+| M2 组织与公司账套 | ASP.NET Core API 的 me、组织、公司/账套记录CRUD限定集；过滤分页 | 创建原子；org切换隔离；member仅获授权公司；无会计字段默认值 |
 | M3 邀请成员授权 | 收件箱邀请、接受、撤销、移除、角色/grants替换 | 7天边界、身份不匹配、邀请人降权、重入、重复与竞争全通过 |
-| M4 MCP委托接入 | 限定工具、scopes、委托创建/撤销、错误映射 | HTTP/MCP同矩阵；无高权凭证；token与业务撤权测试通过 |
+| M4 MCP委托接入 | 官方 MCP C# SDK 适配、限定工具、scopes、委托创建/撤销、错误映射 | HTTP/MCP同矩阵；无高权凭证；token与业务撤权测试通过 |
 | M5 集成验收与发布提案 | 安全测试、负载基线、依赖扫描、恢复演练计划、运行手册 | 验收报告列出通过/失败/未跑；用户另行审阅发布，不自动部署 |
 
 最低自动化测试清单：
@@ -277,6 +287,6 @@ MCP 按选定协议版本2025-11-25设计，实施时核验目标客户端支持
 
 ## 12. 审阅重点与下一步
 
-建议审阅重点为：推荐栈及身份服务运维代价；首期只建组织权限底座；已认证邀请收件箱暂不发通知邮件；保守组织级锁；HTTP字段和错误；MCP显式委托的用户边界。其余技术细节可由实现阶段在不改变契约/风险的前提下完善。
+建议审阅重点为：C# 路线下的精确版本组合及身份服务运维代价；首期只建组织权限底座；已认证邀请收件箱暂不发通知邮件；保守组织级锁；HTTP字段和错误；MCP显式委托的用户边界。其余技术细节可由实现阶段在不改变契约/风险的前提下完善。
 
 审阅后更新决策记录，再取得明确编码指令。会计基础设置、科目与过账继续作为后续独立设计，不阻塞本阶段组织权限文档完成，也不能被此文档默认为批准。未创建账号、凭据、邀请、部署或运行迁移；未修改任何实际系统权限。
