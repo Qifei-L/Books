@@ -167,7 +167,7 @@ Read the corresponding chapter for the proposed behavior and a concrete example.
 
 ## Current review order
 
-Planning → Requirements & Workflow → Technical Design → Development & Testing. Continue with a bounded reconciliation of the organization, member, company/ledger and access foundation design, plus its development task list. Keep broader accounting technical expansion deferred. Existing technical details remain proposals; this does not approve implementation or change the confirmed business rules and C# direction.
+Planning → Requirements & Workflow → Technical Design → Development & Testing. Current priority is to refine the Journal core contract before connecting accounting subsystems. Keep the completed organization, member, company/ledger and access foundation reconciliation and task list available for later implementation review. Keep broader accounting technical expansion deferred. Existing technical details remain proposals; this does not approve implementation or change the confirmed business rules and C# direction.
 
 ## Technical Design Tasks
 
@@ -215,6 +215,8 @@ All decisions above were recorded on 2026-10-23.
 18. Resumed a bounded foundation technical-design reconciliation and development task list. No receipt/accounting module, implementation, credential setup, merge or deployment is authorized.
 
 19. Confirmed one-click Save with a posting attempt and optional Save Draft. Kept Error, Pending and failed-edit protection; the proposed Subsystem Posting Contract does not add an accounting subsystem to phase one.
+
+20. Consolidated the [Journal core contract](05-journals-posting.md#journal-core-contract): one posting boundary, operation outcomes, source traceability proposals and report reconciliation. Corrected an older check that rejected any already-posted journal; open posted journals use the confirmed validated replacement path. Source lifecycle policy remains open, and no subsystem implementation is approved.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

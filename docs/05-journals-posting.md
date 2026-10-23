@@ -30,6 +30,57 @@ One click does not mean input preservation and every possible posting outcome mu
 
 **Proposed name and boundary: Subsystem Posting Contract.** A business subsystem prepares its source document and journal proposal; the common accounting service applies the same posting rules and returns the confirmed outcome. This can be an internal application-service call in the same program, not a new HTTP service or separate accounting engine. A Sales document is an example, not approval to implement Sales now. Exact source links, payloads and lifecycle contracts belong to later design.
 
+## Journal core contract
+
+This section brings the core rules together. **Confirmed** rules are requirements. **Proposed** source links and implementation mechanisms still need design review. There is no working accounting engine yet.
+
+### One posting boundary
+
+Manual journals and future subsystem-generated journals use the same authorization, account, date, currency, amount, balance and Close checks. No subsystem may write effective ledger balances directly or claim success before the accounting result is known. This is the proposed common-service boundary supporting the confirmed Save behavior, not approval to build Sales, Receipts or other subsystems.
+
+| Action | Effective accounting result | Failure or conflict |
+| --- | --- | --- |
+| Save Draft | No new posting. For an edit, the existing effective posting stays unchanged. | Preserve authorized input where safely possible; never report unsaved content as saved. |
+| Save a new valid journal | Create one complete effective posting and show Saved & Posted. | Definite validation failure: Error with no posting. Unknown outcome: Pending until reconciled. |
+| Save changes to an open posted journal | Validate the attempted revision, then replace the old accounting effect once. | Keep the old valid posting. The rejected revision goes to Error; stale changes must not overwrite a newer version. |
+| Delete an open posted journal | Remove its effective accounting impact and preserve actor, time and prior-value evidence. | Leave the existing posting unchanged if authorization, Close or concurrency checks fail. |
+| Post into a closed scope, or edit/delete a posted journal covered by Close | Reject new posting at or before the cutoff. Reject edits/deletion of an effective posting in the closed scope. For an edit, both original posted date and target date must be open. | Do not silently reopen. Draft-only editing policy remains a design decision. |
+
+The Save Draft behavior for an already-posted revision is a **proposed interaction detail**, not permission to unpost the current version. Draft cancellation and optional reversal behavior remain proposals.
+
+Every operation uses current organization/ledger permissions. Ledger edit rights do not grant permission management or automatic reopening rights. Administrator Close is confirmed; reopening authority remains a business decision.
+
+### Proposed source traceability
+
+For a future subsystem journal, keep a stable source identity: organization, ledger, source kind and source record ID. Names, document numbers and URLs are not identities. Preserve the source revision used for each successful posting and the link back from the source to the posting result.
+
+- Resolve both sides within the same authorized organization and ledger. A source link does not grant read or edit permission.
+- A repeated Save of the same intended source revision must not create duplicate accounting effects. A newer revision must not silently overwrite a concurrently posted one.
+- Treat the source's posting status and effective journal result as one consistent business outcome. If the outcome is uncertain, reconcile before showing success or retrying.
+- Preserve source references and audit evidence after a permitted journal deletion. The source must not continue to claim a current posting that no longer exists.
+- Do not cascade deletion between source records and journals. Source deletion rules and whether generated journals may be edited directly or only through their source need a later business decision.
+- Do not assume one source always creates exactly one journal; define that mapping per future subsystem before implementing it.
+
+These are integration safeguards, not approval of source-document modules or a final database schema.
+
+### Amounts, taxes and report consistency
+
+All effective entries must balance at the agreed precision. Decimal storage and PostgreSQL transaction/constraint safeguards are proposed engineering means, not tested guarantees. Invalid drafts and Error attempts are not forced through the formal-entry balance constraint. Tax settings are human-controlled; exact tax-line multiplicity and accounting versus reporting-only treatment remain unresolved. Do not count tax both inside an amount and again as an extra posting without an agreed calculation.
+
+After a successful create, edit or delete, TB, GL Detail, Balance Sheet and P&L use the same currently effective accounting result. Retained audit versions are not additional movements. An unsuccessful edit leaves all reports based on the old valid posting. Valid posted Suspense counts; Error attempts do not; Pending must be reconciled against the effective result. Drilldown consistency remains an engineering proposal in [Reports](06-reports.md#proposed-drilldown-behavior).
+
+### Review scenarios, not test results
+
+- Save a new journal twice, including a lost response: one effective posting, never two.
+- Save an invalid edit: old balances stay unchanged; the attempted revision and errors remain available.
+- Move an open posted journal to a closed date, or move a closed posted journal to an open date: reject both attempts.
+- Race Save or Delete with Close, access revocation or another edit: one ordered outcome, no partial posting or silent overwrite.
+- Delete an open generated journal under an adopted source policy: reports and the source's current-posting indication agree; history and source identity remain.
+- Read Error details or follow a source link from another ledger: deny unauthorized data.
+- Reconcile each accepted change through TB, GL Detail and statements at the same scope and data revision.
+
+All scenarios are **Not run**. Exact APIs, storage schema, transaction ordering and failure recovery must be designed and tested after separate implementation approval.
+
 ## Proposed: First-release scope
 
 Start with manual general journals, including opening-balance and correction journals. Sales invoices, purchase bills, bank reconciliation, payroll, tax calculations and automatic source-document posting are separate features, not implied by this workflow.
@@ -78,7 +129,7 @@ At the moment of posting, verify:
 - Enforce the confirmed single transaction currency for all lines; reject mixed-currency lines or independent line-currency overrides.
 - Debit total equals credit total exactly at the agreed amount precision.
 - The accounting date is valid, no earlier than the ledger opening date, and belongs to an open accounting period.
-- The journal has not already been posted or cancelled, and the submitted draft version is current.
+- For a new posting, the intended draft has not already produced a posting and is not cancelled. For an edit, use the confirmed posted-journal replacement path rather than reject it merely because it is already posted. In both cases, require the current version.
 
 Do not invent a balancing line or silently round an unbalanced journal into balance. A definite validation failure explains what must be corrected and enters Error review without posting. Permission failures disclose no unauthorized record or payload and cannot be used to bypass ledger access.
 
@@ -181,8 +232,9 @@ These are proposed acceptance scenarios, not completed tests.
 
 1. Are manual journals enough initially? Do editors also post and reverse, or is approval required?
 2. What amount precision, maximum value and rounding rule are required?
-3. What numbering rule, date restrictions and close/reopen process should apply?
+3. Which date restrictions beyond the confirmed Close cutoff are needed? Number format and allocation are engineering tasks within the confirmed unique Journal No. rule.
 4. Who may reopen an administrator-controlled cutoff? Are optional reversals needed?
+5. For future generated journals, should corrections happen only through the source document, or may users edit the journal directly? Decide this before connecting that subsystem.
 
 [Business workflow diagrams](11-workflows.md)
 [Next: Balances and Reports](06-reports.md) · [Document index](README.md)
