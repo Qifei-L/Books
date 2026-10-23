@@ -8,8 +8,23 @@ public sealed record OrganizationDto(Guid Id, string Name, string State, string 
 
 public sealed record MembershipDto(Guid Id, Guid OrgId, Guid UserId, string Role, string Status, int Generation, string Version);
 
-public sealed class OrganizationService(IBooksDb db, WriteRunner writes)
+public sealed class OrganizationService(IBooksDb db, WriteRunner writes, ReadRunner reads)
 {
+    public Task<OrganizationDto> GetAsync(Principal principal, Guid orgId, CancellationToken ct) =>
+        reads.RunAsync(principal, orgId, scope => Task.FromResult(ToDto(scope.Organization, scope.RequireMember())), ct);
+
+    public Task<WriteResult> RenameAsync(Principal principal, WriteMeta meta, Guid orgId, string name, CancellationToken ct) =>
+        writes.RunAsync(principal, new WriteRequest("organization.rename", orgId, meta), scope =>
+        {
+            var admin = scope.RequireAdmin();
+            var organization = scope.Organization;
+            scope.CheckVersion(organization.Version);
+            var before = organization.Name;
+            organization.Rename(name);
+            scope.Audit("organization.renamed", "organization", organization.Id, new { before, after = organization.Name });
+            return Task.FromResult(WriteResult.Of(200, ToDto(organization, admin), organization.Version));
+        }, ct);
+
     public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, string name, CancellationToken ct)
     {
         if (principal.VerifiedEmail is null)

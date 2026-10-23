@@ -138,32 +138,9 @@ public sealed class WriteRunner(IBooksDb db, TimeProvider clock)
 
 /// <summary>What a write handler sees: the locked organization, the actor's current membership and the audit sink.</summary>
 public sealed class WriteScope(IBooksDb db, Principal principal, WriteRequest request, Organization? organization, Membership? actor, DateTimeOffset now)
+    : OrgScope(db, principal, organization, actor)
 {
-    public IBooksDb Db => db;
-    public Principal Principal => principal;
     public DateTimeOffset Now => now;
-
-    /// <summary>The actor's active membership, or 404 so other organizations' existence is never revealed.</summary>
-    public Membership RequireMember()
-    {
-        if (organization is null || actor is null)
-        {
-            throw BooksProblem.NotFound();
-        }
-        if (organization.State != OrganizationState.Active)
-        {
-            throw new BooksProblem(403, "ORG_RECOVERY_REQUIRED", "This organization is locked for recovery.");
-        }
-        return actor;
-    }
-
-    public Membership RequireAdmin()
-    {
-        var member = RequireMember();
-        return member.Role == MembershipRole.Admin ? member : throw BooksProblem.Forbidden();
-    }
-
-    public Organization Organization => organization ?? throw BooksProblem.NotFound();
 
     /// <summary>Rejects a write without If-Match (428) or with a stale version (412).</summary>
     public void CheckVersion(long current)
@@ -179,7 +156,7 @@ public sealed class WriteScope(IBooksDb db, Principal principal, WriteRequest re
     }
 
     public void Audit(string action, string targetType, Guid targetId, object changes, Guid? orgId = null) =>
-        db.AuditEvents.Add(new AuditEvent(
-            orgId ?? request.OrgId, principal.UserId, principal.ClientId, action, targetType, targetId,
+        Db.AuditEvents.Add(new AuditEvent(
+            orgId ?? request.OrgId, Principal.UserId, Principal.ClientId, action, targetType, targetId,
             BooksJson.Serialize(changes), request.Meta.RequestId, now));
 }

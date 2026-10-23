@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IdentityService>();
         services.AddScoped<WriteRunner>();
+        services.AddScoped<ReadRunner>();
         services.AddScoped<OrganizationService>();
         return services;
     }
