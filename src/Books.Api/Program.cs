@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Books.Api;
 using Books.Api.Auth;
+using Books.Api.Dev;
 using Books.Api.Http;
 using Books.Api.Mcp;
 using Books.Infrastructure;
@@ -35,11 +36,19 @@ builder.Services.AddMcpServer()
 var app = builder.Build();
 
 app.UseExceptionHandler();
+if (app.Environment.IsDevelopment())
+{
+    // Read-only preview UI for local testing; not served in any other environment.
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+    app.MapGet("/", () => Results.Redirect("/app/"));
+}
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthChecks("/health");
 app.MapDevTokenEndpoint();
+app.MapDemoDataEndpoint();
 
 app.MapMcp("/mcp").RequireAuthorization(AuthSetup.McpPolicy);
 
