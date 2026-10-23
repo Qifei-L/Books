@@ -61,6 +61,40 @@ public sealed class Membership
     public DateTimeOffset? RemovedAt { get; private set; }
 
     public bool IsActiveAdmin => Status == MembershipStatus.Active && Role == MembershipRole.Admin;
+
+    public void ChangeRole(MembershipRole role)
+    {
+        Role = role;
+        Version++;
+    }
+}
+
+/// <summary>
+/// A member's access to one ledger. It counts only while the membership is active, has role member,
+/// and is still the same generation (rule 7: removed or demoted users get no old grants back).
+/// </summary>
+public sealed class LedgerGrant
+{
+    private LedgerGrant() { }
+
+    public LedgerGrant(Membership membership, Guid ledgerId, LedgerAccess access, Guid grantedBy, DateTimeOffset createdAt)
+    {
+        OrgId = membership.OrgId;
+        MembershipId = membership.Id;
+        MembershipGeneration = membership.Generation;
+        LedgerId = ledgerId;
+        Access = access;
+        GrantedBy = grantedBy;
+        CreatedAt = createdAt;
+    }
+
+    public Guid OrgId { get; private set; }
+    public Guid MembershipId { get; private set; }
+    public int MembershipGeneration { get; private set; }
+    public Guid LedgerId { get; private set; }
+    public LedgerAccess Access { get; private set; }
+    public Guid GrantedBy { get; private set; }
+    public DateTimeOffset CreatedAt { get; private set; }
 }
 
 public static class Names

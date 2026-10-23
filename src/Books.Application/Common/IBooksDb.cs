@@ -12,6 +12,7 @@ public interface IBooksDb
     DbSet<UserIdentity> Identities { get; }
     DbSet<Organization> Organizations { get; }
     DbSet<Membership> Memberships { get; }
+    DbSet<LedgerGrant> LedgerGrants { get; }
     DbSet<AuditEvent> AuditEvents { get; }
     DbSet<IdempotencyRecord> IdempotencyRecords { get; }
     DbSet<Company> Companies { get; }

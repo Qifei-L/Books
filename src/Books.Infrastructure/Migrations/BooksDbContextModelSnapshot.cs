@@ -138,6 +138,56 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("idempotency_records", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Access.LedgerGrant", b =>
+                {
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("membership_id");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Access")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("access");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("GrantedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("granted_by");
+
+                    b.Property<int>("MembershipGeneration")
+                        .HasColumnType("integer")
+                        .HasColumnName("membership_generation");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.HasKey("MembershipId", "LedgerId")
+                        .HasName("pk_ledger_grants");
+
+                    b.HasIndex("GrantedBy")
+                        .HasDatabaseName("ix_ledger_grants_granted_by");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_ledger_grants_org_id_ledger_id");
+
+                    b.HasIndex("OrgId", "MembershipId")
+                        .HasDatabaseName("ix_ledger_grants_org_id_membership_id");
+
+                    b.ToTable("ledger_grants", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ledger_grants_access", "access IN ('read', 'edit')");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Access.Membership", b =>
                 {
                     b.Property<Guid>("Id")
@@ -410,6 +460,32 @@ namespace Books.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("ck_ledgers_fy_start_month", "fy_start_month BETWEEN 1 AND 12");
                         });
+                });
+
+            modelBuilder.Entity("Books.Domain.Access.LedgerGrant", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ledger_grants_users_granted_by");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ledger_grants_ledgers_org_id_ledger_id");
+
+                    b.HasOne("Books.Domain.Access.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "MembershipId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ledger_grants_memberships_org_id_membership_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Access.Membership", b =>

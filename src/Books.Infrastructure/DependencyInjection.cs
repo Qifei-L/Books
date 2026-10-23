@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<ReadRunner>();
         services.AddScoped<OrganizationService>();
         services.AddScoped<CompanyService>();
+        services.AddScoped<MembershipService>();
         return services;
     }
 

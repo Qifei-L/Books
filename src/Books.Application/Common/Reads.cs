@@ -45,7 +45,9 @@ public class OrgScope(IBooksDb db, Principal principal, Organization? organizati
             return await db.Ledgers.AsNoTracking().Where(l => l.OrgId == member.OrgId)
                 .ToDictionaryAsync(l => l.Id, _ => LedgerAccess.Edit, ct);
         }
-        return [];
+        return await db.LedgerGrants.AsNoTracking()
+            .Where(g => g.MembershipId == member.Id && g.MembershipGeneration == member.Generation)
+            .ToDictionaryAsync(g => g.LedgerId, g => g.Access, ct);
     }
 
     /// <summary>The actor's current access to one ledger of this organization, or null when it has none.</summary>
