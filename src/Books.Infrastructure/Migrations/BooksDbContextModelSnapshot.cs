@@ -888,6 +888,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<DateTimeOffset?>("FirstPostedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_posted_at");
+
                     b.Property<int>("FyStartMonth")
                         .HasColumnType("integer")
                         .HasColumnName("fy_start_month");
