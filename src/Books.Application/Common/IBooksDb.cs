@@ -1,5 +1,6 @@
 using Books.Domain.Access;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace Books.Application.Common;
@@ -8,6 +9,11 @@ public interface IBooksDb
 {
     DbSet<User> Users { get; }
     DbSet<UserIdentity> Identities { get; }
+    DbSet<Organization> Organizations { get; }
+    DbSet<Membership> Memberships { get; }
+    DbSet<AuditEvent> AuditEvents { get; }
+    DbSet<IdempotencyRecord> IdempotencyRecords { get; }
     DatabaseFacade Database { get; }
+    ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
