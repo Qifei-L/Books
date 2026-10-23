@@ -59,8 +59,14 @@ Security suspension of a compromised last administrator must still be possible. 
 
 Verify the deployed commit and configuration. Test a normal authorized request and a denied cross-organization request. Check migrations, audit writes and agreed accounting totals. Watch for regressions within a release-specific observation window.
 
-## Open questions
+## Business and operating decisions
 
-Before production, decide the hosting destination, budget, operators, recovery targets, backup retention and incident escalation. These choices do not block writing the documents, but they block an actual release.
+Before production, agree on budget, hosting/data-location constraints, operators, acceptable data loss and recovery time, retention needs and incident escalation. These choices do not block writing the documents, but they block an actual release.
+
+## Technical Design Tasks
+
+These tasks belong to the later technical-design stage. Current review focuses on planning and business workflows; detailed expansion is paused.
+
+Engineering recommends the provider and configuration, backup implementation, monitoring, restore tests and release procedure within those constraints. The owner is not expected to design these mechanisms. Explain any cost or workflow trade-off before requesting a business decision. No environment, credential or deployment is authorized by this plan.
 
 [Documentation index](README.md)

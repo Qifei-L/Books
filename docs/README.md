@@ -4,7 +4,11 @@ Status: Review drafts. The documents do not authorize development or deployment.
 
 ## Start here
 
-Read [Project scope](01-project-scope.md), then the [decision list](10-decisions.md). Confirmed decisions do not need another answer.
+Read [Project scope](01-project-scope.md), the [business workflows](11-workflows.md), then the [decision list](10-decisions.md). Confirmed decisions do not need another answer.
+
+Planning → Requirements & Workflow → Technical Design → Development & Testing.
+
+The current review focuses on planning and business flows, including Frontend user actions linked to API business operations. Frontend implementation remains deferred. Existing technical documents remain drafts; further technical detail is paused. They are not permission to implement.
 
 ## Business requirements
 
@@ -18,6 +22,7 @@ Read [Project scope](01-project-scope.md), then the [decision list](10-decisions
 8. [Testing and acceptance](08-testing-acceptance.md)
 9. [Deployment and operations](09-deployment-operations.md)
 10. [Decisions and open questions](10-decisions.md)
+11. [Business workflows](11-workflows.md): diagrams, not Frontend designs.
 
 ## Technical proposals
 
@@ -34,7 +39,8 @@ The C# direction is confirmed. Exact versions, identity provider and other techn
 
 - **Confirmed:** the owner accepted this decision.
 - **Proposed:** a recommendation for review.
-- **Open questions:** a decision is still needed.
+- **Open questions:** a business, cost or user-workflow decision is still needed; use the short business review list.
+- **Technical Design Tasks:** engineering owns the details and validation. A proposed mechanism is not a request for the owner to choose its implementation.
 - **Not run:** no test evidence exists yet.
 
 Publishing a draft does not approve its contents. The next steps are review, a separate instruction to code, tests, and a separate release decision.

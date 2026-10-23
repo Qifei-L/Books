@@ -1,5 +1,7 @@
 # Phase 1: organization access and API contract
 
+Current review: Planning and business workflows first. This technical document is retained as a draft. Further technical expansion is paused; no implementation is authorized.
+
 Version: 0.4 | Date: 2026-10-23 | Status: proposed technical details, not implemented
 
 Based on branch `docs/requirements-review`, source commit `f4f2a2dc93ef351402dbee6e04fadd0b24b88c83`. See [Draft PR #1](https://github.com/Qifei-L/Books/pull/1) and the [permissions overview](organizations-permissions.md).
@@ -10,7 +12,9 @@ Based on branch `docs/requirements-review`, source commit `f4f2a2dc93ef351402dbe
 
 **Proposed:** a modular monolith, the specific versions, identity provider, fields, paths, limits and transaction design in this document. HTTP and MCP share application services, authorization, transactions and data access. Do not introduce microservices, Redis, a message queue, a separate permission engine or a custom OAuth server for this phase.
 
-**Open questions:** exact dependency versions; identity provider and its operator; accounting settings and engine; production provider, region, costs, domain, backup and release plan.
+**Technical Design Tasks (later review):** exact dependency versions, provider compatibility, accounting engine design and deployment mechanisms. Engineering owns these proposals and validation.
+
+**Business and operating decisions:** accounting settings, operator responsibilities, costs, data-location constraints and recovery needs. Engineering recommends options rather than asking the owner to design the system.
 
 **Not approved:** coding, migrations, account or credential creation, production access or deployment. Reviewing this design does not authorize those actions. Obtain a separate instruction to start coding and separate approval for production arrangements.
 
@@ -20,7 +24,7 @@ After coding is approved, start with a small isolated authentication compatibili
 
 ## 2. Phase-1 scope and confirmed business rules
 
-Proposed phase-one implementation scope, after separate coding approval: identity mapping, organizations, members, company/ledger foundation records, invitations, ledger grants, audit, HTTP/MCP contracts and automated tests. Do not build accounts, entries, vouchers, balances, reports or the accounting engine. The Books Web UI is paused. Using an identity provider's login page is not building a Books Web UI.
+Proposed phase-one implementation scope, after separate coding approval: identity mapping, organizations, members, company/ledger foundation records, invitations, ledger grants, audit, HTTP/MCP contracts and automated tests. Do not build accounts, entries, vouchers, balances, reports or the accounting engine. Books Frontend implementation is paused; business interaction planning remains in scope. Using an identity provider's login page is not building a Books Frontend.
 
 Confirmed rules:
 
@@ -98,7 +102,7 @@ Proposed exception: if security disable removes the last usable administrator, s
 
 External provider disable/deletion is outside Books database constraints. Without verified disable-event synchronization and a manual recovery process, the database can guarantee an active administrator record, not that its owner can still log in. Disable synchronization, recovery and recovery identity checks are launch blockers until approved and tested. Document lost/delayed events and provider-outage behavior.
 
-No browser cookie session is needed now. Design BFF/cookies/CSRF if a Web UI is added. Do not mix unapproved authentication methods into the bearer API. Require production TLS and explicit CORS/Origin allowlists, not wildcard credential origins.
+No browser cookie session is needed now. Design BFF/cookies/CSRF if a Frontend is added. Do not mix unapproved authentication methods into the bearer API. Require production TLS and explicit CORS/Origin allowlists, not wildcard credential origins.
 
 Keycloak exposes discovery, token, key, userinfo, introspection and revocation endpoints: [official OIDC documentation](https://www.keycloak.org/securing-apps/oidc-layers). Their existence does not prove this project's MCP compatibility.
 
@@ -407,7 +411,9 @@ Acceptance evidence must include final commit, dependency locks, migration resul
 
 ## 12. Review and next step
 
-Review the exact C# dependency combination and identity-service operating cost; the foundation-only scope; authenticated inbox without email; conservative organization locks; HTTP fields/errors; and the explicit human delegation boundary.
+Engineering reviews the exact C# dependency combination, provider interoperability, organization locks, HTTP fields/errors and human delegation controls. These are proposed mechanisms to validate, not questions the owner must answer. Provider and authentication interoperability are not verified.
+
+Ask the owner only about material business trade-offs, such as identity-service cost or whether an authenticated invitation inbox without email meets the intended workflow. Keep the confirmed invitation policy and foundation-only scope unchanged.
 
 After review, update the decision record and obtain a clear instruction to code. Accounting setup, accounts and posting remain separate later designs. This document does not approve them. No accounts, credentials, real invitations, migrations or deployments were created, and no real system permissions were changed.
 

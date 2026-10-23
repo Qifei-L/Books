@@ -128,12 +128,17 @@ Record for every case:
 
 Writing this plan does not change any case from Not run to Passed. Adopt a proposed workflow before using it as a final acceptance requirement.
 
-## Open Questions
+## Business and release decisions
 
-- Which proposed accounting policies will be adopted?
-- What test volume and concurrency level are needed for the first release?
-- Who makes the final acceptance decision?
-- What are the release gates?
+- Review the proposed accounting policies in the [short business review list](10-decisions.md#short-business-review-list).
+- Name the final acceptance decision-maker and agree on release readiness.
+- Provide expected usage or recovery needs if known. Engineering should propose test volumes and explain any cost or service-level trade-off.
+
+## Technical Design Tasks
+
+These tasks belong to the later technical-design stage. Current review focuses on planning and business workflows; detailed expansion is paused.
+
+Engineering owns test fixtures, concurrency scenarios, load levels, pass/fail evidence and the proposed technical release gates. Use the [contract's implementation milestones and minimum tests](design/phase-1-technical-contract.md#11-implementation-milestones-after-coding-approval) as the starting plan, not a new questionnaire for the owner. No tests are authorized or reported as run by this reclassification.
 
 Candidate release blockers include unauthorized access, normal membership changes leaving an organization with no administrator, writes using revoked access, partial postings, and missing history or audit records. Security suspension of a compromised last administrator is a separate case: it must remain possible, with a reviewed locked-organization recovery workflow. These are proposed gates, not an approved release checklist.
 

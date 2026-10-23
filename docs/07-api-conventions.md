@@ -10,7 +10,7 @@ All clients should use the same business rules, permissions, and data meanings.
 
 ### 1. Use one backend for all clients
 
-All clients use the same backend API. Web development is deferred for now. Test tools can call the backend first.
+All clients use the same backend API. Frontend development is deferred for now. Test tools can call the backend first.
 
 MCP is another way to call the backend. It exposes defined business operations to AI. It must not write directly to the database, bypass the API, or create a separate set of accounting and permission rules.
 
@@ -74,17 +74,21 @@ The MCP tool list should map each tool to an approved backend operation. Tool na
 
 Idempotency keys and record versions are possible ways to handle retries and conflicting edits. They are proposals, not selected mechanisms. An idempotency key identifies a retry of one operation. A record version helps detect an edit based on an old copy.
 
-## Open Questions
+## Technical Design Tasks
 
-- Which authentication service and login flow will be used?
-- What are the API paths, field names, error codes, and response shapes?
-- How will money, dates, time zones, and missing fields be represented?
-- How will pagination behave when records change between page requests?
-- How will duplicate operations and conflicting edits be detected?
-- How will API and MCP versions remain compatible?
-- Which MCP tools will be available first?
+These tasks belong to the later technical-design stage. Current review focuses on planning and business workflows; detailed expansion is paused.
 
-The five principles and shared backend are already confirmed. C#, Entity Framework Core, and PostgreSQL are the confirmed technical direction. These questions concern the proposed contracts and implementation, not whether to adopt that direction. Technical reviewers should resolve the detailed choices; the business owner does not need to answer each one individually.
+Engineering owns contract details and validation. The owner does not need to answer a list of implementation questions.
+
+The [phase-one contract](design/phase-1-technical-contract.md) already proposes authentication checks (section 4), HTTP fields and errors, idempotency and pagination (section 7), endpoints (section 8), and the first MCP tools (section 9). Review and validate those proposals rather than treating them as unspecified requirements.
+
+Engineering will:
+- Evaluate provider compatibility, identity verification and session/token revocation. No provider or authentication integration is verified yet.
+- Finalize paths, field names, errors, missing/null values, pagination and conflict handling.
+- Define compatibility checks for API and MCP clients.
+- Translate approved accounting currency, precision, rounding and calendar policies into wire formats when the accounting design starts. Ask the owner about the business policy, not the serialization mechanism.
+
+The five API principles and C#/EF Core/PostgreSQL direction are confirmed. Technical choices remain proposed until engineering review and validation. Raise only material cost, login experience or workflow trade-offs with the owner. Frontend implementation remains deferred; planning Frontend actions together with API business operations is in scope.
 
 No MCP service, connection, credential, or actual permission is created by this document. Exact database schemas, provider choices, and deployment details remain proposed or open.
 

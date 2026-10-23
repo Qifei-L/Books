@@ -1,5 +1,7 @@
 # Organizations and permissions
 
+Current review: Planning and business workflows first. This technical document is retained as a draft. Further technical expansion is paused; no implementation is authorized.
+
 Version: 0.3 | Date: 2026-10-23 | Status: design proposal, not implemented
 
 ## Read this first
@@ -38,7 +40,7 @@ The backend direction is **C# + ASP.NET Core + EF Core + PostgreSQL, without ABP
 | Invitation | A proposed membership for a specific verified identity, with inviter, role, ledger scope, expiry and state. It is not an active membership. |
 | AuditEvent | Who changed what, in which organization, when, and under which request. It never stores passwords, access tokens or secret invitation credentials. |
 
-Use service checks and database constraints together. Composite foreign keys include `org_id` so a grant cannot connect an Organization A member to an Organization B ledger. An alternative database would need equivalent atomic constraints and tests, not just UI filtering.
+Use service checks and database constraints together. Composite foreign keys include `org_id` so a grant cannot connect an Organization A member to an Organization B ledger. An alternative database would need equivalent atomic constraints and tests, not just Frontend filtering.
 
 Create a company and its ledger in one transaction. If either fails, neither becomes usable. Keep removed memberships for historical references, but invalidate their grants. Rejoining does not revive those grants.
 
@@ -139,7 +141,7 @@ Commit each important organization, membership, grant or invitation change with 
 
 Only authorized viewers can read audit events. Ordinary editors cannot change audit history. Retention periods and compliance rules are not decided here. Notification failures must never be reported as successful delivery or create duplicate memberships.
 
-The [acceptance matrix](../08-testing-acceptance.md) covers cross-organization references, read-only writes, MCP privilege escalation, old sessions after revocation, invitation failures and concurrent administrator handover. Test service rules, database constraints and HTTP/MCP integration, not just the UI.
+The [acceptance matrix](../08-testing-acceptance.md) covers cross-organization references, read-only writes, MCP privilege escalation, old sessions after revocation, invitation failures and concurrent administrator handover. Test service rules, database constraints and HTTP/MCP integration, not just the Frontend.
 
 **No implementation or acceptance tests have run.** Business decisions are confirmed; implementation details remain proposals. Review the [detailed technical contract](phase-1-technical-contract.md), then obtain separate approval to code. Do not run migrations or deploy as part of this documentation task.
 

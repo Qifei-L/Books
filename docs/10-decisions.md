@@ -9,7 +9,7 @@ Status: Review record. No coding or deployment is approved.
 
 - Build Books as a bookkeeping backend.
 - Start with organizations and access control.
-- Keep the Books Web interface out of the current scope.
+- Defer Frontend implementation. Plan Frontend user actions together with API business operations.
 - Complete and review the documents before development.
 - Write all documents in plain, direct English.
 
@@ -76,14 +76,21 @@ The recommended defaults are proposals. Answer by topic; do not repeat the confi
 
 Read the corresponding chapter for the proposed behavior and a concrete example. Once a choice is accepted, update that chapter and this record together.
 
-## Technical and release review
+## Current review order
 
-These do not require immediate answers to finish the drafts:
+Planning → Requirements & Workflow → Technical Design → Development & Testing. Focus now on planning and business flows. Keep existing technical documents as drafts and pause further technical detail. This does not revoke confirmed business rules or the C# direction.
 
-- Review the detailed phase-one contract, identity provider and its operating cost.
-- Agree on test scope, final acceptance owner and pass/fail evidence.
-- Before production, choose hosting, budget, operators, recovery targets and release procedure.
-- Give a separate instruction before coding, and a separate authorization before deployment.
+## Technical Design Tasks
+
+For the later technical-design review, engineering owns schema and constraints, transactions, API/MCP contracts, identity/session checks, retry handling, concurrency and technical test design. The [detailed phase-one contract](design/phase-1-technical-contract.md) already proposes these mechanisms. Review and validate them; do not ask the owner to supply the design.
+
+The identity provider, exact dependency combination and interoperability remain unverified technical proposals. Engineering should compare options and recommend one. Ask the owner only about material costs, login experience, recovery workflow or other business trade-offs.
+
+## Business and release review
+
+Before production, agree on budget, hosting/data-location constraints, operators, acceptable recovery targets and the acceptance decision-maker. Engineering proposes the hosting configuration, test levels and release gates against those needs.
+
+A separate instruction is still required before coding, and separate authorization before deployment. Moving a question to engineering does not approve a provider, service purchase, credential setup or implementation.
 
 Security suspension and recovery of the last usable administrator need a reviewed recovery process before production. The system must not prevent urgent suspension or silently promote someone else.
 
@@ -98,7 +105,9 @@ All decisions above were recorded on 2026-10-23.
 5. Added technical proposals and acceptance scenarios.
 6. Replaced the Go proposal with the C# direction.
 7. Completed the remaining review drafts and rewrote the full set in plain English.
+8. Separated engineering-owned design tasks from owner business decisions. Existing technical proposals remain subject to review and validation.
+9. Standardized the term Frontend and added business workflow diagrams. Frontend implementation remains deferred; business interaction planning is in scope. Proposed accounting flows are not approved by their inclusion.
 
-Step 7 changes presentation and fills gaps. It does not approve new accounting policies or start development.
+Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 
 [Documentation index](README.md)

@@ -121,17 +121,22 @@ Keep historical journal entries and their original operator information when som
 
 Record who changed access, when they changed it, the affected organization or ledger, and the permissions before and after the change. A failed change must not appear as a successful one.
 
-## Open Questions
+## Technical Design Tasks
 
-- What are the exact screens and API operations for these workflows?
-- How will identity verification, sessions, and current-permission checks work?
-- Which exact schema, constraints, and transaction details will enforce these rules? The confirmed direction is C#, Entity Framework Core, and PostgreSQL. Hosting providers and deployment details remain open.
-- Which duplicate-request and invitation-handling proposals will be adopted?
+These tasks belong to the later technical-design stage. Current review focuses on planning and business workflows; detailed expansion is paused.
 
-The confirmed roles, invitation rules, 7-day lifetime, explicit reauthorization, and administrator handover do not need to be decided again.
+Engineering owns these tasks. The business owner does not need to choose API fields, database constraints or retry mechanisms.
 
-The [Phase 1 technical contract](design/phase-1-technical-contract.md) already proposes detailed schemas and mechanisms. These technical questions are for design review; the business owner does not need to answer each one individually.
+- Review the proposed API operations in [contract section 8](design/phase-1-technical-contract.md#8-endpoints-and-minimum-payloads). Frontend implementation is deferred. Planning user actions and their corresponding API business operations is in scope; exact API contracts belong to the later technical review.
+- Validate identity verification, token/session handling and current-permission checks against [section 4](design/phase-1-technical-contract.md#4-identity-and-authentication). The provider is not selected and interoperability is not verified.
+- Review the existing schema, constraints and transaction proposals in [sections 5 and 6](design/phase-1-technical-contract.md#5-data-model-and-database-constraints). The C#/EF Core/PostgreSQL direction is confirmed.
+- Validate duplicate-request and invitation race handling against [section 6](design/phase-1-technical-contract.md#6-transaction-and-lock-order) and [section 7](design/phase-1-technical-contract.md#7-common-http-contract). These mechanisms are already proposed, not missing business decisions.
+
+The confirmed roles, invitation rules, 7-day lifetime, explicit acceptance, revocation, reauthorization and administrator handover do not need another answer. Engineering may refine mechanisms without changing these rules. Any proposed change to user workflow or cost must be raised separately with the owner.
+
+These are design-review tasks, not authorization to implement or run tests.
 
 See [Testing and acceptance](08-testing-acceptance.md) for cases, [Organization and permission design](design/organizations-permissions.md) for technical proposals, and [Decisions](10-decisions.md) for the decision record. No tests have been run for this draft.
 
+[Business workflow diagrams](11-workflows.md)
 [Back to documentation](README.md)

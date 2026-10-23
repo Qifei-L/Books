@@ -90,7 +90,7 @@ The proposed implementation approach remains separate from these business requir
 - Retrying after a lost response returns the same posting, not a duplicate.
 - Concurrent edits, posting attempts, reversals and period closure produce one clear valid outcome.
 - A reversal leaves the original visible and affects only the reversal's accounting date.
-- Revoked access cannot be reused by an old screen or MCP request.
+- Revoked access cannot be reused by an old Frontend session or MCP request.
 
 These are proposed acceptance scenarios, not completed tests.
 
@@ -101,4 +101,5 @@ These are proposed acceptance scenarios, not completed tests.
 3. What numbering rule, date restrictions and close/reopen process should apply?
 4. Is full reversal plus a replacement journal sufficient? Are partial reversals needed?
 
+[Business workflow diagrams](11-workflows.md)
 [Next: Balances and Reports](06-reports.md) · [Document index](README.md)

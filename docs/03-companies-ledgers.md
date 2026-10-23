@@ -73,4 +73,5 @@ These are review scenarios, not test results. Accounting scenarios depend on app
 3. Should setup accept opening balances only, or also import historical transactions?
 4. Is the proposed administrator-only setup and archive workflow acceptable?
 
+[Business workflow diagrams](11-workflows.md)
 [Next: Chart of Accounts](04-chart-of-accounts.md) · [Document index](README.md)
