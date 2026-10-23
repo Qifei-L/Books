@@ -8,7 +8,8 @@ namespace Books.Application.Access;
 public sealed record ExternalIdentity(string Issuer, string Subject, string? ClientId, string? Email, bool EmailVerified, string? Name);
 
 /// <summary>The verified caller of an API or MCP request.</summary>
-public sealed record Principal(Guid UserId, string? ClientId, string? VerifiedEmail);
+/// <param name="IsAgent">True when the caller is an AI client (MCP token). Agents may save drafts but never post (owner decision).</param>
+public sealed record Principal(Guid UserId, string? ClientId, string? VerifiedEmail, bool IsAgent = false);
 
 public sealed class IdentityService(IBooksDb db, TimeProvider clock)
 {

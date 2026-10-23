@@ -63,6 +63,7 @@ public static class LedgerEndpoints
         "retained_earnings" => Books.Domain.Ledgers.SystemPurpose.RetainedEarnings,
         "opening_balance_clearing" => Books.Domain.Ledgers.SystemPurpose.OpeningBalanceClearing,
         "rounding_differences" => Books.Domain.Ledgers.SystemPurpose.RoundingDifferences,
+        "suspense" => Books.Domain.Ledgers.SystemPurpose.Suspense,
         _ => throw Books.Application.Common.BooksProblem.NotFound(),
     };
 }

@@ -84,13 +84,20 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
                 Format(closingSides.D, minor), Format(closingSides.C, minor));
             var balanced = opening == 0 && period.Debit == period.Credit && closingSides.D == closingSides.C;
             var warnings = new List<ReportWarning>();
-            var clearing = await db.AccountPurposes.AsNoTracking()
-                .Where(p => p.LedgerId == ledgerId && p.Purpose == SystemPurpose.OpeningBalanceClearing).Select(p => (Guid?)p.AccountId).SingleOrDefaultAsync(ct);
-            if (clearing is { } clearingId && movements.SingleOrDefault(m => m.AccountId == clearingId) is { } m
-                && m.Opening + m.PeriodDebit - m.PeriodCredit is var left && left != 0)
+            var purposes = await db.AccountPurposes.AsNoTracking().Where(p => p.LedgerId == ledgerId).ToDictionaryAsync(p => p.Purpose, p => p.AccountId, ct);
+            decimal Closing(SystemPurpose purpose) =>
+                purposes.TryGetValue(purpose, out var id) && movements.SingleOrDefault(m => m.AccountId == id) is { } m
+                    ? m.Opening + m.PeriodDebit - m.PeriodCredit
+                    : 0;
+            if (Closing(SystemPurpose.OpeningBalanceClearing) is var clearing && clearing != 0)
             {
                 warnings.Add(new ReportWarning("OPENING_BALANCE_CLEARING_NOT_ZERO",
-                    $"Opening Balance Clearing should be zero after setup; it is {Format(left, minor)}."));
+                    $"Opening Balance Clearing should be zero after setup; it is {Format(clearing, minor)}."));
+            }
+            if (Closing(SystemPurpose.Suspense) is var suspense && suspense != 0)
+            {
+                warnings.Add(new ReportWarning("SUSPENSE_NOT_ZERO",
+                    $"Suspense holds {Format(suspense, minor)} that still needs to be classified."));
             }
             return new TrialBalance(from, to, ledger.BaseCurrency, rows, totals, balanced, warnings);
         }, ct);

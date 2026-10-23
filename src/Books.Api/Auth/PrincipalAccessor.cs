@@ -3,7 +3,7 @@ using Books.Application.Access;
 namespace Books.Api.Auth;
 
 /// <summary>Resolves the verified caller once per request, from the validated token only.</summary>
-public sealed class PrincipalAccessor(IHttpContextAccessor http, IdentityService identities)
+public sealed class PrincipalAccessor(IHttpContextAccessor http, IdentityService identities, AuthOptions options)
 {
     private Principal? _principal;
 
@@ -29,6 +29,8 @@ public sealed class PrincipalAccessor(IHttpContextAccessor http, IdentityService
             user.FindFirst("email")?.Value,
             string.Equals(user.FindFirst("email_verified")?.Value, "true", StringComparison.OrdinalIgnoreCase),
             user.FindFirst("name")?.Value);
-        return _principal = await identities.ResolveAsync(external, ct);
+        var principal = await identities.ResolveAsync(external, ct);
+        var isAgent = user.FindAll("aud").Any(a => a.Value == options.McpAudience);
+        return _principal = principal with { IsAgent = isAgent };
     }
 }

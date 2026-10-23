@@ -26,6 +26,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         writes.RunAsync(principal, new WriteRequest(post ? "journal.save" : "journal.save_draft", orgId, meta), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            RefuseAgentPosting(principal, post);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var issues = JournalValidator.Validate(draft, await ContextAsync(ledger, draft, null, ct));
             var status = !post ? RevisionStatus.Draft : issues.Count == 0 ? RevisionStatus.Posted : RevisionStatus.Error;
@@ -59,6 +60,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         writes.RunAsync(principal, new WriteRequest(post ? "journal.save" : "journal.save_draft", orgId, meta), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            RefuseAgentPosting(principal, post);
             var journal = await FindForWriteAsync(ledgerId, journalId, principal, ct);
             scope.CheckVersion(journal.Version);
             if (!post && journal.IsPosted)
@@ -94,6 +96,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var journal = await FindForWriteAsync(ledgerId, journalId, principal, ct);
+            RefuseAgentPosting(principal, journal.IsPosted);
             scope.CheckVersion(journal.Version);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var shown = await db.JournalRevisions.SingleAsync(r => r.Id == (journal.EffectiveRevisionId ?? journal.CurrentRevisionId), ct);
@@ -108,6 +111,15 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             await db.SaveChangesAsync(ct);
             return WriteResult.Of(200, new { id = journal.Id, journal_no = journal.JournalNo, deleted = true, revision_no = revision.RevisionNo }, journal.Version);
         }, ct);
+
+    /// <summary>AI clients prepare drafts; only a person posts, edits or deletes posted journals (owner decision 2026-10-23).</summary>
+    private static void RefuseAgentPosting(Principal principal, bool touchesPosting)
+    {
+        if (principal.IsAgent && touchesPosting)
+        {
+            throw new BooksProblem(403, "AGENT_CANNOT_POST", "AI clients can save drafts only; a person must post them.");
+        }
+    }
 
     /// <summary>Unposted journals belong to their creator alone; a deleted journal cannot change again.</summary>
     private async Task<Journal> FindForWriteAsync(Guid ledgerId, Guid journalId, Principal principal, CancellationToken ct)
