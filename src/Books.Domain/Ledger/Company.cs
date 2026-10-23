@@ -61,8 +61,14 @@ public sealed class Ledger
     /// <summary>Inclusive Close date; null until the first Close (M2).</summary>
     public DateOnly? ClosedThrough { get; private set; }
 
+    /// <summary>Last Journal No. issued in this ledger; numbers are system-generated and unique per ledger (rule 24).</summary>
+    public long LastJournalNo { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
+
+    /// <summary>Issues the next Journal No. Call only while holding the write lock.</summary>
+    public long IssueJournalNo() => ++LastJournalNo;
 }
 
 public sealed record Currency(string Code, int MinorUnits);

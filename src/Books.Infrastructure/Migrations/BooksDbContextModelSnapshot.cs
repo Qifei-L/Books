@@ -485,6 +485,212 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("identities", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Journals.Journal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("CurrentRevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("current_revision_id");
+
+                    b.Property<Guid?>("EffectiveRevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("effective_revision_id");
+
+                    b.Property<long>("JournalNo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("journal_no");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<int>("RevisionCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision_count");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_journals");
+
+                    b.HasAlternateKey("LedgerId", "Id")
+                        .HasName("ak_journals_ledger_id_id");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_journals_created_by");
+
+                    b.HasIndex("LedgerId", "JournalNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_journals_ledger_id_journal_no");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_journals_org_id_ledger_id");
+
+                    b.ToTable("journals", (string)null);
+                });
+
+            modelBuilder.Entity("Books.Domain.Journals.JournalLine", b =>
+                {
+                    b.Property<Guid>("RevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revision_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_no");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("LineId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("line_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.HasKey("RevisionId", "LineNo")
+                        .HasName("pk_journal_lines");
+
+                    b.HasIndex("LineId")
+                        .HasDatabaseName("ix_journal_lines_line_id");
+
+                    b.HasIndex("LedgerId", "AccountId")
+                        .HasDatabaseName("ix_journal_lines_ledger_id_account_id");
+
+                    b.HasIndex("LedgerId", "RevisionId")
+                        .HasDatabaseName("ix_journal_lines_ledger_id_revision_id");
+
+                    b.ToTable("journal_lines", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_journal_lines_amount", "amount <> 0");
+                        });
+                });
+
+            modelBuilder.Entity("Books.Domain.Journals.JournalRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateOnly>("AccountingDate")
+                        .HasColumnType("date")
+                        .HasColumnName("accounting_date");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Issues")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("issues");
+
+                    b.Property<Guid>("JournalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("journal_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reference");
+
+                    b.Property<int>("RevisionNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision_no");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset?>("SupersededAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("superseded_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_journal_revisions");
+
+                    b.HasAlternateKey("JournalId", "Id")
+                        .HasName("ak_journal_revisions_journal_id_id");
+
+                    b.HasAlternateKey("LedgerId", "Id")
+                        .HasName("ak_journal_revisions_ledger_id_id");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_journal_revisions_created_by");
+
+                    b.HasIndex("JournalId", "RevisionNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_journal_revisions_journal_id_revision_no");
+
+                    b.HasIndex("LedgerId", "JournalId")
+                        .HasDatabaseName("ix_journal_revisions_ledger_id_journal_id");
+
+                    b.ToTable("journal_revisions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_journal_revisions_kind", "kind IN ('manual', 'opening')");
+
+                            t.HasCheckConstraint("ck_journal_revisions_status", "status IN ('draft', 'error', 'posted', 'superseded', 'deleted')");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.Account", b =>
                 {
                     b.Property<Guid>("Id")
@@ -686,6 +892,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("fy_start_month");
 
+                    b.Property<long>("LastJournalNo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_journal_no");
+
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid")
                         .HasColumnName("org_id");
@@ -810,6 +1020,61 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_identities_users_user_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Journals.Journal", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_journals_users_created_by");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_journals_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Journals.JournalLine", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "AccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_journal_lines_accounts_ledger_id_account_id");
+
+                    b.HasOne("Books.Domain.Journals.JournalRevision", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "RevisionId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_journal_lines_journal_revisions_ledger_id_revision_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Journals.JournalRevision", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_journal_revisions_users_created_by");
+
+                    b.HasOne("Books.Domain.Journals.Journal", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "JournalId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_journal_revisions_journals_ledger_id_journal_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Ledgers.Account", b =>
