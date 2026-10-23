@@ -34,7 +34,7 @@ public sealed class BooksReadTools(PrincipalAccessor principals, OrganizationSer
         RunAsync(async () => await accounts.ListAsync(await principals.GetAsync(ct), org_id, ledger_id, ct));
 
     /// <summary>Returns {"data": …} like the API; a business error becomes an error result with the API's code.</summary>
-    private static async Task<CallToolResult> RunAsync<T>(Func<Task<T>> read)
+    internal static async Task<CallToolResult> RunAsync<T>(Func<Task<T>> read)
     {
         try
         {
@@ -43,8 +43,13 @@ public sealed class BooksReadTools(PrincipalAccessor principals, OrganizationSer
         }
         catch (BooksProblem problem)
         {
-            var error = BooksJson.Serialize(new { status = problem.Status, code = problem.Code, detail = problem.Message });
-            return new CallToolResult { IsError = true, Content = [new TextContentBlock { Text = error }] };
+            return Problem(problem);
         }
+    }
+
+    internal static CallToolResult Problem(BooksProblem problem)
+    {
+        var error = BooksJson.Serialize(new { status = problem.Status, code = problem.Code, detail = problem.Message });
+        return new CallToolResult { IsError = true, Content = [new TextContentBlock { Text = error }] };
     }
 }

@@ -14,14 +14,17 @@ public sealed class McpReadToolTests(TestHost host)
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
-    public async Task The_server_offers_the_three_read_only_tools()
+    public async Task The_server_offers_read_only_tools_and_marks_the_writes()
     {
         await using var mcp = await ConnectAsync(Ids.Subject());
 
-        var tools = await mcp.ListToolsAsync(cancellationToken: Ct);
+        var tools = (await mcp.ListToolsAsync(cancellationToken: Ct)).ToDictionary(t => t.Name);
 
-        Assert.Equal(["list_accounts", "list_ledgers", "list_organizations"], tools.Select(t => t.Name).Order());
-        Assert.All(tools, t => Assert.True(t.ProtocolTool.Annotations?.ReadOnlyHint));
+        Assert.Equal(["delete_journal", "get_gl_detail", "get_trial_balance", "list_accounts", "list_journals", "list_ledgers", "list_organizations", "save_journal"],
+            tools.Keys.Order());
+        Assert.All(tools.Where(t => t.Key.StartsWith("list_") || t.Key.StartsWith("get_")), t => Assert.True(t.Value.ProtocolTool.Annotations?.ReadOnlyHint));
+        Assert.False(tools["save_journal"].ProtocolTool.Annotations?.ReadOnlyHint ?? false);
+        Assert.True(tools["delete_journal"].ProtocolTool.Annotations?.DestructiveHint);
     }
 
     [Fact]
@@ -76,7 +79,7 @@ public sealed class McpReadToolTests(TestHost host)
 
     private static StringContent JsonBody() => new("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""", System.Text.Encoding.UTF8, "application/json");
 
-    private async Task<McpClient> ConnectAsync(string subject)
+    internal async Task<McpClient> ConnectAsync(string subject)
     {
         var http = host.Factory.CreateClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
@@ -87,7 +90,7 @@ public sealed class McpReadToolTests(TestHost host)
         return await McpClient.CreateAsync(transport, cancellationToken: Ct);
     }
 
-    private static async Task<JsonElement> CallAsync(McpClient mcp, string tool, Dictionary<string, object?> arguments)
+    internal static async Task<JsonElement> CallAsync(McpClient mcp, string tool, Dictionary<string, object?> arguments)
     {
         var result = await mcp.CallToolAsync(tool, arguments, cancellationToken: Ct);
         var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text;
@@ -95,7 +98,7 @@ public sealed class McpReadToolTests(TestHost host)
         return JsonDocument.Parse(text).RootElement.GetProperty("data").Clone();
     }
 
-    private static async Task<JsonElement> CallForErrorAsync(McpClient mcp, string tool, Dictionary<string, object?> arguments)
+    internal static async Task<JsonElement> CallForErrorAsync(McpClient mcp, string tool, Dictionary<string, object?> arguments)
     {
         var result = await mcp.CallToolAsync(tool, arguments, cancellationToken: Ct);
         Assert.True(result.IsError);
