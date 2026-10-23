@@ -17,6 +17,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<PrincipalAccessor>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
+// Malformed bodies reach the exception handler so they get the same problem+json shape.
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 builder.Services.ConfigureHttpJsonOptions(json =>
 {
     json.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
@@ -36,6 +38,7 @@ app.MapDevTokenEndpoint();
 
 var api = app.MapGroup("/api/v1").RequireAuthorization();
 api.MapMeEndpoints();
+api.MapOrganizationEndpoints();
 
 app.Run();
 

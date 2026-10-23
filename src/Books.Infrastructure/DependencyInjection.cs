@@ -15,6 +15,8 @@ public static class DependencyInjection
         services.AddScoped<IBooksDb>(sp => sp.GetRequiredService<BooksDbContext>());
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IdentityService>();
+        services.AddScoped<WriteRunner>();
+        services.AddScoped<OrganizationService>();
         return services;
     }
 
