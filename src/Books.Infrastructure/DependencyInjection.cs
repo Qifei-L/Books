@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<PartyService>();
         services.AddScoped<AccountUsageService>();
         services.AddScoped<TaxCodeService>();
+        services.AddScoped<CambodiaTemplate>();
         services.AddScoped<BankService>();
         services.AddScoped<ItemService>();
         services.AddScoped<DocumentPosting>();

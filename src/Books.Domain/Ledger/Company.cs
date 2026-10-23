@@ -75,6 +75,15 @@ public sealed class Ledger
 
     public void RecordPosting(DateTimeOffset at) => FirstPostedAt ??= at;
 
+    /// <summary>The tax pack (starter template) applied to this ledger, for example "cambodia-2026".</summary>
+    public string? TaxPack { get; private set; }
+
+    public void UseTaxPack(string key)
+    {
+        TaxPack = key;
+        Version++;
+    }
+
     /// <summary>Marks a setup change (such as a system purpose) so concurrent setup edits conflict.</summary>
     public void Touch() => Version++;
 

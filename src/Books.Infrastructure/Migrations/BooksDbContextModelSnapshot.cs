@@ -1342,6 +1342,11 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("org_id");
 
+                    b.Property<string>("TaxPack")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("tax_pack");
+
                     b.Property<long>("Version")
                         .HasColumnType("bigint")
                         .HasColumnName("version");
