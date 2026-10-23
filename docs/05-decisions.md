@@ -46,7 +46,7 @@
 | 2026-10-23 | A simple Item list (category, default account, default tax code) in v1, designed to become inventory items later. |
 | 2026-10-23 | Allocations are derived, never stored as balances: open balance = total − allocations; overpayments stay as unallocated amounts on the payment. |
 | 2026-10-23 | A document that cannot be posted is kept as a draft with the reasons; a posted document whose change cannot be posted stays unchanged (rule 28). |
-| 2026-10-23 | Input VAT: a person or the AI decides whether a valid tax invoice was received. Without one, the VAT is posted to a separate Cost & Expense account for non-deductible VAT (a system purpose, from M5), not to input VAT and not into the line's own expense account. |
+| 2026-10-23 | Input VAT: a person or the AI decides whether a valid tax invoice was received. Without one, the VAT goes to the tax code's own non-deductible account (a Cost & Expense account set on each input VAT code, required for that kind; from M5), not to input VAT and not into the line's expense account. The setting is generic, so other tax kinds can use it later. |
 | 2026-10-23 | v1 stays USD-only; foreign-currency bank accounts come with multi-currency later. |
 | 2026-10-23 | Reopening a Close needs no written reason. Prior years' profit shows as a calculated Retained Earnings line; GL Detail balances are signed. |
 | 2026-10-23 | `docs/16-ledger-accounting-policy.md` dropped; 01–06 are the only current documents. |
