@@ -62,7 +62,10 @@ public sealed class TestHost : IAsyncLifetime
             builder.UseSetting("ConnectionStrings:Books", ConnectionString);
             builder.UseSetting("Auth:UseLocalIssuer", "true");
             builder.UseSetting("Auth:Audience", Audience);
+            builder.UseSetting("Logging:LogLevel:Default", "Warning");
         });
+        // Start the server now: lazy start from parallel tests is not thread-safe and could build two hosts with different keys.
+        _ = _factory.Server;
     }
 
     public BooksDbContext CreateDbContext() =>
