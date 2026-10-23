@@ -1,8 +1,8 @@
 # Chart of Accounts
 
-Status: Review draft. Ledger access rules, the Cost & Expense label, two P&L groups and initial System Account purposes are confirmed. The account tree below is the accepted planning baseline. Field requirements and maintenance rules remain proposed.
+Status: Review draft. Ledger access rules, the Cost & Expense label, two P&L groups and initial System Account purposes are confirmed. The account tree below is the accepted planning baseline. Default Usage and user-editable Code are also accepted. Other field requirements and maintenance rules remain proposed.
 
-The tree is accepted for planning, not automatic account generation. Repeated account names, fixed codes after use and deactivation with a remaining balance remain review recommendations, not confirmed maintenance policies. These accounting features belong to a later accounting stage, not the organization foundation's phase-one API contract.
+The tree is accepted for planning, not automatic account generation. Repeated account names and deactivation with a remaining balance remain review recommendations, not confirmed maintenance policies. These accounting features belong to a later accounting stage, not the organization foundation's phase-one API contract.
 
 ## Confirmed
 
@@ -10,15 +10,21 @@ Each account belongs to one ledger. Organization administrators can manage their
 
 Use **Cost & Expense** instead of Expense. The P&L has two top-level groups: **Income (add)** and **Cost & Expense (subtract)**. These are reporting groups, not debit/credit rules. Preserve signed balances and contra-account effects; do not turn every amount into a positive value.
 
-## Proposed: Account identity and code
+## Account identity, Code and Default Usage
 
-Each account has a permanent internal identity, a code and a name. Journals refer to that identity, not just the name or code.
+Confirmed: Code is entered and edited by the user. Account ID is the stable internal identity used by journals; changing Code must not move or break historical references.
+
+Confirmed: add **Default Usage** to identify which subsystems use an account by default. Keep it separate from Type (accounting classification) and System Purpose (a fixed system function).
+
+Proposed examples: Sales, Purchases, Banking, Payroll and Inventory. Allowing several usages on one account is proposed, not yet confirmed. Default Usage does not itself grant access, enable a subsystem or approve automatic postings.
+
+**Open clarification:** whether Code must be unique within a ledger. Do not enforce the earlier unique-Code proposal as a confirmed rule, and do not assume duplicates are approved.
 
 - Allow user-defined codes. Store codes as text so leading zeroes survive.
-- Require a unique code within a ledger, including inactive accounts. The same code can exist in a different ledger.
-- Trim surrounding spaces and use a documented case-insensitive uniqueness rule. Do not silently change an existing code.
-- Allow repeated names when codes differ. Show code and name together when selecting an account.
-- Do not reuse a retired code for a different account in the first release.
+- Code uniqueness, including inactive accounts, is awaiting clarification. Stable Account ID remains distinct regardless of that choice.
+- Proposed: trim surrounding spaces and define comparison rules after Code uniqueness is resolved. Do not silently change an existing code.
+- Proposed: show Code and Name together when selecting an account. Duplicate-name rules remain open; stable IDs must distinguish selected accounts.
+- Code reuse rules remain open and must not change historical Account IDs.
 
 Example: Renaming account 1000 from “Bank” to “Main Bank” must not move its journal history to another account.
 
@@ -140,12 +146,13 @@ Correction requires validation again. A posted item is resolved through the agre
 
 Ledger editors and organization administrators would create and maintain accounts. Read-only members would view them only.
 
-Before an account has posted entries, allow corrections to its code, name, type and parent, subject to uniqueness, hierarchy and existing draft-reference checks.
+Before an account has posted entries, allow corrections to its code, name, type and parent, subject to the agreed Code policy, hierarchy and existing draft-reference checks.
 
 After first posting:
 
 - Allow a name or description correction and record the old and new values.
-- Keep code, type and parent fixed in the first release. This avoids silently reclassifying earlier reports.
+- Code remains user-editable, including after use; history keeps the same Account ID. Proposed: audit Code changes.
+- Keep type and parent fixed in the first release as a separate proposal to avoid silently reclassifying earlier reports.
 - Deactivate instead of deleting. Deactivation stops new postings but preserves history and report visibility, even if the account still has a balance.
 - Revalidate a draft at posting time. A draft referencing a now-inactive account cannot post until corrected or the account is reactivated through an authorized change.
 - Permit reactivation with an audit record. It does not remove the earlier deactivation history.
@@ -156,10 +163,10 @@ Historical reports would use the current account name, with stable identity and 
 
 ## Review checks
 
-- A duplicate code in the same ledger is rejected; the same code in another ledger is allowed.
+- Code behavior follows the uniqueness decision once clarified; do not claim duplicate rejection or acceptance is approved.
 - A leading-zero code stays unchanged after save and export.
 - Cross-ledger parents, hierarchy loops and postings to a parent are rejected.
-- A name change does not change balances or journal references.
+- A name or Code change does not change balances or journal references.
 - A used account cannot be deleted, retyped or moved through ordinary editing.
 - An inactive account still appears in historical balances and relevant reports.
 - Read-only users cannot change account data; guessed identifiers do not bypass ledger access.
@@ -168,9 +175,9 @@ These scenarios have not been executed. Proposed behavior must be approved befor
 
 ## Open Questions
 
-1. Are custom codes, duplicate names and leaf-only posting suitable? What code format is needed?
+1. Must Code be unique within a ledger? What code format is needed, and are duplicate names and leaf-only posting suitable?
 2. Are any additional templates or subledgers needed beyond the accepted planning tree? Conditional future items are not enabled by this approval.
-3. Is fixing a used account's code, type and parent acceptable?
+3. Is fixing a used account's type and parent acceptable? Code remains editable.
 4. Do historical reports need the exact account labels shown when originally issued?
 5. Are any additional System Account functions or optional Default Account templates needed? The three accepted purposes do not approve these additions or template contents.
 
