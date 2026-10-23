@@ -12,7 +12,7 @@ A journal line includes **Item** (the product or service) separately from **Acco
 
 Confirmed currency boundary: each journal has **one transaction currency** shared by all its lines. Lines cannot select or override their own transaction currency. A converted base-currency amount is a valuation of the same line, not a second transaction currency.
 
-Confirmed Post outcome: validate the date, accounts, currency, amounts and debit/credit balance. Post only when all checks pass. A definite validation failure keeps the draft and specific errors in the **Suspense review list**, with no balance/report effect and no partial journal lines. Correct it and validate again before resubmission. This is not forced posting to a Suspense Account.
+Confirmed Post outcome: validate the date, accounts, currency, amounts and debit/credit balance. Post only when all checks pass. A definite validation failure keeps the draft and specific errors in the **Error review list**, with no balance/report effect and no partial journal lines. Correct it and validate again before resubmission. This is not forced posting to a Suspense Account.
 
 Current organization and ledger authorization still applies. Do not expose another organization's input or errors. A network timeout or lost response is an unknown outcome, not proof of validation failure; reconcile the saved outcome before retrying.
 
@@ -38,7 +38,7 @@ Proposed solution: a **Document Provider** separates attachment identity from st
 
 Migration needs verified copying, version tracking, backups and a rollback path; changing containers alone cannot guarantee no data loss. See the [migration proposal](09-deployment-operations.md#attachment-storage-portability).
 
-Attachment reads and migration access must preserve the same organization/ledger boundary. This requirement does not approve a storage provider, new credentials, wider sharing, actual migration or deletion. Attachment counts, optionality and retention rules remain separate decisions.
+Attachment reads and migration access must preserve the same organization/ledger boundary. This requirement does not approve a storage provider, new credentials, wider sharing, actual migration or deletion. Confirmed: attachments are optional. A journal can be saved and posted without an attachment if all other checks pass. Attachment counts and retention rules remain separate decisions.
 
 ## Proposed: Draft and posted states
 
@@ -51,7 +51,7 @@ An abandoned draft can be cancelled and retained outside the working list. It ha
 
 ## Posting checks
 
-The date/account/currency/amount/balance checks and failure-to-Suspense outcome are confirmed. Detailed eligibility, precision, period and role rules below remain proposed where not separately confirmed.
+The date/account/currency/amount/balance checks and failure-to-Error outcome are confirmed. Detailed eligibility, precision, period and role rules below remain proposed where not separately confirmed.
 
 At the moment of posting, verify:
 
@@ -64,7 +64,7 @@ At the moment of posting, verify:
 - The accounting date is valid, no earlier than the ledger opening date, and belongs to an open accounting period.
 - The journal has not already been posted or cancelled, and the submitted draft version is current.
 
-Do not invent a balancing line or silently round an unbalanced journal into balance. A definite validation failure explains what must be corrected and enters Suspense review without posting. Permission failures disclose no unauthorized record or payload and cannot be used to bypass ledger access.
+Do not invent a balancing line or silently round an unbalanced journal into balance. A definite validation failure explains what must be corrected and enters Error review without posting. Permission failures disclose no unauthorized record or payload and cannot be used to bypass ledger access.
 
 ## Proposed: Amounts and dates
 
@@ -74,7 +74,7 @@ The earlier base-currency-only starting point is a release-scope proposal, not t
 
 Proposed field placement: put Currency in the journal Header. Each line stores its amount in that shared transaction currency and, where conversion is supported, the corresponding ledger base-currency amount. Do not allow an independent Currency override on a line.
 
-Rate direction, source, precision, rounding, whether rates are shared or line-specific, and account-currency constraints remain undecided. Cross-currency transfers need a separate future workflow; they do not relax the one-transaction-currency rule. No tax fields or FX implementation are approved by this decision.
+Confirmed: one journal uses one shared exchange rate. Users may enter it manually. Rate source is stored as backend information; a manually entered rate has source **Manual**. Rate direction, precision, rounding and account-currency constraints remain design details. Cross-currency transfers need a separate future workflow; they do not relax the one-transaction-currency rule. This does not approve FX implementation. Taxes are configured by people; the system validates and processes according to those settings, without choosing taxes on its own. Tax multiplicity, calculation methods and accounting versus reporting-only treatment are not settled by this rule.
 
 Keep three concepts separate:
 
@@ -82,9 +82,9 @@ Keep three concepts separate:
 - Entry time: when the draft was created.
 - Posting time: when it became effective in the ledger.
 
-Confirmed: a person chooses whether to Close or leave the scope open; there is no automatic Close. Close blocks edits and deletion of posted journals. A person with the required authority controls reopening; the system must not reopen automatically. The exact Close scope and the roles allowed to close or reopen remain open, not assumed to be every administrator.
+Confirmed: a person chooses whether to Close or leave the scope open; there is no automatic Close. Close blocks edits and deletion of posted journals. A person with the required authority controls reopening; the system must not reopen automatically. Confirmed: organization administrators perform Close within their own organization. Close uses an inclusive cutoff: new posting, edits and deletion at or before it are blocked; later accounting dates/times remain open. Use the accounting date/time, not creation time. Reopening permissions remain open.
 
-Proposed additional controls: block new postings into a closed scope and record a reason for reopening. Close does not itself create year-end entries or certify compliance. A concurrent Close and journal change must have one definite order, never partial results.
+New posting at or before the cutoff is blocked. Proposed additional control: record a reason for reopening. Close does not itself create year-end entries or certify compliance. A concurrent Close and journal change must have one definite order, never partial results.
 
 Whether future-dated journals are allowed, how far back users can post, and how year-end closing works remain open. Do not infer them from the timezone or financial-year setting.
 
@@ -96,11 +96,11 @@ Posted status alone does not lock a journal.
 - If the applicable scope is closed, reject the edit or deletion. Reopening requires an authorized person's explicit action.
 - On a date change, both the original date and the new date must be in an editable scope. Moving the date cannot bypass Close.
 - Validate an edited journal again. Only a successful edit replaces the previous accounting effect, with no intermediate partial result.
-- If edit validation fails, keep the existing valid posted version and its balances unchanged. Put the attempted change and errors in Suspense review. Do not create a second posted journal or remove the existing effect.
+- If edit validation fails, keep the existing valid posted version and its balances unchanged. Put the attempted change and errors in Error review. Do not create a second posted journal or remove the existing effect.
 - A successful deletion removes the journal's accounting effect consistently from balances and reports. Preserve evidence of who changed or deleted what and when, including the previous values.
 - A failed or unauthorized change leaves the original unchanged. Do not expose another ledger's journal or error details.
 
-The exact close boundary, close/reopen roles and detailed audit, archive and deletion mechanisms require later design. Deletion here is a business operation, not a promise of physical erasure or a particular recovery feature. No real journal may be changed by this document.
+Date-versus-instant and timezone interpretation must be defined explicitly in later design; do not assume a UTC-midnight cutoff. Reopening permissions and detailed audit, archive and deletion mechanisms require later design. Administrators perform Close; this does not automatically grant reopening authority. Deletion here is a business operation, not a promise of physical erasure or a particular recovery feature. No real journal may be changed by this document.
 
 ## Proposed: Optional reversals
 
@@ -116,27 +116,28 @@ Record who performed each action, the ledger and journal, when it happened, the 
 
 The proposed implementation approach remains separate from these business requirements. C#, ASP.NET Core, EF Core and PostgreSQL are the selected stack; ABP is not used. This document authorizes no code, migration or deployment.
 
-## Suspense and failed processing
+## Suspense, Error and Pending
 
-Confirmed Suspense scope includes incomplete data, unusable accounts and import or processing errors. The [Suspense distinction](04-chart-of-accounts.md#suspense-records-needing-attention) separates an accounting account from a review list.
+Confirmed: Suspense is posted accounting awaiting classification; Error covers incomplete data, unusable accounts and definite validation or processing failures. Pending covers unfinished or unknown results. The [category distinction](04-chart-of-accounts.md#suspense-and-error) separates accounting effects from failed attempts.
 
 Proposed handling:
 - Valid balanced transactions with unresolved classification may use a Suspense Account under an agreed policy.
-- Confirmed: records failing Post validation remain unposted in the Suspense review list with the draft and error reasons. Do not fill in missing amounts, bypass an inactive account or force a balancing entry just to post.
+- Confirmed: records failing Post validation remain unposted in the Error review list with the draft and error reasons. Do not fill in missing amounts, bypass an inactive account or force a balancing entry just to post.
 - If posting may have committed but the response was lost, mark the outcome Pending / Unknown and check the saved result before retrying. Do not assume failure or create a second journal.
 - Corrections trigger fresh validation. Apply the confirmed Close-based edit/delete policy to posted items. Keep failed edit attempts and unposted error records out of ledger balances; preserve the previous valid posted effect.
 - Preserve relevant source and resolution history with current ledger access checks. Error details must not contain authentication secrets or another organization's data.
 
 ### Proposed durable submission handling
 
-This simplification applies only to **Suspense Review**. The two confirmed types remain distinct:
+This simplification applies only to **Error**. The confirmed categories remain distinct:
 - **Suspense Account:** valid, balanced entries posted temporarily while classification is unresolved. These affect balances and later need reclassification.
-- **Suspense Review:** incomplete, unusable or failed attempts needing attention. Unposted attempts do not affect balances; a failed edit retains the previous effective posted result. Unknown outcomes need reconciliation.
+- **Error:** incomplete, unusable or definitely failed attempts needing attention. Unposted attempts do not affect balances; a failed edit retains the previous effective posted result.
+- **Pending:** unfinished or unknown outcomes. Reconcile whether posting committed before retrying; do not classify a timeout alone as Error.
 
-Keep one business journal: **save first, then Post**. Suspense Review is a filtered worklist, not a copied business journal. A shared Suspense entry point remains proposed, with posted classification issues separate from unposted/processing issues; never mix their balances.
+Keep one business journal: **save first, then Post**. Error is a filtered worklist, not a copied business journal. Page layout remains proposed. Keep posted Suspense classification issues separate from Error attempts and Pending outcomes; never mix their balances.
 
 1. Save the draft and its current content before Post. Saving alone has no balance effect.
-2. On Post, validate and commit only valid, balanced accounting entries. A definite validation failure keeps the saved content and errors for Suspense review.
+2. On Post, validate and commit only valid, balanced accounting entries. A definite validation failure keeps the saved content and errors for Error review.
 3. For an edit of a posted journal, retain the attempted revision separately from the effective posted version. Replace the accounting effect only after the edit succeeds. A failed edit leaves the old posted result intact.
 4. After a timeout or crash, show Pending / Unknown and reconcile the saved outcome before retrying. Do not assume that a lost response means posting failed.
 
@@ -165,7 +166,7 @@ These are proposed acceptance scenarios, not completed tests.
 1. Are manual journals enough initially? Do editors also post and reverse, or is approval required?
 2. What amount precision, maximum value and rounding rule are required?
 3. What numbering rule, date restrictions and close/reopen process should apply?
-4. What exact scope does Close protect, and who may close or reopen it? Are optional reversals needed?
+4. Who may reopen an administrator-controlled cutoff? Are optional reversals needed?
 
 [Business workflow diagrams](11-workflows.md)
 [Next: Balances and Reports](06-reports.md) · [Document index](README.md)

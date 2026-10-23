@@ -85,9 +85,9 @@ If results span several pages or an export, keep the same snapshot or clearly re
 
 If cached summaries are introduced later, they must be rebuildable from posted entries and reconcilable to them. A mismatch is an error to investigate, not an amount to patch manually in the report.
 
-## Suspense visibility
+## Suspense, Error and Pending visibility
 
-Proposed presentation: show pending issues separately from accounting totals. Only successfully posted entries affect ledger balances and reports, including valid entries posted to a Suspense Account. The presence of a record in a Suspense review list is not evidence of posting.
+Proposed presentation: show pending issues separately from accounting totals. Only successfully posted entries affect ledger balances and reports, including valid entries posted to a Suspense Account. The presence of a record in an Error review list is not evidence of posting.
 
 Unposted invalid records have no balance effect. For Pending / Unknown processing outcomes, reconcile against the posted accounting source; never infer totals from an error or timeout flag. Show unresolved review items clearly without inventing balances or claiming the books are complete. Any issue count or detail must obey the same ledger access boundary.
 

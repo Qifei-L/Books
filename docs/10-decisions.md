@@ -75,9 +75,9 @@ This approval covers the tree, not automatic account generation, new field requi
 - Rounding Differences is enabled only if automatic rounding adjustments are needed.
 - These purposes are accepted, not an instruction to create all accounts initially or to implement them.
 
-### Suspense scope
+### Suspense, Error and Pending
 
-Include incomplete data, unusable records and import or processing errors in Suspense review. Distinguish valid entries posted to a Suspense Account from invalid or failed records kept unposted for review. This does not authorize posting invalid entries or select a Frontend layout.
+Call the second category **Error**, replacing the earlier label Suspense Review. Include incomplete data, unusable records and definite import or processing failures in Error review. Unknown outcomes remain **Pending**, not Error. Distinguish valid entries posted to a Suspense Account from invalid or failed records kept unposted for review. This does not authorize posting invalid entries or select a Frontend layout.
 
 ### Journal line Item
 
@@ -87,11 +87,11 @@ Add Item (product or service) to journal lines, separate from Account. Item is o
 
 Each journal uses one transaction currency, with the same currency on all lines. No independent line-currency override is allowed. Base-currency conversion amounts are valuations, not mixed transaction currencies.
 
-Header Currency and line transaction/base amounts are proposed field placement. Supported currencies, rate direction/source/precision, rate scope, rounding and account-currency constraints remain separate decisions. Cross-currency transfers require a separate future workflow. No tax or FX implementation is approved.
+Header Currency and line transaction/base amounts are proposed field placement. One journal shares one exchange rate. Manual entry is allowed; source is backend information and manually entered rates are labelled Manual. Supported currencies, rate direction/precision, rounding and account-currency constraints remain separate design decisions. Cross-currency transfers require a separate future workflow. No tax or FX implementation is approved.
 
-### Post validation and Suspense
+### Post validation and Error
 
-Validate date, accounts, currency, amounts and debit/credit balance before posting. All must pass. Definite validation failures retain the draft and specific errors in Suspense review, not a forced Suspense Account posting. They have no balance/report effect or partial entries. Correct and revalidate before resubmitting.
+Validate date, accounts, currency, amounts and debit/credit balance before posting. All must pass. Definite validation failures retain the draft and specific errors in Error review, not a forced Suspense Account posting. They have no balance/report effect or partial entries. Correct and revalidate before resubmitting.
 
 Unknown outcomes such as a lost response require reconciliation before retrying. Current ledger permissions apply to drafts and error details. Detailed posting eligibility and calculation policies remain subject to their separate status.
 
@@ -100,10 +100,11 @@ Unknown outcomes such as a lost response require reconciliation before retrying.
 - Posted status does not itself prohibit editing or deletion.
 - Authorized users may change amounts, accounts or dates, or delete posted journals, while the applicable scope is open.
 - People control Close or leaving the scope open; it is not automatic. Close blocks edits and deletion. Authorized people control reopening; it is never automatic.
-- Both the old and new dates must be editable when moving a journal date.
-- Successful edits replace the prior accounting effect after validation. A failed edit retains the valid posted version and sends the attempted change to Suspense review without changing balances.
+- The cutoff is evaluated against accounting date/time, not record creation time. Both the old and new accounting dates must be editable when moving a journal date.
+- Date-versus-instant and timezone interpretation are later design details; do not silently use UTC midnight or force monthly closing.
+- Successful edits replace the prior accounting effect after validation. A failed edit retains the valid posted version and sends the attempted change to Error review without changing balances.
 - Successful deletion removes the accounting effect and retains an audit record of actor, time and changes.
-- Exact Close scope and close/reopen roles remain open. Reversal may be optional; it is not the only allowed correction method.
+- Organization administrators perform Close within their organization. Close uses an inclusive accounting cutoff; new posting, edits and deletion at or before it are blocked. Later accounting dates/times remain open. Reopening permissions remain open. Reversal may be optional; it is not the only allowed correction method.
 
 ### Journal numbering
 
@@ -113,7 +114,11 @@ The system generates a unique Journal No. Reference is entered by the user and m
 
 Files and their journal links must be preserved when changing the attachment storage container. This requirement is confirmed. It does not introduce a new journal Document data model.
 
-Document Provider, stable Attachment IDs, location mappings, copy/checksum/read verification, version tracking, backups and rollback are proposed means of meeting the requirement. No storage provider, credentials, sharing expansion, migration or deletion is approved. Attachment counts, optionality and retention policy are not settled by this clarification.
+Document Provider, stable Attachment IDs, location mappings, copy/checksum/read verification, version tracking, backups and rollback are proposed means of meeting the requirement. No storage provider, credentials, sharing expansion, migration or deletion is approved. Attachments are optional: saving and posting do not require an upload. Attachment counts and retention policy remain open.
+
+### Human-configured taxes
+
+People choose the tax settings. The system validates and processes those settings rather than selecting taxes on its own. The number of taxes per line, calculation rules and accounting versus reporting-only treatment are not yet settled; no particular tax implementation is approved.
 
 ### Technology direction
 
@@ -125,7 +130,7 @@ This replaces the earlier Go proposal. It does not select exact package versions
 
 The accounting chapters now contain a complete starting proposal. Except for the specifically confirmed labels, P&L grouping, account tree and initial System Account purposes above, they are not a statement of approved accounting policy.
 
-Default Accounts as optional starter templates remain proposed. Current Year Profit's non-posting place in the tree is accepted; calculation and closing details remain open. The posted-account versus unposted-review distinction is accepted. A shared entry point and Posted / Not posted / Pending or Unknown presentation remain workflow proposals. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. FX and AR/AP/Inventory placeholders are accepted in the planning tree, but their module activation and behavior are not approved. A tax-control mapping remains a further proposal. No account or mapping has been created.
+Default Accounts as optional starter templates remain proposed. Current Year Profit's non-posting place in the tree is accepted; calculation and closing details remain open. The posted-account versus unposted-review distinction is accepted. A shared or separate page layout remains proposed. Suspense, Error and Pending remain distinct categories, not interchangeable accounting balances. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. FX and AR/AP/Inventory placeholders are accepted in the planning tree, but their module activation and behavior are not approved. A tax-control mapping remains a further proposal. No account or mapping has been created.
 
 The detailed technical contract proposes .NET/EF Core/Npgsql version families, Keycloak evaluation, authenticated invitation inboxes, transaction and lock rules, API fields, MCP delegation and development stages. Exact implementation details remain under review.
 
@@ -179,13 +184,17 @@ All decisions above were recorded on 2026-10-23.
 9. Standardized the term Frontend and added business workflow diagrams. Frontend implementation remains deferred; business interaction planning is in scope. Proposed accounting flows are not approved by their inclusion.
 
 10. Confirmed Cost & Expense naming, two P&L groups and three conditional System Account purposes. Default templates and further System Account candidates remain proposed.
-11. Included incomplete, unusable and errored records in Suspense scope. Added proposed safe review and resolution handling without approving invalid posting.
+11. Included incomplete, unusable and errored records in the review category, later renamed Error. Added proposed safe review and resolution handling without approving invalid posting.
 
 12. Accepted the revised account tree with no Other Income group and generic asset names. Conditional activation and operational rules remain separate decisions.
 
 13. Added Default Usage as subsystem + purpose, optional Description, Sort Order and user-editable Code. Confirmed Code uniqueness within each ledger; the same Code may exist in different ledgers. The earlier fixed-Code-after-use proposal is superseded.
 
 14. Added Edit, Deactivate and Delete Account workflow drafts. Requesting these diagrams does not approve their proposed operation restrictions or authorize real account changes.
+
+15. Renamed Suspense Review to Error; retained posted Suspense Account and separate Pending outcomes. This changes labels, not accounting effects or permissions.
+
+16. Confirmed human-configured taxes, administrator Close, one shared journal exchange rate with backend source and Manual labelling, and optional attachments. Close now uses an inclusive accounting cutoff; reopening rights and detailed tax behavior remain open.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

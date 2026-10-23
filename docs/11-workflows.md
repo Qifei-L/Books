@@ -356,7 +356,7 @@ These choices do not reopen the confirmed roles, seven-day invitation policy, me
 
 ## 6. Prepare and post a journal
 
-Proposed accounting workflow: Manual journals can be saved as drafts and posted only after validation. Editors and administrators would prepare and post them; a separate approval role is not assumed. The permission boundary and validation-failure-to-Suspense outcome are confirmed. Detailed posting roles, states and accounting controls remain proposed.
+Proposed accounting workflow: Manual journals can be saved as drafts and posted only after validation. Editors and administrators would prepare and post them; a separate approval role is not assumed. The permission boundary and validation-failure-to-Error outcome are confirmed. Detailed posting roles, states and accounting controls remain proposed.
 
 ```mermaid
 flowchart TD
@@ -367,7 +367,7 @@ flowchart TD
     E --> P{"Current access still permits posting?"}
     P -->|No| C
     P -->|Yes| F{"Date, account, currency, amount and balance checks pass?"}
-    F -->|No| G["Keep draft and errors in Suspense review; no posting"]
+    F -->|No| G["Keep draft and errors in Error review; no posting"]
     G --> K["Correct errors and resubmit for validation"]
     K --> D
     F -->|Yes| H["Post all lines and status together; assign posting reference"]
@@ -377,13 +377,13 @@ flowchart TD
 
 Proposed posting checks include an active company, complete ledger settings, a current draft version, eligible same-ledger accounts, at least two non-zero lines, valid debit or credit amounts, exact balance at agreed precision, and a valid accounting date in an open period. A cancelled or already posted draft cannot post again.
 
-Confirmed: a definite Post validation failure enters the Suspense review list, not the Suspense Account. It changes neither balances nor reports and creates no partial entries. Current access checks apply to the draft and errors; unauthorized users must not see another ledger's payload.
+Confirmed: a definite Post validation failure enters the Error review list, not the Suspense Account. It changes neither balances nor reports and creates no partial entries. Current access checks apply to the draft and errors; unauthorized users must not see another ledger's payload.
 
 A retry must not create a second posting. An uncertain response requires checking the saved outcome before starting a new request. A timeout is an unknown outcome, not a failed validation. The Close-based edit/delete policy is confirmed. Under the existing reversal proposal, a reversal would be a separate validated journal; it affects balances only when posted and does not erase the original.
 
-These workflows do not add accounting endpoints to phase one. One transaction currency per journal and the Close-based edit/delete boundary are confirmed; detailed precision, numbering, Close scope and close/reopen roles remain open.
+These workflows do not add accounting endpoints to phase one. One transaction currency per journal and the Close-based edit/delete boundary are confirmed; detailed precision, numbering, Close uses an inclusive accounting cutoff and is performed by organization administrators; reopening permissions remain open.
 
-Confirmed posted-journal changes: recheck current access and Close before applying an edit or deletion. Validate edits before replacing prior effects. Failed edits retain the old valid posting and send the attempted change to Suspense review. Deletion removes accounting effects but retains actor/time/change evidence. Both dates must be editable when a journal date changes. No automatic reopening.
+Confirmed posted-journal changes: recheck current access and Close before applying an edit or deletion. Validate edits before replacing prior effects. Failed edits retain the old valid posting and send the attempted change to Error review. Deletion removes accounting effects but retains actor/time/change evidence. Both dates must be editable when a journal date changes. No automatic reopening.
 
 See [Journals and posting](05-journals-posting.md).
 

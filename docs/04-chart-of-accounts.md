@@ -130,15 +130,15 @@ Conditional future scope: the tree includes realized/unrealized FX and receivabl
 
 Account codes, additional template contents, mapping permissions and safeguards for changing a used mapping remain proposals. No accounts or mappings are created by this document.
 
-## Suspense: records needing attention
+## Suspense and Error
 
-Confirmed scope: Suspense includes incomplete data, unusable account references, and import or processing errors, as well as unresolved classification.
+Confirmed labels: **Suspense** is posted accounting with unresolved account classification. **Error** is incomplete data, unusable account references or definite validation/processing failures needing correction. **Pending** is an unknown or unfinished outcome and must be reconciled, not treated as Error.
 
 Confirmed distinction:
 - **Suspense Account:** a temporary accounting destination only when a transaction can otherwise be validly posted and the final classification is unknown.
-- **Suspense review list:** records needing correction or investigation. Missing amounts, unbalanced entries, unusable accounts and failed validation do not become posted entries merely because they are in Suspense.
+- **Error review list:** records needing correction or investigation. Missing amounts, unbalanced entries, unusable accounts and failed validation do not become posted entries merely because they appear in Error.
 
-A shared Suspense entry point is a presentation proposal, not an approved Frontend layout. Show **Posted**, **Not posted**, or **Pending / Unknown** based on evidence. A timeout or lost response must not be labelled Not posted without checking whether the operation committed.
+Whether these categories share a page or use separate pages remains a presentation proposal, not an approved Frontend layout. Show **Posted**, **Not posted**, or **Pending / Unknown** based on evidence. A timeout or lost response must not be labelled Not posted without checking whether the operation committed.
 
 Keep the source reference, relevant original values, error reason and resolution history under the same organization and ledger access rules. Retain only the data needed for resolution; never expose another organization's records or store credentials and authentication tokens in error details.
 
