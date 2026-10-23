@@ -111,9 +111,9 @@ public sealed class AccountTests(TestHost host)
         await (await outsider.GetAsync($"/api/v1/organizations/{orgId}/ledgers/{ledger}/accounts", Ct)).AssertProblemAsync(HttpStatusCode.NotFound, "NOT_FOUND");
     }
 
-    internal async Task<(HttpClient Admin, Guid OrgId, Guid LedgerId)> LedgerAsync()
+    internal async Task<(HttpClient Admin, Guid OrgId, Guid LedgerId)> LedgerAsync(string? subject = null)
     {
-        var admin = host.Client(Ids.Subject("admin"));
+        var admin = host.Client(subject ?? Ids.Subject("admin"));
         var orgId = await admin.CreateOrganizationAsync();
         return (admin, orgId, await admin.CreateLedgerAsync(orgId));
     }

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Books.Api;
 using Books.Api.Auth;
 using Books.Api.Http;
+using Books.Api.Mcp;
 using Books.Infrastructure;
 using Books.Infrastructure.Persistence;
 
@@ -26,6 +27,9 @@ builder.Services.ConfigureHttpJsonOptions(json =>
     json.SerializerOptions.AllowDuplicateProperties = false;
 });
 builder.AddBooksAuthentication();
+builder.Services.AddMcpServer()
+    .WithHttpTransport(options => options.Stateless = true)
+    .WithTools<BooksReadTools>();
 
 var app = builder.Build();
 
@@ -36,7 +40,9 @@ app.UseAuthorization();
 app.MapHealthChecks("/health");
 app.MapDevTokenEndpoint();
 
-var api = app.MapGroup("/api/v1").RequireAuthorization();
+app.MapMcp("/mcp").RequireAuthorization(AuthSetup.McpPolicy);
+
+var api = app.MapGroup("/api/v1").RequireAuthorization(AuthSetup.ApiPolicy);
 api.MapMeEndpoints();
 api.MapOrganizationEndpoints();
 api.MapLedgerEndpoints();
