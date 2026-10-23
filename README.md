@@ -1,19 +1,16 @@
 # Books
 
-Books is a bookkeeping backend in the requirements and system-design review stage.
+An AI-native bookkeeping backend: multi-organization ledgers, documents that post to one journal core, and an MCP entry point that follows the same rules as the API.
 
-## Read the design
+| Read | What it is |
+| --- | --- |
+| [Product](docs/01-product.md) | Goal, scope, milestones and success criteria |
+| [Domain rules](docs/02-domain-rules.md) | The rules the system must enforce, one line each |
+| [Architecture](docs/03-architecture.md) | Modules, data model, posting flow, reports |
+| [Cambodia tax](docs/04-cambodia-tax.md) | Tax requirements that shape the design |
+| [Decisions](docs/05-decisions.md) | Decided, proposed defaults and open questions |
+| [Workflow](docs/06-workflow.md) | How we build, review and release |
 
-**[Documentation contents](docs/README.md)** is the main entrance.
+Stack: C#, ASP.NET Core, EF Core + Npgsql, PostgreSQL. No ABP.
 
-Start with [System Design Principles](docs/00-system-design-principles.md), then read the module requirements and technical proposals. The contents page shows what each document covers and whether it is confirmed, proposed or not yet tested.
-
-## Current direction
-
-- Organizations manage teams and companies; each company initially has one independent ledger.
-- C#, ASP.NET Core, EF Core and PostgreSQL. No ABP in phase one.
-- API and MCP share backend rules. Frontend implementation is deferred.
-- Current focus: the Journal core, combined validation and safe source-to-accounting updates.
-- The organization foundation design and task list remain available.
-
-[Confirmed decisions and open questions](docs/10-decisions.md) distinguish accepted rules from proposals. No coding, merge or deployment is approved. Acceptance scenarios have not been run.
+The earlier review draft is kept unchanged in [docs/archive](docs/archive/2026-10-23-review-draft/README.md). Where it conflicts with these documents, these documents win.
