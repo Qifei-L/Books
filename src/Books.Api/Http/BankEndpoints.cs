@@ -1,0 +1,44 @@
+using System.Globalization;
+using Books.Api.Auth;
+using Books.Application.Common;
+using Books.Application.Ledgers;
+
+namespace Books.Api.Http;
+
+public static class BankEndpoints
+{
+    public sealed record BankAccountRequest(Guid AccountId, string BankName, string? AccountNumber);
+
+    public sealed record BankAccountUpdate(string BankName, string? AccountNumber);
+
+    /// <param name="Rate">Units of to_currency per one from_currency, as a decimal string, for example "4100".</param>
+    public sealed record RateRequest(DateOnly Date, string FromCurrency, string ToCurrency, string Rate, string? Source);
+
+    public static void MapBankEndpoints(this RouteGroupBuilder api)
+    {
+        var banks = api.MapGroup("/organizations/{orgId:guid}/ledgers/{ledgerId:guid}/bank-accounts");
+
+        banks.MapGet("", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, BankService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.ListAsync(await principals.GetAsync(ct), orgId, ledgerId, ct)));
+
+        banks.MapPost("", async (Guid orgId, Guid ledgerId, BankAccountRequest body, PrincipalAccessor principals, BankService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.CreateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, body.AccountId, body.BankName, body.AccountNumber, ct)));
+
+        banks.MapPut("/{accountId:guid}", async (Guid orgId, Guid ledgerId, Guid accountId, BankAccountUpdate body, PrincipalAccessor principals, BankService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.UpdateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, accountId, body.BankName, body.AccountNumber, ct)));
+
+        var rates = api.MapGroup("/organizations/{orgId:guid}/exchange-rates");
+
+        rates.MapGet("", async (Guid orgId, DateOnly from, DateOnly to, PrincipalAccessor principals, BankService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.RatesAsync(await principals.GetAsync(ct), orgId, from, to, ct)));
+
+        rates.MapPut("", async (Guid orgId, RateRequest body, PrincipalAccessor principals, BankService service, HttpContext http, CancellationToken ct) =>
+        {
+            var rate = decimal.TryParse(body.Rate, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var r)
+                ? r
+                : throw BooksProblem.Invalid("rate must be a positive decimal string such as \"4100\".");
+            return WriteHttp.Result(http, await service.SetRateAsync(
+                await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, body.Date, body.FromCurrency, body.ToCurrency, rate, body.Source ?? "Manual", ct));
+        });
+    }
+}

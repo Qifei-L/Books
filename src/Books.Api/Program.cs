@@ -61,6 +61,7 @@ api.MapInvitationEndpoints();
 api.MapAccountEndpoints();
 api.MapPartyEndpoints();
 api.MapTaxCodeEndpoints();
+api.MapBankEndpoints();
 api.MapJournalEndpoints();
 api.MapReportEndpoints();
 

@@ -868,6 +868,62 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.BankAccount", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<string>("AccountNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("account_number");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("bank_name");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("AccountId")
+                        .HasName("pk_bank_accounts");
+
+                    b.HasIndex("LedgerId")
+                        .HasDatabaseName("ix_bank_accounts_ledger_id");
+
+                    b.HasIndex("LedgerId", "AccountId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_bank_accounts_ledger_id_account_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_bank_accounts_org_id_ledger_id");
+
+                    b.ToTable("bank_accounts", (string)null);
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.Company", b =>
                 {
                     b.Property<Guid>("Id")
@@ -902,6 +958,56 @@ namespace Books.Infrastructure.Migrations
                         .HasDatabaseName("ix_companies_org_id_created_at_id");
 
                     b.ToTable("companies", (string)null);
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.ExchangeRate", b =>
+                {
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<string>("FromCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("from_currency")
+                        .IsFixedLength();
+
+                    b.Property<string>("ToCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("to_currency")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal>("Rate")
+                        .HasPrecision(20, 10)
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("rate");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("source");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("OrgId", "Date", "FromCurrency", "ToCurrency")
+                        .HasName("pk_exchange_rates");
+
+                    b.ToTable("exchange_rates", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_exchange_rates_rate", "rate > 0");
+                        });
                 });
 
             modelBuilder.Entity("Books.Domain.Ledgers.Ledger", b =>
@@ -1340,6 +1446,25 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_account_purposes_ledgers_org_id_ledger_id");
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.BankAccount", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithOne()
+                        .HasForeignKey("Books.Domain.Ledgers.BankAccount", "LedgerId", "AccountId")
+                        .HasPrincipalKey("Books.Domain.Ledgers.Account", "LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_accounts_accounts_ledger_id_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_accounts_ledgers_org_id_ledger_id");
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.Company", b =>
                 {
                     b.HasOne("Books.Domain.Access.Organization", null)
@@ -1348,6 +1473,16 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_companies_organizations_org_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.ExchangeRate", b =>
+                {
+                    b.HasOne("Books.Domain.Access.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_exchange_rates_organizations_org_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Ledgers.Ledger", b =>

@@ -24,6 +24,8 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<AccountPurpose> AccountPurposes => Set<AccountPurpose>();
     public DbSet<Party> Parties => Set<Party>();
     public DbSet<TaxCode> TaxCodes => Set<TaxCode>();
+    public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
+    public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
     public DbSet<Journal> Journals => Set<Journal>();
     public DbSet<JournalRevision> JournalRevisions => Set<JournalRevision>();
     public DbSet<JournalLine> JournalLines => Set<JournalLine>();
