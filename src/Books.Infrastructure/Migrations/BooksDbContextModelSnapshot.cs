@@ -1049,6 +1049,81 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("parties", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.TaxCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean")
+                        .HasColumnName("active");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly?>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_to");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<decimal>("Rate")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("numeric(9,4)")
+                        .HasColumnName("rate");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tax_codes");
+
+                    b.HasAlternateKey("LedgerId", "Id")
+                        .HasName("ak_tax_codes_ledger_id_id");
+
+                    b.HasIndex("LedgerId", "AccountId")
+                        .HasDatabaseName("ix_tax_codes_ledger_id_account_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_tax_codes_org_id_ledger_id");
+
+                    b.ToTable("tax_codes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_zero_rated', 'non_vat', 'withholding')");
+
+                            t.HasCheckConstraint("ck_tax_codes_rate", "rate >= 0 AND rate <= 100");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Access.Invitation", b =>
                 {
                     b.HasOne("Books.Domain.Access.User", null)
@@ -1295,6 +1370,24 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_parties_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.TaxCode", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "AccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_tax_codes_accounts_ledger_id_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_tax_codes_ledgers_org_id_ledger_id");
                 });
 #pragma warning restore 612, 618
         }

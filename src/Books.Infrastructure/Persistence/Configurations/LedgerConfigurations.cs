@@ -133,3 +133,25 @@ internal sealed class PartyConfiguration : IEntityTypeConfiguration<Party>
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class TaxCodeConfiguration : IEntityTypeConfiguration<TaxCode>
+{
+    public void Configure(EntityTypeBuilder<TaxCode> b)
+    {
+        b.ToTable("tax_codes", t =>
+        {
+            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_zero_rated', 'non_vat', 'withholding')");
+            t.HasCheckConstraint("ck_tax_codes_rate", "rate >= 0 AND rate <= 100");
+        });
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Name).HasMaxLength(200);
+        b.Property(x => x.Rate).HasPrecision(9, 4);
+        b.HasAlternateKey(x => new { x.LedgerId, x.Id });
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.AccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
