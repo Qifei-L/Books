@@ -16,13 +16,22 @@ Use **Cost & Expense** instead of Expense. The P&L has two top-level groups: **I
 
 Confirmed: Code is entered and edited by the user. Account ID is the stable internal identity used by journals; changing Code must not move or break historical references.
 
-Confirmed: **Account Usage** identifies eligible **subsystem + purpose** combinations. The same usage can have several eligible accounts, for example Sales → A/R may offer several receivable accounts. The user selects one and the document/journal saves the actual Account ID. Do not make the purpose unique to one account.
+Confirmed: **Account Usage** describes a business purpose, such as **Receivable** or **Revenue**. It is not a caller/module permission. It is many-to-many:
 
-Do not add separate Default Usage, Default Account or Link fields/settings. Account Usage is distinct from Type (accounting classification), System Purpose (fixed system function) and Required Details (validation requirements). Changing eligibility later does not rewrite the Account on historical documents.
+- One Usage can apply to several accounts.
+- One account can have several Usages.
+- Do not add the same Usage twice to the same account.
+- Code is still unique within its ledger; Usage is not unique across accounts.
+
+For example, a future Sales A/R selection can offer several accounts with Receivable usage. Save the actual selected Account ID. Concrete role-to-purpose mapping is defined with that subsystem, not inferred from the caller's name.
+
+Blank Usage means **no purpose has been declared**. It does not mean suitable for every subsystem role, and it does not automatically prevent a manual Journal from using the account. Manual journals still pass common and Account requirements.
+
+Do not add separate Default Usage, Default Account, Link or Account Non-Usage fields/settings. Account Usage is distinct from Type (accounting classification), System Purpose (fixed system function), permissions and Required Details (validation requirements). Changing Usage never rewrites historical Account selections.
 
 Confirmed fields: **Description** is optional; **Sort Order** controls display order, not accounting calculations.
 
-Other subsystem examples, such as Purchases, Banking, Payroll and Inventory, remain future proposals. Several accounts for one usage is confirmed; several usages on one account remains a proposed mapping capability. Eligibility never grants permission or enables a module. The selected account must still belong to the current ledger, be usable for the operation and satisfy common + subsystem + Account requirements. A suggested account is only a suggestion, not the only eligible choice.
+Subsystems own their business validation and mapping; Journal owns common posting and Account-detail validation. All applicable requirements still combine, without overrides. A suggested account remains a suggestion, not the only choice. Account validity, current ledger access and posting checks always apply. No subsystem or automatic posting feature is enabled by adding Usage.
 
 **Confirmed:** Code must be unique within the same ledger. Different ledgers may use the same Code. Code remains user-editable; edits must satisfy this uniqueness rule.
 
@@ -117,7 +126,7 @@ Custom account types, jurisdiction-specific templates, control accounts and subl
 
 ## System Accounts
 
-System Accounts and the three initial purposes below remain accepted. They are distinct from Account Usage eligibility. A system function uses its mapped account identity in the same ledger, not a fixed name or code. This does not require every account at launch or authorize automatic creation. The earlier Default Accounts proposal is superseded; no separate default-account configuration is part of the current model.
+System Accounts and the three initial purposes below remain accepted. They are distinct from Account Usage business purposes. A system function uses its mapped account identity in the same ledger, not a fixed name or code. This does not require every account at launch or authorize automatic creation. The earlier Default Accounts proposal is superseded; no separate default-account configuration is part of the current model.
 
 Accepted System Account purposes:
 
@@ -164,7 +173,7 @@ After first posting:
 - Revalidate a draft at posting time. A draft referencing a now-inactive account cannot post until corrected or the account is reactivated through an authorized change.
 - Permit reactivation with an audit record. It does not remove the earlier deactivation history.
 
-Proposed safeguards: validate Account Usage eligibility and protect existing document references. Removing an eligibility mapping prevents new selection; it must not redirect historical entries. Before changing a required active System Purpose mapping or deactivating its account, validate a suitable replacement where that system function remains required. Account Usage alone does not impose a single replacement/default account. Structural changes to Type, parent, System Purpose or any future account-level currency need separate checks; after use, reject unsupported changes rather than silently reinterpreting history. Account-level currency is not a newly approved field.
+Proposed safeguards: validate Account Usage mappings and protect existing references. Removing a purpose must trigger revalidation where an adopted subsystem rule requires it; it is not a blanket prohibition on all new or manual entries and must not redirect historical entries. Before changing a required active System Purpose mapping or deactivating its account, validate a suitable replacement where that system function remains required. Account Usage alone does not impose a single replacement/default account. Structural changes to Type, parent, System Purpose or any future account-level currency need separate checks; after use, reject unsupported changes rather than silently reinterpreting history. Account-level currency is not a newly approved field.
 
 Proposed deletion is limited to unused accounts with no document or System Purpose or Account Usage references. Accounts with posted history cannot be deleted, even at zero balance. Resolve draft and mapping references before considering deletion. A Group with children cannot be deleted as a cascade. Exact storage, recovery and retention mechanisms remain for later technical design; do not promise permanent erasure or recovery. Preserve audit evidence and do not reuse a deleted account's stable identity. Inactive accounts remain available in historical searches.
 

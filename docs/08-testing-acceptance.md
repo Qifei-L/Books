@@ -158,12 +158,15 @@ All cases are **Not run**. Qty and combined requirements are confirmed; exact ty
 
 ## Account Usage checks
 
-All cases are **Not run**. Several eligible accounts per usage and saving the actual selection are confirmed; mapping storage and enforcement mechanisms remain proposed.
+All cases are **Not run**. Many-to-many business-purpose Usage and saving the actual selection are confirmed; concrete subsystem mappings and enforcement mechanisms remain proposed.
 
-- USAGE-01: Offer two same-ledger accounts eligible for Sales → A/R. Either may be selected; the saved Journal line keeps the actual Account ID. Do not force a unique purpose-to-account relation.
+- USAGE-01: Offer two same-ledger accounts with Receivable Usage for a proposed Sales A/R role. Either may be selected; the saved Journal line keeps the actual Account ID. Do not force a unique purpose-to-account relation.
 - USAGE-02: An Item suggests an account. Select another eligible account; save that selection. Later changes to suggestions or eligibility do not rewrite historical lines.
 - USAGE-03: Attempt selection of a wrong-ledger, inactive, unauthorized or ineligible account. Reject it without bypassing common/subsystem/Account required-detail checks.
-- USAGE-04: Remove an eligibility mapping concurrently with Save. Apply the proposed rule/reference synchronization protocol; no stale unchecked selection or silent redirection.
+- USAGE-05: Add two Usages to one account and the same Usage to two accounts. Allow both; reject only adding the same Usage twice to the same account in that ledger. Code uniqueness is unchanged.
+- USAGE-06: Use an otherwise valid blank-Usage account in a manual Journal. Do not reject it solely for blank Usage; apply common/Account checks. Do not infer universal subsystem suitability from blank Usage.
+- USAGE-07: Call through a different authorized entry point. Usage remains business-purpose metadata, not caller permission; current organization/ledger access is checked separately.
+- USAGE-04: Remove a Usage mapping concurrently with Save where an adopted subsystem rule requires that purpose. Apply the proposed rule/reference synchronization protocol; no stale unchecked selection or silent redirection.
 
 ## Evidence for each test
 

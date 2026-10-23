@@ -67,12 +67,14 @@ This approval covers the tree, not automatic account generation, new field requi
 
 ### Account fields
 
-- Use Account Usage as eligible subsystem + purpose. The same usage may offer several accounts, such as Sales → A/R. Save the actual account selected.
+- Account Usage describes a business purpose, such as Receivable or Revenue, not subsystem/caller permission. Save the actual Account selected.
+- Usage is many-to-many: several accounts per Usage and several Usages per account. Prohibit only duplicate account/Usage mappings in the same ledger; Account Code remains ledger-unique.
+- Blank Usage is undeclared, neither universal subsystem suitability nor an automatic ban on manual journals. Common/Account validation and permissions remain independent.
 - Do not add separate Default Usage, Default Account or Link fields/settings. This supersedes the earlier default-usage proposal. Keep Type, System Purpose and required-detail validation separate.
 - Include optional Description and Sort Order.
 - Code is user-entered and editable. A stable Account ID preserves journal identity when Code changes.
 - Code must be unique within the same ledger; different ledgers may use the same Code. Editable Code must still satisfy this rule.
-- Specific additional subsystem lists and several usages per account remain proposals. Several accounts per usage is confirmed; it does not activate a subsystem or grant permission.
+- Subsystems own their business-purpose mapping and validation; Journal owns common and Account-detail checks. Specific vocabulary and subsystem integration rules remain to be defined, not automatically enabled.
 
 ### Initial System Account purposes
 
@@ -172,7 +174,7 @@ The recommended defaults are proposals. Answer by topic; do not repeat the confi
 | Topic | What needs a decision |
 | --- | --- |
 | 1. Ledger setup | Base currency for each company, whether foreign-currency transactions are needed in the first accounting release, fiscal year and business time zone. |
-| 2. Accounts | The tree is accepted. Code format and comparison rules; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and Account Usage eligibility. |
+| 2. Accounts | The tree is accepted. Code format and comparison rules; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and concrete business-purpose mappings. |
 | 3. Posting and corrections | Opening balances, who can post and who can reopen. The confirmed administrator Close cutoff and open-journal correction rules do not need reconfirmation. |
 | 4. Reports | The four reports and core layout are confirmed. Agree fiscal-year/profit-transfer details, export needs and optional presentation choices. |
 
@@ -234,9 +236,11 @@ All decisions above were recorded on 2026-10-23.
 21. Added JournalLine Qty, combined common/subsystem/Account requirements and the atomic official source-plus-Journal boundary. Added a technical proposal and unexecuted acceptance cases; no inventory, Sales, code or production scope was added.
 22. Organized the reading path into system principles, business requirements, technical details and acceptance/decisions. Status labels preserve confirmed rules versus proposed mechanisms.
 
-23. Replaced Default Usage with Account Usage only. One purpose may have several eligible accounts; persist the actual selection. Do not introduce Default Account or Link settings. Required Details remains separate, and the earlier Item account suggestion remains an optional suggestion rather than an exclusive default.
+23. Replaced Default Usage with Account Usage only; the initial subsystem + purpose wording was later refined to business purpose in step 25. One purpose may have several eligible accounts; persist the actual selection. Do not introduce Default Account or Link settings. Required Details remains separate, and the earlier Item account suggestion remains an optional suggestion rather than an exclusive default.
 
 24. Confirmed the six selected high-level system-design principles and their purpose. Kept official atomic effects distinct from durable candidate/error storage and external uploads; retained open-before-Close edits and controlled contract evolution.
+
+25. Confirmed Account Usage as a many-to-many business-purpose association. Only the same account/Usage pair is unique within a ledger. Blank is undeclared, not all-purpose and not a manual-Journal prohibition. This supersedes the earlier subsystem/caller eligibility wording without changing permissions or composed validation.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

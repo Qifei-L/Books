@@ -44,11 +44,19 @@ Frontend, direct API and MCP use this same server contract. A proposed requireme
 
 Return errors with stable line ID, field, code and rule origin (Common, Subsystem or Account). Do not reveal another ledger's account or rule details. Unknown fields and unauthorized reference values are rejected, not saved as unrestricted extension data.
 
-### Account Usage is eligibility, not a default
+<a id="account-usage-is-eligibility-not-a-default"></a>
 
-Account Usage identifies subsystem + purpose eligibility. Several accounts may be eligible for the same purpose, such as Sales → A/R. Save the actual selected AccountId; do not require a unique purpose-to-account mapping or add separate Default Usage, Default Account or Link settings. An eligibility mapping may be unique by ledger + account + usage to prevent duplicate mappings without limiting the number of eligible accounts.
+### Account Usage describes business purpose
 
-Validate current ledger ownership, usability, permission and composed required details after selection. Eligibility is not authorization and does not replace Account rules. Retain the agreed Item-based account suggestion as a suggestion only; users can select another eligible account. Changes to suggestions or usage mappings never rewrite historical selections. Sales is an example, not an implemented module.
+Account Usage is a many-to-many business-purpose association, such as Receivable or Revenue, not module/caller authorization. Several accounts may share a Usage and one account may have several Usages. Prohibit only the duplicate mapping **ledger + account + usage**; do not require unique Usage across accounts or one Usage per Account. Account Code remains unique within its ledger.
+
+A future Sales A/R slot can offer several accounts with Receivable purpose. The subsystem owns its role-to-purpose mapping and business validation; Journal owns common and Account-detail checks. The composed contract still enforces all applicable layers. Concrete purpose vocabulary and subsystem mappings are defined when those subsystems are designed, not imposed by this document.
+
+Blank Usage is undeclared, not universal suitability and not an automatic denial of manual Journal posting. A manual Journal can use an otherwise valid account without a Usage declaration, subject to common/Account rules and current permissions. A subsystem cannot infer suitability for its role merely from a blank value.
+
+Save the actual AccountId. Suggestions and later Usage changes never rewrite historical selections. Item may still suggest an Account without introducing Default Account settings. No Default Usage, Default Account, Link or Account Non-Usage field is added.
+
+Proposed source-linked example: a Receipt settling a particular Sales source should use the corresponding receivable account rather than silently choose a different one with the same Usage. This illustrates source consistency; it does not approve Receipt allocation policy or implementation.
 
 ## 3. Proposed typed C# shapes
 
