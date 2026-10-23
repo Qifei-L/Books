@@ -129,21 +129,24 @@ Proposed handling:
 
 ### Proposed durable submission handling
 
-Do not rely on rolling back a failed posting and then separately saving Suspense: a crash between those steps could lose the failed submission.
+This simplification applies only to **Suspense Review**. The two confirmed types remain distinct:
+- **Suspense Account:** valid, balanced entries posted temporarily while classification is unresolved. These affect balances and later need reclassification.
+- **Suspense Review:** incomplete, unusable or failed attempts needing attention. Unposted attempts do not affect balances; a failed edit retains the previous effective posted result. Unknown outcomes need reconciliation.
 
-Proposed sequence:
-1. Reliably save the submitted content and a stable processing ID before attempting posting. This record has no accounting effect.
-2. Attempt posting. Validate and commit only valid, balanced formal accounting entries.
-3. Link success to the posted result. A definite validation failure marks the saved submission for Suspense review.
-4. After a crash, timeout or lost response, retain Pending / Unknown and reconcile whether posting committed before any idempotent retry.
+Keep one business journal: **save first, then Post**. Suspense Review is a filtered worklist, not a copied business journal. A shared Suspense entry point remains proposed, with posted classification issues separate from unposted/processing issues; never mix their balances.
 
-Submission records and formal accounting records are logically distinct; they do not require two databases. Accounting balance constraints protect formal entries, not the raw invalid data retained for correction. When editing an existing posting, retain its valid effect until replacement succeeds.
+1. Save the draft and its current content before Post. Saving alone has no balance effect.
+2. On Post, validate and commit only valid, balanced accounting entries. A definite validation failure keeps the saved content and errors for Suspense review.
+3. For an edit of a posted journal, retain the attempted revision separately from the effective posted version. Replace the accounting effect only after the edit succeeds. A failed edit leaves the old posted result intact.
+4. After a timeout or crash, show Pending / Unknown and reconcile the saved outcome before retrying. Do not assume that a lost response means posting failed.
 
-Protect submitted content with current organization/ledger access, data minimization and retention rules. Preserve what is needed for resolution without storing credentials, authentication tokens or unrelated data in error payloads or logs.
+This proposal can use one database and does not require a message queue or a new submission platform. The storage design must preserve saved drafts or attempted revisions, current posted results and audit evidence without making duplicate business journals. Transactions and idempotency remain required safeguards.
 
-This is an engineering proposal requiring implementation and fault-injection testing. Durable linkage, crash recovery and duplicate prevention have not been validated; do not claim that this design has already proved loss-free.
+Do not depend on saving an error only after rollback: a crash in between can lose that error. Save the content first; recovery must be able to determine the outcome even if the failure-status update did not complete. This is not a claim that posting and every failure-status update occur in one successful commit.
 
-This is a workflow proposal, not a new implemented journal state or approval of a posting engine.
+Balance rules protect effective accounting entries, not an invalid draft awaiting correction. Protect saved content and error details with current organization/ledger access and retention rules; store no authentication secrets or unrelated data.
+
+This remains a proposal, not implemented or tested behavior. Crash recovery and duplicate prevention need fault tests before any reliability claim.
 
 ## Review checks
 
