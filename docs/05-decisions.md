@@ -17,6 +17,18 @@
 | 2026-10-23 | Tax per line, rounded per line, then summed. |
 | 2026-10-23 | Tax reporting is a separate module. Jurisdiction: Cambodia. |
 | 2026-10-23 | Documents compressed; the review draft moved to `docs/archive`. Rules become tests. |
+| 2026-10-23 | Ledger base currencies: USD and KHR only. |
+| 2026-10-23 | A company has only a name for now; a ledger has no name of its own and shows its company's name. |
+| 2026-10-23 | Invitations reach the invitee through their in-app inbox after sign-in; no email in v1. |
+| 2026-10-23 | Account codes are case-insensitive within a ledger, free text of 1–50 characters with no further format. |
+| 2026-10-23 | Members with edit access to a ledger may maintain its chart of accounts. |
+| 2026-10-23 | Accounts that were never used may be deleted; used accounts are deactivated (rule 19). |
+| 2026-10-23 | MCP client sign-in (OAuth discovery) is deferred. |
+| 2026-10-23 | Identity provider: the simplest option, Microsoft Entra ID from the existing Microsoft 365 tenant (one app registration exposing the Books API and MCP audiences). |
+| 2026-10-23 | Emails match ignoring case, the whole address. |
+| 2026-10-23 | Administrators see member emails in the member list. |
+| 2026-10-23 | Removing a member also invalidates pending invitations addressed to them. |
+| 2026-10-23 | `docs/16-ledger-accounting-policy.md` dropped; 01–06 are the only current documents. |
 
 ## Proposed defaults (accept or change)
 

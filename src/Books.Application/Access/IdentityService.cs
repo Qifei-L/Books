@@ -71,11 +71,6 @@ public sealed class IdentityService(IBooksDb db, TimeProvider clock)
 
 public static class EmailKey
 {
-    /// <summary>Trims and lower-cases the domain only; the local part stays as the issuer verified it.</summary>
-    public static string Normalize(string email)
-    {
-        var trimmed = email.Trim();
-        var at = trimmed.LastIndexOf('@');
-        return at < 0 ? trimmed : trimmed[..at] + trimmed[at..].ToLowerInvariant();
-    }
+    /// <summary>Trims and lower-cases the whole address: emails match ignoring case (owner decision 2026-10-23).</summary>
+    public static string Normalize(string email) => email.Trim().ToLowerInvariant();
 }

@@ -29,10 +29,10 @@ Single source of truth · Consistency by design · Traceability · Secure by def
 
 14. Five types: Assets, Liabilities, Equity, Income, Cost & Expense. P&L = Income (add) − Cost & Expense (subtract), keeping signed and contra balances.
 15. Accounts form a tree within one ledger and type. Only leaf accounts take postings. **[T]**
-16. Code is user-entered and editable, unique within a ledger. The stable Account ID is what journals reference.
+16. Code is user-entered and editable, unique within a ledger ignoring letter case. The stable Account ID is what journals reference.
 17. System purposes: Retained Earnings, Opening Balance Clearing (must be zero after setup), Rounding Differences (only if needed).
 18. Control accounts (AR, AP) are posted only by documents, and every line on them carries a Party. **[T]** *(default)*
-19. Used accounts are deactivated, not deleted. Type and parent of a used account do not change. *(default)*
+19. Used accounts are deactivated, not deleted; accounts that were never used may be deleted. Type and parent of a used account do not change. *(default)*
 20. Current Year Profit is calculated in reports, never posted to.
 
 ## Journals
