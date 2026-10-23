@@ -145,3 +145,7 @@ These checks have not been executed. Proposed accounting behavior must be review
 3. Should zero-balance accounts appear by default? Are comparative periods or saved historical report snapshots needed?
 
 [Document index](README.md)
+
+## Foreign-currency revaluation
+
+The confirmed [FX workflow](15-foreign-currency.md) produces official base-currency Journal adjustments without changing original-currency principal. Include each effective adjustment once in TB, GL Detail, Balance Sheet and P&L. Proposed presentation: disclose stale downstream valuations caused by historical edits and link to the affected sources and adjustments; do not present those valuations as reviewed/current or silently patch report totals. Detailed reprocessing and reporting status controls still need design.

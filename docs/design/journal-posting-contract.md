@@ -228,3 +228,9 @@ No provider has been selected, no code or migrations written, and no tests run b
 
 [Journal requirements](../05-journals-posting.md#journal-core-contract) · [Document index](../README.md)
 
+
+## FX valuation integration
+
+The [confirmed FX workflow](../15-foreign-currency.md) adds a generated base-only valuation case to the shared posting boundary. The normal transaction DTO above is not yet a complete valuation DTO. Proposed implementation: an explicit validated system kind with exposure currency, zero original principal movement, balanced base movements, rate evidence and stable exposure/run links. Do not fake an exchange rate or relax ordinary single-currency validation. Revalidate as-of versions and Close, serialize incremental adjustment calculation, and commit official links and effects together. Exact typed extension remains design work; no implementation is claimed.
+
+Settlement at a new rate needs the separate proposed representation in that page: normal shared-rate principal plus an atomically linked base-only settlement FX component. The ordinary DTO must not silently accept different line rates to clear prior carrying value. Both official components succeed or fail together.

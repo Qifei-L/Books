@@ -63,7 +63,7 @@ This selection does not mark the other four items from the same proposal (Correc
 
 The five-type account tree in [Chart of Accounts](04-chart-of-accounts.md#account-tree) is accepted with these changes: no Other Income group, FX gains directly under Income, and generic asset names such as Bank Account and Property, Plant & Equipment. System is a function flag, not another type. Current Year Profit is a calculated non-posting report item.
 
-This approval covers the tree, not automatic account generation, new field requirements or maintenance policies. Future/conditional account activation, detailed year-end calculations and the separate FX line/account design remain open.
+This approval covers the tree, not automatic account generation, new field requirements or maintenance policies. Future/conditional account activation, detailed year-end calculations and the detailed FX line/account mechanisms remain proposals, subject to the later confirmed FX workflow below.
 
 ### Account fields
 
@@ -165,7 +165,7 @@ This replaces the earlier Go proposal. It does not select exact package versions
 
 The accounting chapters now contain a complete starting proposal. Only the policies explicitly listed under Confirmed above are approved; other proposals are not approved merely because they appear in a complete draft.
 
-The earlier Default Accounts/default-usage concepts are superseded by Account Usage; no separate default configuration is adopted. Current Year Profit's non-posting place in the tree is accepted; calculation and closing details remain open. The posted-account versus unposted-review distinction is accepted. A shared or separate page layout remains proposed. Suspense, Error and Pending remain distinct categories, not interchangeable accounting balances. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. FX and AR/AP/Inventory placeholders are accepted in the planning tree, but their module activation and behavior are not approved. A tax-control mapping remains a further proposal. No account or mapping has been created.
+The earlier Default Accounts/default-usage concepts are superseded by Account Usage; no separate default configuration is adopted. Current Year Profit's non-posting place in the tree is accepted; calculation and closing details remain open. The posted-account versus unposted-review distinction is accepted. A shared or separate page layout remains proposed. Suspense, Error and Pending remain distinct categories, not interchangeable accounting balances. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. FX and AR/AP/Inventory placeholders are accepted in the planning tree. The later FX workflow decision confirms only its stated behavior; automatic activation and full AR/AP/Inventory modules are not approved. A tax-control mapping remains a further proposal. No account or mapping has been created.
 
 The detailed technical contract proposes .NET/EF Core/Npgsql version families, Keycloak evaluation, authenticated invitation inboxes, transaction and lock rules, API fields, MCP delegation and development stages. Exact implementation details remain under review.
 
@@ -256,3 +256,11 @@ Steps 7–9 clarify the drafts and review process. They do not approve new accou
 
 [Documentation index](README.md)
 
+
+## FX workflow decision: 2026-10-23
+
+**Confirmed:** [Human-initiated monetary FX revaluation](15-foreign-currency.md), preview and confirmation, base-only system adjustments with unchanged original principal, settlement using carrying values including prior revaluation, incremental/no-duplicate reruns, no automatic next-month reversal, Close checks and identification of affected downstream results after historical edits.
+
+**Proposed technical design:** explicit system Journal kind, one currency per generated Journal, as-of/versioned snapshots, serialization and idempotency receipts, partial-settlement allocation, batch outcomes and stale-result reporting/rebuild mechanics. These still require implementation and tests.
+
+**Not approved by this decision:** exact precision/rounding, base-currency migration, fiscal-year/year-end processing, date/timezone details or reopen authority. Existing independent confirmations remain unchanged. No code, merge or deployment is authorized.

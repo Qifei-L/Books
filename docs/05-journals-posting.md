@@ -140,7 +140,7 @@ At the moment of posting, verify:
 
 - The user still has edit or administrator access to this ledger.
 - The company is active and its required accounting settings are complete.
-- There are at least two non-zero lines. Each line has a debit or a credit, never both, and never a negative amount.
+- For normal transactions, there are at least two non-zero lines. Each line has a debit or a credit, never both, and never a negative amount. The confirmed system FX valuation case has zero original-currency principal movement but nonzero balanced base-currency lines; see [its separate validation design](15-foreign-currency.md#proposed-system-journal-contract).
 - Every account belongs to this ledger and is active and eligible for posting.
 - Enforce the confirmed single transaction currency for all lines; reject mixed-currency lines or independent line-currency overrides.
 - Debit total equals credit total exactly at the agreed amount precision.
@@ -255,3 +255,7 @@ These are proposed acceptance scenarios, not completed tests.
 [Business workflow diagrams](11-workflows.md)
 [Next: Balances and Reports](06-reports.md) · [Document index](README.md)
 
+
+## Confirmed: Foreign-currency revaluation
+
+Use the [FX workflow and design](15-foreign-currency.md) for human-initiated monetary revaluation and subsequent settlement. A normal Journal still has one transaction currency and one shared rate. A generated valuation adjustment changes only base-currency carrying value, with balanced base debits/credits and zero original-currency principal movement. Its explicit system-kind validation is a proposed mechanism, not permission to invent a rate, mix currencies or bypass Close. Revaluation remains posted without automatic next-month reversal. Exact decimal, rounding, date representation and year-end policies remain separate.
