@@ -14,3 +14,16 @@ An AI-native bookkeeping backend: multi-organization ledgers, documents that pos
 Stack: C#, ASP.NET Core, EF Core + Npgsql, PostgreSQL. No ABP.
 
 The earlier review draft is kept unchanged in [docs/archive](docs/archive/2026-10-23-review-draft/README.md). Where it conflicts with these documents, these documents win.
+
+## Development
+
+Requirements: .NET 10 SDK, Docker (for local PostgreSQL and Testcontainers).
+
+```bash
+docker compose up -d                                  # local PostgreSQL
+dotnet tool restore
+dotnet ef database update --project src/Books.Infrastructure   # needs ConnectionStrings__Books
+dotnet test --solution Books.slnx                     # integration tests start their own PostgreSQL
+```
+
+Without Docker, set `BOOKS_TEST_POSTGRES` to an admin connection string; the tests create a fresh database on that server.
