@@ -63,6 +63,39 @@ public sealed class Account
             : trimmed;
     }
 
+    /// <summary>
+    /// Applies a partial update; null arguments leave a field unchanged. The caller decides whether the parent
+    /// changes and has already checked that the new parent is not a descendant.
+    /// </summary>
+    public void Update(string? code, string? name, AccountType? type, bool? active, bool hasChildren, bool parentChanges, Account? parent)
+    {
+        var typeChanges = type is { } newType && newType != Type;
+        if (typeChanges)
+        {
+            if (hasChildren)
+            {
+                throw new DomainException("The type of an account with sub-accounts cannot change.");
+            }
+            Type = type!.Value;
+        }
+        if (parentChanges)
+        {
+            if (parent?.Id == Id)
+            {
+                throw new DomainException("An account cannot be its own parent.");
+            }
+            MoveUnder(parent);
+        }
+        else if (typeChanges && ParentId is not null)
+        {
+            throw new DomainException("A parent account must be in the same ledger and of the same type.");
+        }
+        Code = code is null ? Code : RequireCode(code);
+        Name = name is null ? Name : Names.Require(name);
+        Active = active ?? Active;
+        Version++;
+    }
+
     private void MoveUnder(Account? parent)
     {
         if (parent is not null && (parent.LedgerId != LedgerId || parent.Type != Type))
