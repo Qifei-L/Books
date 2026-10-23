@@ -1,0 +1,26 @@
+# Books 文档目录
+
+状态：先搭建骨架，再逐章确认；发布文档不代表批准实施。
+
+## 建议阅读与完善顺序
+
+1. [项目目标与范围](01-project-scope.md)
+2. [组织 成员与权限](02-organizations-permissions.md)
+3. [公司与账套](03-companies-ledgers.md)
+4. [科目管理](04-chart-of-accounts.md)
+5. [凭证与记账](05-journals-posting.md)
+6. [余额 流水与报表](06-reports.md)
+7. [接口约定](07-api-conventions.md)
+8. [测试与验收](08-testing-acceptance.md)
+9. [部署与运维](09-deployment-operations.md)
+10. [决策与待办](10-decisions.md)
+
+组织、成员与权限是第一优先内容。公司账套及科目章节在其边界明确后继续补充。
+
+## 既有草案
+
+- [后端与科目管理早期需求草案](requirements.md)：保留作为讨论材料；其中建议、默认值与阶段安排未经批准，后续以逐章审阅结果及决策记录为准。
+
+## 文档工作方式
+
+先确认业务含义与范围，再补业务规则及验收，之后才进入技术设计。当前不确定引擎、接口实现、数据结构或部署方案，不开始代码实施。
