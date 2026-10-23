@@ -105,6 +105,13 @@ public sealed class Account
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
 
+    /// <summary>Called when bank details are attached (one bank account per ledger account).</summary>
+    public void MarkAsBank()
+    {
+        IsBank = true;
+        Version++;
+    }
+
     /// <summary>Only active accounts take postings; groups never do.</summary>
     public bool Postable => Active;
 

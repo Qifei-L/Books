@@ -155,3 +155,37 @@ internal sealed class TaxCodeConfiguration : IEntityTypeConfiguration<TaxCode>
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class BankAccountConfiguration : IEntityTypeConfiguration<BankAccount>
+{
+    public void Configure(EntityTypeBuilder<BankAccount> b)
+    {
+        b.ToTable("bank_accounts");
+        b.HasKey(x => x.AccountId);
+        b.Property(x => x.BankName).HasMaxLength(200);
+        b.Property(x => x.AccountNumber).HasMaxLength(50);
+        b.Property(x => x.Currency).HasMaxLength(3).IsFixedLength();
+        b.HasIndex(x => x.LedgerId);
+        // One bank account per ledger account, in the same ledger.
+        b.HasOne<Account>().WithOne()
+            .HasForeignKey<BankAccount>(x => new { x.LedgerId, x.AccountId }).HasPrincipalKey<Account>(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class ExchangeRateConfiguration : IEntityTypeConfiguration<ExchangeRate>
+{
+    public void Configure(EntityTypeBuilder<ExchangeRate> b)
+    {
+        b.ToTable("exchange_rates", t => t.HasCheckConstraint("ck_exchange_rates_rate", "rate > 0"));
+        b.HasKey(x => new { x.OrgId, x.Date, x.FromCurrency, x.ToCurrency });
+        b.Property(x => x.FromCurrency).HasMaxLength(3).IsFixedLength();
+        b.Property(x => x.ToCurrency).HasMaxLength(3).IsFixedLength();
+        b.Property(x => x.Rate).HasPrecision(20, 10);
+        b.Property(x => x.Source).HasMaxLength(50);
+        b.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrgId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
