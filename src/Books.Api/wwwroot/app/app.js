@@ -105,8 +105,7 @@ async function chooseLedger(ledger) {
     + (ledger.closed_through ? `closed through ${ledger.closed_through}` : "not closed");
   await renderChart();
   await renderJournals();
-  $("tb-out").innerHTML = "";
-  $("gl-out").innerHTML = "";
+  for (const id of ["tb-out", "gl-out", "pl-out", "bs-out"]) $(id).innerHTML = "";
 }
 
 for (const button of document.querySelectorAll(".tabs button")) {
@@ -205,5 +204,66 @@ $("gl-form").addEventListener("submit", async (event) => {
     showError(error);
   }
 });
+
+// Statements: nested groups with a subtotal at every level.
+function statementRows(lines, level) {
+  return lines.map((line) => {
+    const pad = `style="padding-left:${8 + level * 18}px"`;
+    const name = esc(line.code ? `${line.code} ${line.name}` : line.name);
+    if (line.kind !== "group") {
+      return `<tr><td ${pad}>${line.kind === "calculated" ? `<em>${name}</em>` : name}</td><td class="num">${line.amount}</td></tr>`;
+    }
+    return `<tr><td ${pad}><strong>${name}</strong></td><td></td></tr>${statementRows(line.children, level + 1)}
+      <tr><td ${pad}><strong>Total ${esc(line.name)}</strong></td><td class="num"><strong>${line.amount}</strong></td></tr>`;
+  }).join("");
+}
+
+function statementTable(sections) {
+  return sections.map((s) => `<tr class="group"><td colspan="2">${esc(s.title)}</td></tr>${statementRows(s.lines, 1)}
+    <tr class="total"><td>Total ${esc(s.title)}</td><td class="num">${s.total}</td></tr>`).join("");
+}
+
+$("pl-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const f = event.target;
+    const pl = await api(`${ledgerUrl()}/reports/profit-and-loss?from=${f.from.value}&to=${f.to.value}`);
+    $("pl-out").innerHTML = `<table><tr><th>Account</th><th class="num">${pl.currency}</th></tr>${statementTable(pl.sections)}
+      <tr class="total"><td>Net profit</td><td class="num">${pl.net_profit}</td></tr></table>`;
+  } catch (error) {
+    showError(error);
+  }
+});
+
+$("bs-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const bs = await api(`${ledgerUrl()}/reports/balance-sheet?asOf=${event.target.asOf.value}`);
+    $("bs-out").innerHTML = `<p>${bs.balanced ? `<span class="ok">Balanced</span>` : `<span class="error">Not balanced</span>`}
+      · assets ${bs.total_assets} = liabilities and equity ${bs.total_liabilities_and_equity}</p>
+      <table><tr><th>Account</th><th class="num">${bs.currency}</th></tr>${statementTable(bs.sections)}</table>`;
+  } catch (error) {
+    showError(error);
+  }
+});
+
+// Excel downloads use the same query as the form next to the button.
+for (const button of document.querySelectorAll("[data-export]")) {
+  button.onclick = async () => {
+    try {
+      const form = button.closest("form");
+      const query = new URLSearchParams();
+      for (const [key, value] of new FormData(form)) query.set(key === "account" ? "accountId" : key, value);
+      const response = await fetch(`${ledgerUrl()}/reports/${button.dataset.export}.xlsx?${query}`, { headers: { Authorization: `Bearer ${state.token}` } });
+      if (!response.ok) throw new Error(`Export failed (HTTP ${response.status}).`);
+      const name = /filename="?([^";]+)/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? `${button.dataset.export}.xlsx`;
+      const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(await response.blob()), download: name });
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      showError(error);
+    }
+  };
+}
 
 start();

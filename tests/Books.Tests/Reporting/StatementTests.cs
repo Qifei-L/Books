@@ -97,9 +97,9 @@ public sealed class StatementTests(TestHost host)
     /// 2025: capital 1000 to the bank, sale 300 cash, rent 100 cash (profit 200).
     /// 2026: sale 500 to the bank, sales return 50 cash, rent 120 on credit (profit 330).
     /// </summary>
-    internal async Task<Books> SeedAsync()
+    internal async Task<Books> SeedAsync(string? subject = null)
     {
-        var admin = host.Client(Ids.Subject("admin"));
+        var admin = host.Client(subject ?? Ids.Subject("admin"));
         var orgId = await admin.CreateOrganizationAsync();
         var ledgerId = await admin.CreateLedgerAsync(orgId);
         var groups = $"/api/v1/organizations/{orgId}/ledgers/{ledgerId}/groups";

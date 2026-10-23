@@ -9,9 +9,11 @@ namespace Books.Application.Common;
 
 public static class BooksJson
 {
+    /// <summary>Matches ASP.NET Core's HTTP JSON, so API and MCP responses are byte-identical. Output is JSON, never inline HTML.</summary>
     public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     public static string Serialize(object value) => JsonSerializer.Serialize(value, Options);

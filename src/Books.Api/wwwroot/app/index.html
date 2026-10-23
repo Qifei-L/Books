@@ -46,6 +46,8 @@
           <button data-tab="journals">Journals</button>
           <button data-tab="tb">Trial Balance</button>
           <button data-tab="gl">GL Detail</button>
+          <button data-tab="pl">Profit and Loss</button>
+          <button data-tab="bs">Balance Sheet</button>
         </nav>
         <div id="tab-chart" class="tab"></div>
         <div id="tab-journals" class="tab hidden"></div>
@@ -54,6 +56,7 @@
             <label>From <input type="date" name="from" value="2026-01-01"></label>
             <label>To <input type="date" name="to" value="2026-10-31"></label>
             <button type="submit">Run</button>
+            <button type="button" class="secondary" data-export="trial-balance">Excel</button>
           </form>
           <div id="tb-out"></div>
         </div>
@@ -63,8 +66,26 @@
             <label>From <input type="date" name="from" value="2026-01-01"></label>
             <label>To <input type="date" name="to" value="2026-10-31"></label>
             <button type="submit">Run</button>
+            <button type="button" class="secondary" data-export="gl-detail">Excel</button>
           </form>
           <div id="gl-out"></div>
+        </div>
+        <div id="tab-pl" class="tab hidden">
+          <form class="inline" id="pl-form">
+            <label>From <input type="date" name="from" value="2026-01-01"></label>
+            <label>To <input type="date" name="to" value="2026-10-31"></label>
+            <button type="submit">Run</button>
+            <button type="button" class="secondary" data-export="profit-and-loss">Excel</button>
+          </form>
+          <div id="pl-out"></div>
+        </div>
+        <div id="tab-bs" class="tab hidden">
+          <form class="inline" id="bs-form">
+            <label>As of <input type="date" name="asOf" value="2026-10-31"></label>
+            <button type="submit">Run</button>
+            <button type="button" class="secondary" data-export="balance-sheet">Excel</button>
+          </form>
+          <div id="bs-out"></div>
         </div>
       </div>
     </section>
