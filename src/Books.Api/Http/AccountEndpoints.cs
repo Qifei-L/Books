@@ -27,6 +27,9 @@ public static class AccountEndpoints
         accounts.MapPatch("/{accountId:guid}", async (Guid orgId, Guid ledgerId, Guid accountId, JsonElement body, PrincipalAccessor principals, AccountService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.UpdateAsync(
                 await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, accountId, ParseUpdate(body), ct)));
+
+        accounts.MapDelete("/{accountId:guid}", async (Guid orgId, Guid ledgerId, Guid accountId, PrincipalAccessor principals, AccountService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.DeleteAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), orgId, ledgerId, accountId, ct)));
     }
 
     /// <summary>PATCH semantics: an omitted field is unchanged; only parent_id may be null (move to the top level).</summary>

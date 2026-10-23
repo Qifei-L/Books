@@ -66,8 +66,8 @@ internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
         b.Property(x => x.Name).HasMaxLength(200);
         b.Property(x => x.Currency).HasMaxLength(3).IsFixedLength();
         b.HasAlternateKey(x => new { x.LedgerId, x.Id });
-        // Rule 16: Code is unique within a ledger; other ledgers may reuse it.
-        b.HasIndex(x => new { x.LedgerId, x.Code }).IsUnique();
+        // Rule 16: Code is unique within a ledger ignoring case; other ledgers may reuse it.
+        // The unique index is on (ledger_id, lower(code)) and is created in SQL by the migration.
         b.HasOne<Ledger>().WithMany()
             .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);

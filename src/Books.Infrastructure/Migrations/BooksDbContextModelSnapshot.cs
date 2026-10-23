@@ -553,10 +553,6 @@ namespace Books.Infrastructure.Migrations
                     b.HasAlternateKey("LedgerId", "Id")
                         .HasName("ak_accounts_ledger_id_id");
 
-                    b.HasIndex("LedgerId", "Code")
-                        .IsUnique()
-                        .HasDatabaseName("ix_accounts_ledger_id_code");
-
                     b.HasIndex("LedgerId", "ParentId")
                         .HasDatabaseName("ix_accounts_ledger_id_parent_id");
 

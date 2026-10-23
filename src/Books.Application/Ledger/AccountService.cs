@@ -80,6 +80,26 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
             return WriteResult.Of(200, after, account.Version);
         }, ct);
 
+    /// <summary>
+    /// Deletes an account that was never used (rule 19). An account with sub-accounts cannot be deleted.
+    /// M1 has no postings yet; M2 must also refuse accounts referenced by any journal line.
+    /// </summary>
+    public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid accountId, CancellationToken ct) =>
+        writes.RunAsync(principal, new WriteRequest("account.delete", orgId, meta), async scope =>
+        {
+            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            var account = await db.Accounts.SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Id == accountId, ct) ?? throw BooksProblem.NotFound();
+            scope.CheckVersion(account.Version);
+            if (await db.Accounts.AnyAsync(a => a.LedgerId == ledgerId && a.ParentId == account.Id, ct))
+            {
+                throw BooksProblem.Conflict("ACCOUNT_HAS_CHILDREN", "Move or delete its sub-accounts first.");
+            }
+            var before = (await LoadAsync(ledgerId, account.Id, ct)).Single();
+            db.Accounts.Remove(account);
+            scope.Audit("account.deleted", "account", account.Id, new { before });
+            return WriteResult.Of(200, new { id = account.Id, deleted = true });
+        }, ct);
+
     private async Task EnsureNotDescendantAsync(Guid accountId, Account newParent, CancellationToken ct)
     {
         var parents = await db.Accounts.AsNoTracking().Where(a => a.LedgerId == newParent.LedgerId)
@@ -93,10 +113,11 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
         }
     }
 
-    /// <summary>Rule 16, checked under the organization lock; the unique index is the final guard.</summary>
+    /// <summary>Rule 16 (case-insensitive), checked under the organization lock; the unique index is the final guard.</summary>
     private async Task EnsureCodeFreeAsync(Guid ledgerId, string code, Guid accountId, CancellationToken ct)
     {
-        if (await db.Accounts.AnyAsync(a => a.LedgerId == ledgerId && a.Code == code && a.Id != accountId, ct))
+        var key = code.ToLowerInvariant();
+        if (await db.Accounts.AnyAsync(a => a.LedgerId == ledgerId && a.Code.ToLower() == key && a.Id != accountId, ct))
         {
             throw BooksProblem.Conflict("ACCOUNT_CODE_TAKEN", $"Code {code} is already used in this ledger.");
         }
