@@ -1,0 +1,274 @@
+# Decisions and open questions
+
+Updated: 2026-10-23  
+Status: Review record. No coding or deployment is approved.
+
+## Confirmed
+
+### Project and delivery
+
+- Build Books as a bookkeeping backend.
+- Start with organizations and access control.
+- Defer Frontend implementation. Plan Frontend user actions together with API business operations.
+- Complete and review the documents before development.
+- Write all documents in plain, direct English.
+
+### Six system-design principles
+
+Confirm Single Source of Truth, Consistency by Design, Traceability, Secure by Default, Explicit over Implicit and Design for Change. See their principle, reason and Books example in [System Design Principles](00-system-design-principles.md#six-confirmed-design-principles).
+
+This selection does not mark the other four items from the same proposal (Correctness First, Clear Boundaries, Simplicity First and Testability) as newly confirmed principles. It does not revoke any previously confirmed business rule, validation requirement or testing obligation. Linked implementation mechanisms retain their own Proposed status.
+
+### Organizations and ledgers
+
+- An organization manages a team.
+- One organization can manage several companies.
+- Each company has one independent ledger in the first release.
+- An organization does not post entries or automatically consolidate its companies.
+
+### Roles and permissions
+
+- Organization administrators manage all ledgers, members and grants in their own organization.
+- An administrator role in one organization gives no rights in another.
+- Ordinary members access only assigned ledgers. Each assignment is read-only or editable.
+- Only administrators invite and manage members or grant and revoke access.
+- Ordinary members cannot delegate access, including when they can edit a ledger.
+- The last administrator must hand over before leaving. Appoint another active member as administrator first.
+- Administrator rights do not bypass accounting validation, history protection or audit.
+
+### Creation and membership
+
+- Registered users with verified identity may create an organization and become its first administrator.
+- One account may join several organizations. Roles and permissions are independent in each.
+- An administrator invites a user. The user must accept before joining.
+- Invitations last seven days, may be revoked, and must be reissued after expiry.
+- When an inviter loses administrator rights, their pending invitations become invalid.
+- Rejoining members and administrators downgraded to members need explicit new grants. Do not restore old rights automatically.
+
+### API and MCP
+
+- Clients share one backend. MCP is another entry point, not a privileged bypass.
+- The backend verifies identity and the relevant organization and ledger scope. Client-supplied IDs do not prove permission.
+- Requests, results and errors follow consistent rules. Money, dates and null values need clear meanings.
+- Search, filters, sorting and pagination follow consistent rules.
+- Retries must not create duplicates. Concurrent changes must not silently overwrite each other. Upgrades must not silently break existing callers.
+
+### COA labels and P&L grouping
+
+- Rename Expense to **Cost & Expense**.
+- Use two top-level P&L groups: **Income (add)** and **Cost & Expense (subtract)**.
+- This is reporting classification, not a change to debit/credit treatment or an instruction to discard signed or contra balances.
+
+### Account tree planning baseline
+
+The five-type account tree in [Chart of Accounts](04-chart-of-accounts.md#account-tree) is accepted with these changes: no Other Income group, FX gains directly under Income, and generic asset names such as Bank Account and Property, Plant & Equipment. System is a function flag, not another type. Current Year Profit is a calculated non-posting report item.
+
+This approval covers the tree, not automatic account generation, new field requirements or maintenance policies. Future/conditional account activation, detailed year-end calculations and the detailed FX line/account mechanisms remain proposals, subject to the later confirmed FX workflow below.
+
+### Account fields
+
+- Account Usage describes a business purpose, such as Receivable or Revenue, not subsystem/caller permission. Save the actual Account selected.
+- Usage is many-to-many: several accounts per Usage and several Usages per account. Prohibit only duplicate account/Usage mappings in the same ledger; Account Code remains ledger-unique.
+- Blank Usage is undeclared, neither universal subsystem suitability nor an automatic ban on manual journals. Common/Account validation and permissions remain independent.
+- Do not add separate Default Usage, Default Account or Link fields/settings. This supersedes the earlier default-usage proposal. Keep Type, System Purpose and required-detail validation separate.
+- Include optional Description and Sort Order.
+- Code is user-entered and editable. A stable Account ID preserves journal identity when Code changes.
+- Code must be unique within the same ledger; different ledgers may use the same Code. Editable Code must still satisfy this rule.
+- Subsystems own their business-purpose mapping and validation; Journal owns common and Account-detail checks. Specific vocabulary and subsystem integration rules remain to be defined, not automatically enabled.
+
+### Initial System Account purposes
+
+- Identify System Accounts by fixed function mapped to account identity, not by name or code.
+- Retained Earnings holds prior-year accumulated results; the selected calculated carryforward policy is defined below.
+- Opening Balance Clearing is temporary during opening-balance setup and must be zero when setup is complete.
+- Rounding Differences is enabled only if automatic rounding adjustments are needed.
+- These purposes are accepted, not an instruction to create all accounts initially or to implement them.
+
+### Suspense, Error and Pending
+
+Call the second category **Error**, replacing the earlier label Suspense Review. Include incomplete data, unusable records and definite import or processing failures in Error review. Unknown outcomes remain **Pending**, not Error. Distinguish valid entries posted to a Suspense Account from invalid or failed records kept unposted for review. This does not authorize posting invalid entries or select a Frontend layout.
+
+### Journal line Item
+
+Add Item (product or service) to journal lines, separate from Account. Item is optional, including for pure adjustment journals. Selecting Item may suggest an Account; the actual Account used is saved on the line. This is not a separate Default Account setting and does not restrict the user to one eligible account. This does not approve the full header/line model, inventory, quantity, costing or FX behavior.
+
+### Journal Party
+
+Add optional PartyId to JournalLine rather than separate CustomerId/SupplierId fields. Receivable/payable lines require Party when the business and Account rules require it; ordinary income/expense lines do not all require Party. Different Journal lines may have different Parties. A Sales customer carries to its receivable line; a Receipt settling that source keeps the corresponding Party and A/R. Party is not the invoice-allocation link.
+
+The [Party requirements](12-party.md) and [technical design](design/party-technical-design.md) are review drafts. Concrete master-data fields, maintenance rights, code policies, historical snapshots and maintenance mechanisms remain proposed unless individually confirmed. This does not approve full Sales or Receipt implementation.
+
+### Journal Qty and requirement composition
+
+Add Qty to JournalLine. The effective requirements are Journal common rules + subsystem requirements + each line's Account requirements. One layer cannot waive another; manual journals still apply common and Account checks. Frontend, API and MCP share the authoritative server validation contract.
+
+Official accepted source changes and their Journal/accounting effects are atomic. Preserve candidate input separately so a failed edit leaves the previous valid source version and posting intact. Typed shapes, rule metadata, lock order and recovery mechanics are proposed in the [Journal posting contract](design/journal-posting-contract.md), not implemented behavior. Unit, Qty signs/precision and specific subsystem or Account policies are not all decided by adding Qty.
+
+### Journal transaction currency
+
+Each journal uses one transaction currency, with the same currency on all lines. No independent line-currency override is allowed. Base-currency conversion amounts are valuations, not mixed transaction currencies.
+
+Header Currency and line transaction/base amounts are proposed field placement. One journal shares one exchange rate. Manual entry is allowed; source is backend information and manually entered rates are labelled Manual. The ledger policy below selects supported precision, rate direction and rounding; concrete currency setup and account eligibility remain explicit configuration/design. Cross-currency transfers require a separate future workflow. No tax or FX implementation is approved.
+
+### Post validation and Error
+
+Validate date, accounts, currency, amounts and debit/credit balance before posting. All must pass. Definite validation failures retain the draft and specific errors in Error review, not a forced Suspense Account posting. They have no balance/report effect or partial entries. Correct and revalidate before resubmitting.
+
+Unknown outcomes such as a lost response require reconciliation before retrying. Current ledger permissions apply to drafts and error details. Detailed posting eligibility and calculation policies remain subject to their separate status.
+
+### Save and subsystem posting
+
+Normal Save in a future posting-capable business subsystem preserves the source document, generates journal lines, validates and attempts posting in one user action. Show Saved & Posted only on confirmed success. Save Draft is an optional separate action without posting. Definite failure preserves input in Error; unknown outcomes remain Pending. A failed edit preserves the prior valid posting.
+
+Subsystem Posting Contract is the proposed name for the shared internal integration boundary. It does not require separate services or HTTP, approve a Sales module, or bypass current permissions, Close, validation, audit and duplicate-prevention rules. One user action does not remove durable input preservation or atomic accounting changes.
+
+### Posted journal changes and Close
+
+- Posted status does not itself prohibit editing or deletion.
+- Authorized users may change amounts, accounts or dates, or delete posted journals, while the applicable scope is open.
+- People control Close or leaving the scope open; it is not automatic. Close blocks edits and deletion. Authorized people control reopening; it is never automatic.
+- The cutoff is evaluated against accounting date/time, not record creation time. Both the old and new accounting dates must be editable when moving a journal date.
+- Accounting dates are now DateOnly, with ledger timezone used for defaults and UTC audit timestamps. Close may use any selected date; monthly fiscal periods do not force month-only closing.
+- Successful edits replace the prior accounting effect after validation. A failed edit retains the valid posted version and sends the attempted change to Error review without changing balances.
+- Successful deletion removes the accounting effect and retains an audit record of actor, time and changes.
+- Organization administrators perform Close within their organization. Close uses an inclusive accounting cutoff; new posting, edits and deletion at or before it are blocked. Later accounting dates/times remain open. Reopening permissions remain open. Reversal may be optional; it is not the only allowed correction method.
+
+### Journal numbering
+
+The system generates a unique Journal No. Reference is entered by the user and may repeat. Number format, scope and allocation timing remain design details. No attachment policy or new Document/container model is approved by this decision.
+
+### Attachment storage portability
+
+Files and their journal links must be preserved when changing the attachment storage container. This requirement is confirmed. It does not introduce a new journal Document data model.
+
+Document Provider, stable Attachment IDs, location mappings, copy/checksum/read verification, version tracking, backups and rollback are proposed means of meeting the requirement. No storage provider, credentials, sharing expansion, migration or deletion is approved. Attachments are optional: saving and posting do not require an upload. Attachment counts and retention policy remain open.
+
+### Human-configured taxes
+
+People choose the tax settings. The system validates and processes those settings rather than selecting taxes on its own. The number of taxes per line, calculation rules and accounting versus reporting-only treatment are not yet settled; no particular tax implementation is approved.
+
+### Reports
+
+Confirm four reports: Trial Balance (TB), General Ledger Detail, Balance Sheet and Profit & Loss. TB replaces a separate GL Summary. TB shows account Code/Name, opening debit/credit balances, period debits/credits and closing debit/credit balances, with full-ledger totals and a balance check. Accounts drill down to GL Detail.
+
+GL Detail shows accounting date, Journal No., Reference, Description, debit, credit and running balance, with opening balance and period totals. Balance Sheet uses an As of Date and the Assets / Liabilities / Equity layout in [Reports](06-reports.md), with Assets = Liabilities + Equity. Current Year Profit / Loss is calculated and must not duplicate Retained Earnings. P&L uses a date range and Income minus Cost & Expense. Totals use base currency and the currently effective posted accounting source.
+
+This confirms the report discussion, not all earlier technical drafts. Year-end now uses the selected ledger policy; export choices and drilldown implementation remain proposals or open decisions. Posted Suspense affects totals; failed Error attempts do not. Failed edits retain the prior valid posting. Pending outcomes require reconciliation.
+
+### Technology direction
+
+Use C#, ASP.NET Core, EF Core and PostgreSQL. API and MCP come first. Do not add ABP in phase one. A modular monolith is the proposed application structure, not an instruction to implement it.
+
+This replaces the earlier Go proposal. It does not select exact package versions, an identity provider, hosting or production settings.
+
+## Proposed, not approved
+
+The accounting chapters now contain a complete starting proposal. Only the policies explicitly listed under Confirmed above are approved; other proposals are not approved merely because they appear in a complete draft.
+
+The earlier Default Accounts/default-usage concepts are superseded by Account Usage; no separate default configuration is adopted. Current Year Profit's non-posting place in the tree is accepted; calculation and closing now follow the selected ledger policy below. The posted-account versus unposted-review distinction is accepted. A shared or separate page layout remains proposed. Suspense, Error and Pending remain distinct categories, not interchangeable accounting balances. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. FX and AR/AP/Inventory placeholders are accepted in the planning tree. The later FX workflow decision confirms only its stated behavior; automatic activation and full AR/AP/Inventory modules are not approved. A tax-control mapping remains a further proposal. No account or mapping has been created.
+
+The detailed technical contract proposes .NET/EF Core/Npgsql version families, Keycloak evaluation, authenticated invitation inboxes, transaction and lock rules, API fields, MCP delegation and development stages. Exact implementation details remain under review.
+
+ASP.NET Core Identity is not, by itself, a complete OAuth/OIDC authorization server. Moving to C# does not authorize replacing the external identity-provider plan with homemade authentication.
+
+No tests have been run. No production service, database, account, credential, invitation or permission has been created by this documentation work.
+
+## Short business review list
+
+The recommended defaults are proposals. Answer by topic; do not repeat the confirmed decisions above.
+
+| Topic | What needs a decision |
+| --- | --- |
+| 1. Ledger setup | Select each ledger's actual base currency, fiscal start month and timezone during setup. System precision, monthly periods, FX and calculated carryforward now have a selected design baseline. |
+| 2. Accounts | The tree is accepted. Code format and comparison rules; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and concrete business-purpose mappings. |
+| 3. Posting and corrections | Opening balances, who can post and who can reopen. The confirmed administrator Close cutoff and open-journal correction rules do not need reconfirmation. |
+| 4. Reports | The four reports and core layout are confirmed; calculated carryforward is selected. Export needs and optional presentation choices remain open. |
+
+Read the corresponding chapter for the proposed behavior and a concrete example. Once a choice is accepted, update that chapter and this record together.
+
+## Current review order
+
+Planning → Requirements & Workflow → Technical Design → Development & Testing. Current priority is to refine the Journal core contract before connecting accounting subsystems. Keep the completed organization, member, company/ledger and access foundation reconciliation and task list available for later implementation review. Keep broader accounting technical expansion deferred. Existing technical details remain proposals; this does not approve implementation or change the confirmed business rules and C# direction.
+
+## Technical Design Tasks
+
+For the current foundation review and later accounting technical design, engineering owns schema and constraints, transactions, API/MCP contracts, identity/session checks, retry handling, concurrency and technical test design. The [detailed phase-one contract](design/phase-1-technical-contract.md) already proposes these mechanisms. Review and validate them; do not ask the owner to supply the design.
+
+The identity provider, exact dependency combination and interoperability remain unverified technical proposals. Engineering should compare options and recommend one. Ask the owner only about material costs, login experience, recovery workflow or other business trade-offs.
+
+## Business and release review
+
+Before production, agree on budget, hosting/data-location constraints, operators, acceptable recovery targets and the acceptance decision-maker. Engineering proposes the hosting configuration, test levels and release gates against those needs.
+
+A separate instruction is still required before coding, and separate authorization before deployment. Moving a question to engineering does not approve a provider, service purchase, credential setup or implementation.
+
+Security suspension and recovery of the last usable administrator need a reviewed recovery process before production. The system must not prevent urgent suspension or silently promote someone else.
+
+## Change record
+
+All decisions above were recorded on 2026-10-23.
+
+1. Created a requirements-only review branch.
+2. Prioritized organizations and built the document outline.
+3. Confirmed organization roles, company/ledger structure and API/MCP principles.
+4. Confirmed organization creation, membership, invitation and reauthorization policies.
+5. Added technical proposals and acceptance scenarios.
+6. Replaced the Go proposal with the C# direction.
+7. Completed the remaining review drafts and rewrote the full set in plain English.
+8. Separated engineering-owned design tasks from owner business decisions. Existing technical proposals remain subject to review and validation.
+9. Standardized the term Frontend and added business workflow diagrams. Frontend implementation remains deferred; business interaction planning is in scope. Proposed accounting flows are not approved by their inclusion.
+
+10. Confirmed Cost & Expense naming, two P&L groups and three conditional System Account purposes. The earlier default-template proposal was later superseded; further System Account candidates remain proposals.
+11. Included incomplete, unusable and errored records in the review category, later renamed Error. Added proposed safe review and resolution handling without approving invalid posting.
+
+12. Accepted the revised account tree with no Other Income group and generic asset names. Conditional activation and operational rules remain separate decisions.
+
+13. Initially added Default Usage as subsystem + purpose (later superseded by Account Usage), optional Description, Sort Order and user-editable Code. Confirmed Code uniqueness within each ledger; the same Code may exist in different ledgers. The earlier fixed-Code-after-use proposal is superseded.
+
+14. Added Edit, Deactivate and Delete Account workflow drafts. Requesting these diagrams does not approve their proposed operation restrictions or authorize real account changes.
+
+15. Renamed Suspense Review to Error; retained posted Suspense Account and separate Pending outcomes. This changes labels, not accounting effects or permissions.
+
+16. Confirmed human-configured taxes, administrator Close, one shared journal exchange rate with backend source and Manual labelling, and optional attachments. Close now uses an inclusive accounting cutoff; reopening rights and detailed tax behavior remain open.
+
+17. Confirmed TB (no separate GL Summary), GL Detail, Balance Sheet and P&L with core fields, date scope, drilldown navigation and base-currency totals. Exact drilldown mechanisms and year-end calculations remain to be designed and validated.
+
+18. Resumed a bounded foundation technical-design reconciliation and development task list. No receipt/accounting module, implementation, credential setup, merge or deployment is authorized.
+
+19. Confirmed one-click Save with a posting attempt and optional Save Draft. Kept Error, Pending and failed-edit protection; the proposed Subsystem Posting Contract does not add an accounting subsystem to phase one.
+
+20. Consolidated the [Journal core contract](05-journals-posting.md#journal-core-contract): one posting boundary, operation outcomes, source traceability proposals and report reconciliation. Corrected an older check that rejected any already-posted journal; open posted journals use the confirmed validated replacement path. Source lifecycle policy remains open, and no subsystem implementation is approved.
+
+21. Added JournalLine Qty, combined common/subsystem/Account requirements and the atomic official source-plus-Journal boundary. Added a technical proposal and unexecuted acceptance cases; no inventory, Sales, code or production scope was added.
+22. Organized the reading path into system principles, business requirements, technical details and acceptance/decisions. Status labels preserve confirmed rules versus proposed mechanisms.
+
+23. Replaced Default Usage with Account Usage only; the initial subsystem + purpose wording was later refined to business purpose in step 25. One purpose may have several eligible accounts; persist the actual selection. Do not introduce Default Account or Link settings. Required Details remains separate, and the earlier Item account suggestion remains an optional suggestion rather than an exclusive default.
+
+24. Confirmed the six selected high-level system-design principles and their purpose. Kept official atomic effects distinct from durable candidate/error storage and external uploads; retained open-before-Close edits and controlled contract evolution.
+
+25. Confirmed Account Usage as a many-to-many business-purpose association. Only the same account/Usage pair is unique within a ledger. Blank is undeclared, not all-purpose and not a manual-Journal prohibition. This supersedes the earlier subsystem/caller eligibility wording without changing permissions or composed validation.
+
+26. Confirmed optional JournalLine PartyId and its rule-based source relationship. Party requirements and technical design remain review drafts; no module implementation is authorized.
+
+27. Expanded Party into a complete functional and technical review draft. Field policies, maintenance rights, code uniqueness, snapshots, inactive-reference behavior and deletion mechanisms remain proposals. No publication or implementation authority follows from the draft itself.
+
+Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
+
+[Documentation index](README.md)
+
+
+## FX workflow decision: 2026-10-23
+
+**Confirmed:** [Human-initiated monetary FX revaluation](15-foreign-currency.md), preview and confirmation, base-only system adjustments with unchanged original principal, settlement using carrying values including prior revaluation, incremental/no-duplicate reruns, no automatic next-month reversal, Close checks and identification of affected downstream results after historical edits.
+
+**Proposed technical design:** explicit system Journal kind, one currency per generated Journal, as-of/versioned snapshots, serialization and idempotency receipts, partial-settlement allocation, batch outcomes and stale-result reporting/rebuild mechanics. These still require implementation and tests.
+
+**Historical scope of this FX decision:** it did not select precision/rounding, fiscal-year/year-end or date/timezone details; the later delegated ledger policy below now selects those. Exceptional base-currency migration and reopen authority remain open. Existing independent confirmations remain unchanged. No code, merge or deployment is authorized.
+
+## Ledger accounting baseline and one-click Close: 2026-10-23
+
+**Confirmed:** administrator-initiated one-click Close automatically performs required FX revaluation and advances the per-ledger cutoff only when the complete operation succeeds. Missing rates require correction, not guessing or a separate compulsory revaluation click. This supersedes the earlier separate preview-confirm and per-currency partial-commit Close proposals.
+
+**Delegated design selections:** [Ledger accounting policy](16-ledger-accounting-policy.md) defines explicit base currency immutable by ordinary edit after posting; monthly periods/fiscal start month; DateOnly cutoff and ledger timezone defaults; currency minor units with MidpointAwayFromZero; exact scaled-integer/rational intermediate calculations with checked decimal amount/rate storage; no hidden imbalance tolerance; calculated year-end carryforward without physical clearing; validated opening imports; and one FX Gain / FX Loss pair rather than realized/unrealized split. These are selected implementation specifications, not verified code.
+
+**Still open:** reopening authority and controlled rebuild workflow, exceptional base-currency migration, specialized settlement/allocation and tax policies. No account creation, migration, merge or deployment occurs through this documentation update.
