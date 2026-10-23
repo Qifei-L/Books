@@ -1,8 +1,8 @@
 # Phase 1: organization access and API contract
 
-Current review: Planning and business workflows first. This technical document is retained as a draft. Further technical expansion is paused; no implementation is authorized.
+Current review: Reconcile the confirmed organization foundation requirements with this existing technical draft and prepare the development task list. Accounting technical expansion remains deferred. No implementation is authorized.
 
-Version: 0.4 | Date: 2026-10-23 | Status: proposed technical details, not implemented
+Version: 0.5 | Date: 2026-10-23 | Status: proposed technical details, not implemented
 
 Based on branch `docs/requirements-review`, source commit `f4f2a2dc93ef351402dbee6e04fadd0b24b88c83`. See [Draft PR #1](https://github.com/Qifei-L/Books/pull/1) and the [permissions overview](organizations-permissions.md).
 
@@ -12,7 +12,7 @@ Based on branch `docs/requirements-review`, source commit `f4f2a2dc93ef351402dbe
 
 **Proposed:** a modular monolith, the specific versions, identity provider, fields, paths, limits and transaction design in this document. HTTP and MCP share application services, authorization, transactions and data access. Do not introduce microservices, Redis, a message queue, a separate permission engine or a custom OAuth server for this phase.
 
-**Technical Design Tasks (later review):** exact dependency versions, provider compatibility, accounting engine design and deployment mechanisms. Engineering owns these proposals and validation.
+**Technical Design Tasks (foundation review now; accounting later):** exact dependency versions, provider compatibility, accounting engine design and deployment mechanisms. Engineering owns these proposals and validation.
 
 **Business and operating decisions:** accounting settings, operator responsibilities, costs, data-location constraints and recovery needs. Engineering recommends options rather than asking the owner to design the system.
 
@@ -38,6 +38,31 @@ Confirmed rules:
 - All entry points, including MCP, use the same identity, ownership, permission and business checks.
 
 Base currency, financial year, accounting time zone and engine are not decided. Phase-1 ledgers contain identity and display fields only. Return `accounting_setup_status=not_configured`. These are access-control foundation records, not ledgers ready for posting. Do not silently choose USD, a calendar year or UTC as accounting defaults. UTC system timestamps do not decide the accounting time zone.
+
+### Foundation reconciliation and task ownership
+
+This is a documentation readiness check, not a claim that the design has passed implementation tests. The existing model and endpoints cover the confirmed foundation scope. Do not add receipt posting, accounts, journals, reports or Frontend implementation to these tasks.
+
+| Confirmed need | Existing design | Engineering task and acceptance evidence |
+| --- | --- | --- |
+| Explicit organization creation by a verified user; creator becomes administrator | Users/identities, organizations and memberships; POST /organizations | Keep sign-in separate from creation. Finalize input/response schemas. Test atomic creation and duplicate retries (ORG-10, ORG-23–27). |
+| Several companies in an organization; one ledger per company | Companies/ledgers, composite and deferred constraints; company creation endpoint | Review generated migration SQL and prove both-or-neither creation, exactly one ledger and tenant isolation (ORG-05; minimum tests 1 and 4). No accounting defaults. |
+| Administrator access versus member read/edit grants | Memberships, ledger_grants, common Principal and service checks | Complete the operation-permission matrix and test current access through HTTP and MCP, including guessed IDs and removal (ORG-01–04, ORG-08, ORG-22). |
+| Seven-day invitation with explicit acceptance, revocation and inviter invalidation | Invitations, invitation_grants and authenticated inbox proposal | Finalize identity matching and error schemas. Test expiry, accept/revoke races and permanent invalidation after inviter demotion (ORG-11–16). Do not claim email delivery. |
+| Fresh grants on rejoin/demotion; last-administrator handover | Membership generation, full access replacement and organization lock | Review transaction order and audit coverage. Test simultaneous departures and stale grants (ORG-06–07, ORG-17–19). Emergency suspension must remain possible. |
+| Shared backend rules; no duplicates or silent overwrite | Idempotency, versions, audit and limited MCP delegation | Finish schemas and replay/error cases. Validate provider/client compatibility after coding is separately approved; no shared administrator credential (ORG-19–22; API-01–06). |
+
+Case IDs refer to [Testing and acceptance](../08-testing-acceptance.md). All remain **Not run**.
+
+Before asking to start development, engineering should finish these bounded design tasks:
+
+1. Cross-check every proposed endpoint and MCP tool against the permission matrix, required context and the same error/version/retry rules. Keep identity-establishing actions in the direct-client flow described below.
+2. Review the database constraints and transaction order together. Record how company/ledger atomicity, last-administrator protection, grant revocation and audit fail safely.
+3. Turn M0–M5 below into small implementation tasks with the listed evidence. Each task inherits the foundation-only boundary; task preparation is not permission to execute it.
+4. Prepare an identity-provider comparison and a compatibility test plan. Provider choice, exact package versions and interoperability are still unverified. Do not create accounts, credentials or services while comparing.
+5. Identify only genuine owner trade-offs: identity-service cost, invitation notification experience, and recovery/operating responsibilities. Engineering owns schemas, locks, API fields and test fixtures. Do not ask the owner to redesign them.
+
+Readiness is **draft ready for technical review**, not ready to deploy. The inbox-only invitation delivery, emergency recovery and provider-disable synchronization remain proposed design points to settle before launch. Confirmed business rules are not reopened.
 
 ## 3. Proposed stack and module boundaries
 

@@ -161,11 +161,11 @@ Read the corresponding chapter for the proposed behavior and a concrete example.
 
 ## Current review order
 
-Planning → Requirements & Workflow → Technical Design → Development & Testing. Focus now on planning and business flows. Keep existing technical documents as drafts and pause further technical detail. This does not revoke confirmed business rules or the C# direction.
+Planning → Requirements & Workflow → Technical Design → Development & Testing. Continue with a bounded reconciliation of the organization, member, company/ledger and access foundation design, plus its development task list. Keep broader accounting technical expansion deferred. Existing technical details remain proposals; this does not approve implementation or change the confirmed business rules and C# direction.
 
 ## Technical Design Tasks
 
-For the later technical-design review, engineering owns schema and constraints, transactions, API/MCP contracts, identity/session checks, retry handling, concurrency and technical test design. The [detailed phase-one contract](design/phase-1-technical-contract.md) already proposes these mechanisms. Review and validate them; do not ask the owner to supply the design.
+For the current foundation review and later accounting technical design, engineering owns schema and constraints, transactions, API/MCP contracts, identity/session checks, retry handling, concurrency and technical test design. The [detailed phase-one contract](design/phase-1-technical-contract.md) already proposes these mechanisms. Review and validate them; do not ask the owner to supply the design.
 
 The identity provider, exact dependency combination and interoperability remain unverified technical proposals. Engineering should compare options and recommend one. Ask the owner only about material costs, login experience, recovery workflow or other business trade-offs.
 
@@ -205,6 +205,8 @@ All decisions above were recorded on 2026-10-23.
 16. Confirmed human-configured taxes, administrator Close, one shared journal exchange rate with backend source and Manual labelling, and optional attachments. Close now uses an inclusive accounting cutoff; reopening rights and detailed tax behavior remain open.
 
 17. Confirmed TB (no separate GL Summary), GL Detail, Balance Sheet and P&L with core fields, date scope, drilldown navigation and base-currency totals. Exact drilldown mechanisms and year-end calculations remain to be designed and validated.
+
+18. Resumed a bounded foundation technical-design reconciliation and development task list. No receipt/accounting module, implementation, credential setup, merge or deployment is authorized.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

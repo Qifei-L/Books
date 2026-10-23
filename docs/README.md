@@ -8,7 +8,7 @@ Read [Project scope](01-project-scope.md), the [business workflows](11-workflows
 
 Planning → Requirements & Workflow → Technical Design → Development & Testing.
 
-The current review focuses on planning and business flows, including Frontend user actions linked to API business operations. Frontend implementation remains deferred. Existing technical documents remain drafts; further technical detail is paused. They are not permission to implement.
+The business requirements and workflows remain the basis for review. Next, reconcile the existing organization foundation design and prepare its development tasks. See the [foundation reconciliation](design/phase-1-technical-contract.md#foundation-reconciliation-and-task-ownership). Frontend implementation and broader accounting technical expansion remain deferred. Technical drafts are not permission to implement.
 
 ## Business requirements
 

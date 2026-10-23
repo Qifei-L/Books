@@ -1,6 +1,6 @@
 # Organizations and permissions
 
-Current review: Planning and business workflows first. This technical document is retained as a draft. Further technical expansion is paused; no implementation is authorized.
+Current review: Reconcile the organization foundation design and development task list. This remains a technical draft; no implementation is authorized. See the [foundation reconciliation](phase-1-technical-contract.md#foundation-reconciliation-and-task-ownership).
 
 Version: 0.3 | Date: 2026-10-23 | Status: design proposal, not implemented
 
