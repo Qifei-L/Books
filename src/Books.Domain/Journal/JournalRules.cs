@@ -2,7 +2,8 @@ namespace Books.Domain.Journals;
 
 /// <summary>What a user or AI submits for a journal, before any accounting effect.</summary>
 /// <param name="Amount">Signed, in base currency: debit positive, credit negative.</param>
-public sealed record DraftLine(Guid AccountId, decimal Amount, string? Description = null, Guid? LineId = null, Guid? PartyId = null);
+public sealed record DraftLine(
+    Guid AccountId, decimal Amount, string? Description = null, Guid? LineId = null, Guid? PartyId = null, Guid? ItemId = null, decimal? Quantity = null);
 
 public sealed record JournalDraft(DateOnly AccountingDate, IReadOnlyList<DraftLine> Lines, string? Reference = null, string? Description = null);
 
@@ -19,7 +20,8 @@ public sealed record JournalContext(
     IReadOnlyDictionary<Guid, AccountFacts> Accounts,
     DateOnly? PreviousDate = null,
     IReadOnlyDictionary<Guid, bool>? Parties = null,
-    bool FromDocument = false);
+    bool FromDocument = false,
+    IReadOnlyDictionary<Guid, bool>? Items = null);
 
 /// <summary>A definite validation failure. <see cref="Line"/> is 1-based when the issue belongs to one line.</summary>
 public sealed record JournalIssue(string Code, string Message, int? Line = null);
@@ -45,6 +47,7 @@ public static class JournalValidator
         new BalanceRule(),
         new AccountRule(),
         new PartyRule(),
+        new ItemRule(),
         new CloseDateRule(),
     ];
 
@@ -154,6 +157,33 @@ public sealed class PartyRule : IJournalRule
             else if (!active)
             {
                 yield return new JournalIssue("INACTIVE_PARTY", "The party is inactive.", i + 1);
+            }
+        }
+    }
+}
+
+/// <summary>A named item must be an active item of this ledger; a quantity has at most 4 decimals (rule 23).</summary>
+public sealed class ItemRule : IJournalRule
+{
+    public IEnumerable<JournalIssue> Check(JournalDraft draft, JournalContext context)
+    {
+        for (var i = 0; i < draft.Lines.Count; i++)
+        {
+            var line = draft.Lines[i];
+            if (line.ItemId is { } item)
+            {
+                if (context.Items is null || !context.Items.TryGetValue(item, out var active))
+                {
+                    yield return new JournalIssue("UNKNOWN_ITEM", "The item is not in this ledger.", i + 1);
+                }
+                else if (!active)
+                {
+                    yield return new JournalIssue("INACTIVE_ITEM", "The item is inactive.", i + 1);
+                }
+            }
+            if (line.Quantity is { } qty && (decimal.Round(qty, 4) != qty || Math.Abs(qty) >= 10_000_000_000_000_000m))
+            {
+                yield return new JournalIssue("BAD_QUANTITY", "Quantity allows up to 4 decimals.", i + 1);
             }
         }
     }

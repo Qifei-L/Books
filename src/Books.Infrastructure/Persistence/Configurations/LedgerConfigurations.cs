@@ -189,3 +189,43 @@ internal sealed class ExchangeRateConfiguration : IEntityTypeConfiguration<Excha
         b.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrgId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class ItemCategoryConfiguration : IEntityTypeConfiguration<ItemCategory>
+{
+    public void Configure(EntityTypeBuilder<ItemCategory> b)
+    {
+        b.ToTable("item_categories");
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Name).HasMaxLength(200);
+        b.HasAlternateKey(x => new { x.LedgerId, x.Id });
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
+{
+    public void Configure(EntityTypeBuilder<Item> b)
+    {
+        b.ToTable("items");
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Name).HasMaxLength(200);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.Property(x => x.Unit).HasMaxLength(20);
+        b.HasAlternateKey(x => new { x.LedgerId, x.Id });
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        // Composite keys keep category, default account and default tax code in the same ledger.
+        b.HasOne<ItemCategory>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.CategoryId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.DefaultAccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<TaxCode>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.DefaultTaxCodeId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}

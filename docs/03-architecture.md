@@ -81,6 +81,22 @@ transfer:          Dr to-bank · Cr from-bank (same currency in v1)
 - `allocations(payment_id, invoice_id, amount)`: an invoice's open balance is derived from this table.
 - Tax is a line attribute on documents (`tax_code_id`, `tax_amount`). On the journal, tax becomes separate lines summed by tax account, with `source_line_id` pointing back to the document line.
 
+## Items and the path to inventory
+
+v1 keeps a simple Item list per ledger: `item_categories(id, ledger_id, name)` and
+`items(id, ledger_id, category_id, name, description, unit, default_account_id, default_tax_code_id, active)`.
+A document or journal line may name an item and a quantity; the item only **suggests** the account and tax
+code, and the line keeps what the person chose (rule 23). Nothing is valued or counted in stock yet.
+
+When inventory arrives (after v1), these same rows become inventory items rather than a new list:
+
+1. Add `is_stock` and an inventory asset account to `items`; categories become inventory categories.
+2. Add `stock_movements(item_id, line_id, quantity, unit_cost, ...)` written by purchase and sales postings
+   for stock items, in the same transaction as the journal.
+3. Choose a costing method (owner decision, for example weighted average) and post cost of sales from the
+   movements.
+4. Existing lines that already carry `item_id` and `quantity` become the opening history, so no data moves.
+
 ## Bank reconciliation
 
 ```

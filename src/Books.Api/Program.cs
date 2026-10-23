@@ -62,6 +62,7 @@ api.MapAccountEndpoints();
 api.MapPartyEndpoints();
 api.MapTaxCodeEndpoints();
 api.MapBankEndpoints();
+api.MapItemEndpoints();
 api.MapJournalEndpoints();
 api.MapReportEndpoints();
 

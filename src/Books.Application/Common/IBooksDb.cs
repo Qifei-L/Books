@@ -27,6 +27,8 @@ public interface IBooksDb
     DbSet<TaxCode> TaxCodes { get; }
     DbSet<BankAccount> BankAccounts { get; }
     DbSet<ExchangeRate> ExchangeRates { get; }
+    DbSet<ItemCategory> ItemCategories { get; }
+    DbSet<Item> Items { get; }
     DbSet<Journal> Journals { get; }
     DbSet<JournalRevision> JournalRevisions { get; }
     DbSet<JournalLine> JournalLines { get; }

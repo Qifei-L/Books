@@ -125,7 +125,7 @@ public sealed class JournalLine
 {
     private JournalLine() { }
 
-    public JournalLine(JournalRevision revision, int lineNo, Guid lineId, Guid accountId, string? description, decimal amount, Guid? partyId = null)
+    public JournalLine(JournalRevision revision, int lineNo, Guid lineId, Guid accountId, string? description, decimal amount, Guid? partyId = null, Guid? itemId = null, decimal? quantity = null)
     {
         RevisionId = revision.Id;
         OrgId = revision.OrgId;
@@ -136,6 +136,8 @@ public sealed class JournalLine
         Description = description;
         Amount = amount;
         PartyId = partyId;
+        ItemId = itemId;
+        Quantity = quantity;
     }
 
     public Guid RevisionId { get; private set; }
@@ -147,6 +149,11 @@ public sealed class JournalLine
 
     /// <summary>Optional counterparty; required on control accounts (rule 18).</summary>
     public Guid? PartyId { get; private set; }
+
+    /// <summary>Optional item; it only suggested the account, which is what counts (rule 23).</summary>
+    public Guid? ItemId { get; private set; }
+
+    public decimal? Quantity { get; private set; }
 
     public string? Description { get; private set; }
     public decimal Amount { get; private set; }
