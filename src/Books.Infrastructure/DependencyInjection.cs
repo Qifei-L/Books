@@ -1,5 +1,6 @@
 using Books.Application.Access;
 using Books.Application.Common;
+using Books.Application.Ledgers;
 using Books.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<WriteRunner>();
         services.AddScoped<ReadRunner>();
         services.AddScoped<OrganizationService>();
+        services.AddScoped<CompanyService>();
         return services;
     }
 

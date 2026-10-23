@@ -81,3 +81,6 @@ public static class Names
 
 /// <summary>A business rule violation in the domain; the API maps it to 400 INVALID_ARGUMENT.</summary>
 public sealed class DomainException(string message) : Exception(message);
+
+/// <summary>Access to one ledger. Edit includes read; neither includes granting access (rule 3).</summary>
+public enum LedgerAccess { Read = 1, Edit = 2 }

@@ -1,5 +1,6 @@
 using Books.Application.Common;
 using Books.Domain.Access;
+using Books.Domain.Ledgers;
 using Microsoft.EntityFrameworkCore;
 
 namespace Books.Infrastructure.Persistence;
@@ -12,6 +13,8 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+    public DbSet<Company> Companies => Set<Company>();
+    public DbSet<Ledger> Ledgers => Set<Ledger>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
