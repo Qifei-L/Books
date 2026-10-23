@@ -10,6 +10,9 @@ public sealed record AccountDto(
     Guid Id, Guid LedgerId, Guid? ParentId, string Code, string Name, string Type, bool IsControl, bool IsBank,
     string? Currency, bool Active, bool IsLeaf, bool Postable, string Version);
 
+/// <param name="ParentChanges">True when parent_id was sent; ParentId null then means the top level.</param>
+public sealed record UpdateAccount(string? Code, string? Name, AccountType? Type, bool? Active, bool ParentChanges, Guid? ParentId);
+
 public sealed record CreateAccount(string Code, string Name, AccountType Type, Guid? ParentId, bool IsControl, bool IsBank, string? Currency);
 
 /// <summary>Chart of accounts. Reading needs ledger read access; changes need edit access.</summary>
@@ -47,6 +50,48 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
             await db.SaveChangesAsync(ct);
             return WriteResult.Of(201, (await LoadAsync(ledgerId, account.Id, ct)).Single(), account.Version);
         }, ct);
+
+    /// <summary>
+    /// Partial update: omitted fields stay unchanged. The Id never changes, so journals keep pointing at the
+    /// same account when its code changes (rule 16). A new parent may not be the account or one of its descendants.
+    /// </summary>
+    public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid accountId, UpdateAccount command, CancellationToken ct) =>
+        writes.RunAsync(principal, new WriteRequest("account.update", orgId, meta), async scope =>
+        {
+            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            var account = await db.Accounts.SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Id == accountId, ct) ?? throw BooksProblem.NotFound();
+            scope.CheckVersion(account.Version);
+            var before = (await LoadAsync(ledgerId, account.Id, ct)).Single();
+
+            Account? parent = null;
+            if (command.ParentChanges && command.ParentId is { } parentId)
+            {
+                parent = await db.Accounts.SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Id == parentId, ct)
+                    ?? throw BooksProblem.Invalid("parent_id must be an account in the same ledger.");
+                await EnsureNotDescendantAsync(account.Id, parent, ct);
+            }
+            var hasChildren = await db.Accounts.AnyAsync(a => a.LedgerId == ledgerId && a.ParentId == account.Id, ct);
+            account.Update(command.Code, command.Name, command.Type, command.Active, hasChildren, command.ParentChanges, parent);
+            await EnsureCodeFreeAsync(ledgerId, account.Code, account.Id, ct);
+
+            await db.SaveChangesAsync(ct);
+            var after = (await LoadAsync(ledgerId, account.Id, ct)).Single();
+            scope.Audit("account.updated", "account", account.Id, new { before, after });
+            return WriteResult.Of(200, after, account.Version);
+        }, ct);
+
+    private async Task EnsureNotDescendantAsync(Guid accountId, Account newParent, CancellationToken ct)
+    {
+        var parents = await db.Accounts.AsNoTracking().Where(a => a.LedgerId == newParent.LedgerId)
+            .ToDictionaryAsync(a => a.Id, a => a.ParentId, ct);
+        for (Guid? current = newParent.Id; current is { } id; current = parents.GetValueOrDefault(id))
+        {
+            if (id == accountId)
+            {
+                throw BooksProblem.Invalid("An account cannot be moved under itself or one of its sub-accounts.");
+            }
+        }
+    }
 
     /// <summary>Rule 16, checked under the organization lock; the unique index is the final guard.</summary>
     private async Task EnsureCodeFreeAsync(Guid ledgerId, string code, Guid accountId, CancellationToken ct)
