@@ -89,3 +89,41 @@ internal sealed class IdempotencyRecordConfiguration : IEntityTypeConfiguration<
         b.HasIndex(x => x.ExpiresAt);
     }
 }
+
+internal sealed class InvitationConfiguration : IEntityTypeConfiguration<Invitation>
+{
+    public void Configure(EntityTypeBuilder<Invitation> b)
+    {
+        b.ToTable("invitations", t =>
+        {
+            t.HasCheckConstraint("ck_invitations_status", "status IN ('pending', 'accepted', 'revoked', 'expired', 'invalidated')");
+            t.HasCheckConstraint("ck_invitations_role", "proposed_role IN ('admin', 'member')");
+        });
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.TargetEmailKey).HasMaxLength(320);
+        b.HasAlternateKey(x => new { x.OrgId, x.Id });
+        // At most one pending invitation per organization and target; elapsed ones are marked expired first.
+        b.HasIndex(x => new { x.OrgId, x.TargetEmailKey }).IsUnique().HasFilter("status = 'pending'");
+        b.HasIndex(x => new { x.TargetEmailKey, x.Status, x.ExpiresAt });
+        b.HasIndex(x => new { x.OrgId, x.InviterMembershipId, x.Status });
+        b.HasOne<Membership>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.InviterMembershipId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.AcceptedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class InvitationGrantConfiguration : IEntityTypeConfiguration<InvitationGrant>
+{
+    public void Configure(EntityTypeBuilder<InvitationGrant> b)
+    {
+        b.ToTable("invitation_grants", t => t.HasCheckConstraint("ck_invitation_grants_access", "access IN ('read', 'edit')"));
+        b.HasKey(x => new { x.InvitationId, x.LedgerId });
+        b.HasOne<Invitation>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.InvitationId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Books.Domain.Ledgers.Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}

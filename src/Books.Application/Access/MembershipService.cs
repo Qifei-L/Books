@@ -34,19 +34,7 @@ public sealed class MembershipService(IBooksDb db, WriteRunner writes, ReadRunne
             scope.RequireAdmin();
             var target = await FindActiveAsync(orgId, membershipId, ct);
             scope.CheckVersion(target.Version);
-            if (role == MembershipRole.Admin && grants.Count > 0)
-            {
-                throw BooksProblem.Invalid("Administrators have access to every ledger; grants must be empty.");
-            }
-            if (grants.Select(g => g.LedgerId).Distinct().Count() != grants.Count)
-            {
-                throw BooksProblem.Invalid("Each ledger may appear only once in grants.");
-            }
-            var ledgerIds = grants.Select(g => g.LedgerId).ToList();
-            if (await db.Ledgers.CountAsync(l => l.OrgId == orgId && ledgerIds.Contains(l.Id), ct) != ledgerIds.Count)
-            {
-                throw BooksProblem.Invalid("Every granted ledger must belong to this organization.");
-            }
+            await ValidateGrantsAsync(db, orgId, role, grants, ct);
             if (target.IsActiveAdmin && role != MembershipRole.Admin)
             {
                 await EnsureAnotherAdminAsync(orgId, target.Id, ct);
@@ -88,6 +76,24 @@ public sealed class MembershipService(IBooksDb db, WriteRunner writes, ReadRunne
         target.Remove(scope.Now);
         scope.Audit(action, "membership", target.Id, new { user_id = target.UserId, role = Text.Of(target.Role) });
         return WriteResult.Of(200, new { id = target.Id, status = Text.Of(target.Status), removed_at = target.RemovedAt }, target.Version);
+    }
+
+    /// <summary>Administrators hold no grants; a member's grants name distinct ledgers of this organization.</summary>
+    internal static async Task ValidateGrantsAsync(IBooksDb db, Guid orgId, MembershipRole role, IReadOnlyList<GrantInput> grants, CancellationToken ct)
+    {
+        if (role == MembershipRole.Admin && grants.Count > 0)
+        {
+            throw BooksProblem.Invalid("Administrators have access to every ledger; grants must be empty.");
+        }
+        if (grants.Select(g => g.LedgerId).Distinct().Count() != grants.Count)
+        {
+            throw BooksProblem.Invalid("Each ledger may appear only once in grants.");
+        }
+        var ledgerIds = grants.Select(g => g.LedgerId).ToList();
+        if (await db.Ledgers.CountAsync(l => l.OrgId == orgId && ledgerIds.Contains(l.Id), ct) != ledgerIds.Count)
+        {
+            throw BooksProblem.Invalid("Every granted ledger must belong to this organization.");
+        }
     }
 
     /// <summary>Rule 8: counted under the organization lock, so two concurrent changes cannot both pass.</summary>

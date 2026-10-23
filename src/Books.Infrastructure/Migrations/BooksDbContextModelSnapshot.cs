@@ -138,6 +138,121 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("idempotency_records", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Access.Invitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("accepted_at");
+
+                    b.Property<Guid?>("AcceptedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("accepted_by");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("InviterMembershipId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inviter_membership_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("ProposedRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("proposed_role");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TargetEmailKey")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("target_email_key");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_invitations");
+
+                    b.HasAlternateKey("OrgId", "Id")
+                        .HasName("ak_invitations_org_id_id");
+
+                    b.HasIndex("AcceptedBy")
+                        .HasDatabaseName("ix_invitations_accepted_by");
+
+                    b.HasIndex("OrgId", "TargetEmailKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_invitations_org_id_target_email_key")
+                        .HasFilter("status = 'pending'");
+
+                    b.HasIndex("OrgId", "InviterMembershipId", "Status")
+                        .HasDatabaseName("ix_invitations_org_id_inviter_membership_id_status");
+
+                    b.HasIndex("TargetEmailKey", "Status", "ExpiresAt")
+                        .HasDatabaseName("ix_invitations_target_email_key_status_expires_at");
+
+                    b.ToTable("invitations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_invitations_role", "proposed_role IN ('admin', 'member')");
+
+                            t.HasCheckConstraint("ck_invitations_status", "status IN ('pending', 'accepted', 'revoked', 'expired', 'invalidated')");
+                        });
+                });
+
+            modelBuilder.Entity("Books.Domain.Access.InvitationGrant", b =>
+                {
+                    b.Property<Guid>("InvitationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invitation_id");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Access")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("access");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.HasKey("InvitationId", "LedgerId")
+                        .HasName("pk_invitation_grants");
+
+                    b.HasIndex("OrgId", "InvitationId")
+                        .HasDatabaseName("ix_invitation_grants_org_id_invitation_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_invitation_grants_org_id_ledger_id");
+
+                    b.ToTable("invitation_grants", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_invitation_grants_access", "access IN ('read', 'edit')");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Access.LedgerGrant", b =>
                 {
                     b.Property<Guid>("MembershipId")
@@ -460,6 +575,42 @@ namespace Books.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("ck_ledgers_fy_start_month", "fy_start_month BETWEEN 1 AND 12");
                         });
+                });
+
+            modelBuilder.Entity("Books.Domain.Access.Invitation", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("AcceptedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_invitations_users_accepted_by");
+
+                    b.HasOne("Books.Domain.Access.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "InviterMembershipId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_invitations_memberships_org_id_inviter_membership_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Access.InvitationGrant", b =>
+                {
+                    b.HasOne("Books.Domain.Access.Invitation", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "InvitationId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_invitation_grants_invitations_org_id_invitation_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_invitation_grants_ledgers_org_id_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Access.LedgerGrant", b =>
