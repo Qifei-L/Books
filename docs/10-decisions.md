@@ -61,6 +61,10 @@ Status: Review record. No coding or deployment is approved.
 - Rounding Differences is enabled only if automatic rounding adjustments are needed.
 - These purposes are accepted, not an instruction to create all accounts initially or to implement them.
 
+### Suspense scope
+
+Include incomplete data, unusable records and import or processing errors in Suspense review. This scope does not authorize posting invalid entries or selecting a Frontend layout.
+
 ### Technology direction
 
 Use C#, ASP.NET Core, EF Core and PostgreSQL. API and MCP come first. Do not add ABP in phase one. A modular monolith is the proposed application structure, not an instruction to implement it.
@@ -71,7 +75,7 @@ This replaces the earlier Go proposal. It does not select exact package versions
 
 The accounting chapters now contain a complete starting proposal. Except for the specifically confirmed labels, P&L grouping and initial System Account purposes above, they are not a statement of approved accounting policy.
 
-Default Accounts as optional starter templates remain proposed. Current Year Profit is proposed as a calculated display rather than a routine posting account. Further proposed candidates are Suspense, realized/unrealized FX gains or losses, and AR/AP/Inventory/Tax controls only with the relevant modules. They are not approved by acceptance of the three initial System Account purposes. No account or mapping has been created.
+Default Accounts as optional starter templates remain proposed. Current Year Profit is proposed as a calculated display rather than a routine posting account. The distinction between a posted Suspense Account and an unposted review list, a shared entry point, and Posted / Not posted / Pending or Unknown presentation remain workflow proposals. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. Further proposed candidates are realized/unrealized FX gains or losses, and AR/AP/Inventory/Tax controls only with the relevant modules. They are not approved by acceptance of the three initial System Account purposes. No account or mapping has been created.
 
 The detailed technical contract proposes .NET/EF Core/Npgsql version families, Keycloak evaluation, authenticated invitation inboxes, transaction and lock rules, API fields, MCP delegation and development stages. Exact implementation details remain under review.
 
@@ -125,6 +129,7 @@ All decisions above were recorded on 2026-10-23.
 9. Standardized the term Frontend and added business workflow diagrams. Frontend implementation remains deferred; business interaction planning is in scope. Proposed accounting flows are not approved by their inclusion.
 
 10. Confirmed Cost & Expense naming, two P&L groups and three conditional System Account purposes. Default templates and further System Account candidates remain proposed.
+11. Included incomplete, unusable and errored records in Suspense scope. Added proposed safe review and resolution handling without approving invalid posting.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

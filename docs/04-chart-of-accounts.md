@@ -53,9 +53,23 @@ Accepted System Account purposes:
 
 **Current Year Profit** is proposed as a calculated report value, not an ordinary posting account. Its relationship to closing entries and retained earnings still needs an agreed reporting policy.
 
-Further candidates, still Proposed: Suspense for unresolved classification; realized and unrealized foreign-exchange gains/losses only if foreign-currency accounting is added; and receivable, payable, inventory and tax control accounts only when the relevant module is enabled. Their posting and clearing policies need separate review. Do not enable them just because a starter template includes similarly named accounts.
+Further candidates, still Proposed: realized and unrealized foreign-exchange gains/losses only if foreign-currency accounting is added; and receivable, payable, inventory and tax control accounts only when the relevant module is enabled. Their posting and clearing policies need separate review. Do not enable them just because a starter template includes similarly named accounts.
 
 Codes, names, template contents, mapping permissions and safeguards for changing a used mapping remain proposals. No accounts or mappings are created by this document.
+
+## Suspense: records needing attention
+
+Confirmed scope: Suspense includes incomplete data, unusable account references, and import or processing errors, as well as unresolved classification.
+
+Proposed distinction:
+- **Suspense Account:** a temporary accounting destination only when a transaction can otherwise be validly posted and the final classification is unknown.
+- **Suspense review list:** records needing correction or investigation. Missing amounts, unbalanced entries, unusable accounts and failed validation do not become posted entries merely because they are in Suspense.
+
+A shared Suspense entry point is a presentation proposal, not an approved Frontend layout. Show **Posted**, **Not posted**, or **Pending / Unknown** based on evidence. A timeout or lost response must not be labelled Not posted without checking whether the operation committed.
+
+Keep the source reference, relevant original values, error reason and resolution history under the same organization and ledger access rules. Retain only the data needed for resolution; never expose another organization's records or store credentials and authentication tokens in error details.
+
+Correction requires validation again. A posted item is resolved through the agreed reclassification or correction process, not by overwriting history. An unposted item may be posted only after validation succeeds. An uncertain outcome must be reconciled before retrying. Detailed clearing rules remain proposed; Suspense is not a way to force invalid transactions into reports.
 
 ## Proposed: Create, change and deactivate
 

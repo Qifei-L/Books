@@ -110,6 +110,16 @@ All cases below are Proposed and Not run. Review the accounting policies first, 
 - ACC-16: Query the same report with different page sizes and filters. Proposed result: pagination does not change the full-query total; a filter changes the total only by changing the query scope. Distinguish a page subtotal from a full-query total. The pagination principle is confirmed; report formulas remain proposed.
 - ACC-17: Use identical account codes in two companies and query as a user with access to only one ledger. Proposed result: no mixed balances, unauthorized rows, counts, or totals. Ledger isolation is confirmed; report implementation remains to be designed.
 
+## Proposed Suspense checks
+
+The inclusion of incomplete, unusable and errored records in Suspense is confirmed. These handling scenarios remain proposed and **Not run**:
+
+- SUS-01: Missing amounts, unbalanced lines or unusable accounts enter the review list without posting or balance changes.
+- SUS-02: An otherwise valid, balanced entry with unknown classification can use a Suspense Account only under the agreed posting policy. Its posted balance appears in the accounting source, not as a fabricated review-list total.
+- SUS-03: A response is lost after a possible commit. Show Pending / Unknown, check the saved outcome and retry safely without duplicate posting.
+- SUS-04: Correct a record and validate again. Resolve an already-posted item through the agreed correction process; keep the original and resolution history.
+- SUS-05: A user without ledger access cannot read the source record, issue count, error details or resolution history. Error records contain no authentication secrets.
+
 ## Proposed API contract checks
 
 These cases support the confirmed API principles. They are Not run. Exact formats and mechanisms must be defined before execution.

@@ -82,6 +82,19 @@ Record who performed each action, the ledger and journal, when it happened, the 
 
 The proposed implementation approach remains separate from these business requirements. C#, ASP.NET Core, EF Core and PostgreSQL are the selected stack; ABP is not used. This document authorizes no code, migration or deployment.
 
+## Suspense and failed processing
+
+Confirmed Suspense scope includes incomplete data, unusable accounts and import or processing errors. The [Suspense distinction](04-chart-of-accounts.md#suspense-records-needing-attention) separates an accounting account from a review list.
+
+Proposed handling:
+- Valid balanced transactions with unresolved classification may use a Suspense Account under an agreed policy.
+- Invalid records remain unposted in the review list. Do not fill in missing amounts, bypass an inactive account or force a balancing entry just to post.
+- If posting may have committed but the response was lost, mark the outcome Pending / Unknown and check the saved result before retrying. Do not assume failure or create a second journal.
+- Corrections trigger fresh validation. Resolve posted items through traceable correcting entries; keep unposted error records out of ledger balances.
+- Preserve relevant source and resolution history with current ledger access checks. Error details must not contain authentication secrets or another organization's data.
+
+This is a workflow proposal, not a new implemented journal state or approval of a posting engine.
+
 ## Review checks
 
 - An unbalanced draft can be saved but cannot post or affect a report.
