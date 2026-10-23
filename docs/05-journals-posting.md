@@ -1,6 +1,6 @@
 # Journals and Posting
 
-Status: Review draft. Access boundaries, the agreed Item behavior and one transaction currency per journal, Post validation outcomes and the Close-based edit/delete boundary are confirmed. The journal workflow and accounting controls below are proposals, not approved accounting policy.
+Status: Review draft. Access boundaries, the agreed Item behavior and one transaction currency per journal, Post validation outcomes and the Close-based edit/delete boundary are confirmed. The one-click Save behavior below is also confirmed. Other workflow details and accounting controls remain proposals unless explicitly confirmed.
 
 These workflows are proposed for a later accounting stage. They do not add journal endpoints or other accounting work to the organization foundation's phase-one API contract.
 
@@ -15,6 +15,20 @@ Confirmed currency boundary: each journal has **one transaction currency** share
 Confirmed Post outcome: validate the date, accounts, currency, amounts and debit/credit balance. Post only when all checks pass. A definite validation failure keeps the draft and specific errors in the **Error review list**, with no balance/report effect and no partial journal lines. Correct it and validate again before resubmission. This is not forced posting to a Suspense Account.
 
 Current organization and ledger authorization still applies. Do not expose another organization's input or errors. A network timeout or lost response is an unknown outcome, not proof of validation failure; reconcile the saved outcome before retrying.
+
+## Confirmed: Save and Save Draft
+
+For a future posting-capable business subsystem, normal **Save** is one user action: preserve the business document, generate its proposed journal lines, validate them and attempt posting. Users do not need a second Post click for this normal path.
+
+- Success: show **Saved & Posted** only after the posting result is confirmed.
+- Definite validation failure: keep the input and specific errors in **Error**. A new failed attempt creates no accounting effect.
+- Failed edit: keep the attempted revision for correction and preserve the previous valid posted effect.
+- Unknown outcome: show **Pending**, reconcile the saved result and do not blindly post again.
+- **Save Draft** is a separate optional action for unfinished work. It saves without posting.
+
+One click does not mean input preservation and every possible posting outcome must share one all-or-nothing transaction. The input must survive a failed posting attempt; effective accounting changes still commit atomically. Current permissions, Close, validation, duplicate prevention and audit rules apply.
+
+**Proposed name and boundary: Subsystem Posting Contract.** A business subsystem prepares its source document and journal proposal; the common accounting service applies the same posting rules and returns the confirmed outcome. This can be an internal application-service call in the same program, not a new HTTP service or separate accounting engine. A Sales document is an example, not approval to implement Sales now. Exact source links, payloads and lifecycle contracts belong to later design.
 
 ## Proposed: First-release scope
 
@@ -41,6 +55,8 @@ Migration needs verified copying, version tracking, backups and a rollback path;
 Attachment reads and migration access must preserve the same organization/ledger boundary. This requirement does not approve a storage provider, new credentials, wider sharing, actual migration or deletion. Confirmed: attachments are optional. A journal can be saved and posted without an attachment if all other checks pass. Attachment counts and retention rules remain separate decisions.
 
 ## Proposed: Draft and posted states
+
+These are internal states, not a requirement for two user clicks. The confirmed normal Save action can move through saving and posting in one request; Save Draft stops at the draft state.
 
 1. Save a draft. It may be incomplete or unbalanced, with visible validation warnings. It does not affect any ledger balance or posted report.
 2. Edit the draft. Reject a stale edit if another person has changed it; do not silently overwrite their work.
@@ -134,7 +150,7 @@ This simplification applies only to **Error**. The confirmed categories remain d
 - **Error:** incomplete, unusable or definitely failed attempts needing attention. Unposted attempts do not affect balances; a failed edit retains the previous effective posted result.
 - **Pending:** unfinished or unknown outcomes. Reconcile whether posting committed before retrying; do not classify a timeout alone as Error.
 
-Keep one business journal: **save first, then Post**. Error is a filtered worklist, not a copied business journal. Page layout remains proposed. Keep posted Suspense classification issues separate from Error attempts and Pending outcomes; never mix their balances.
+Keep one business journal: **preserve input first, then attempt posting**. This describes backend ordering, not two required user actions; normal Save performs both, while Save Draft does not post. Error is a filtered worklist, not a copied business journal. Page layout remains proposed. Keep posted Suspense classification issues separate from Error attempts and Pending outcomes; never mix their balances.
 
 1. Save the draft and its current content before Post. Saving alone has no balance effect.
 2. On Post, validate and commit only valid, balanced accounting entries. A definite validation failure keeps the saved content and errors for Error review.

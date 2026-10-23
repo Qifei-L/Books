@@ -95,6 +95,12 @@ Validate date, accounts, currency, amounts and debit/credit balance before posti
 
 Unknown outcomes such as a lost response require reconciliation before retrying. Current ledger permissions apply to drafts and error details. Detailed posting eligibility and calculation policies remain subject to their separate status.
 
+### Save and subsystem posting
+
+Normal Save in a future posting-capable business subsystem preserves the source document, generates journal lines, validates and attempts posting in one user action. Show Saved & Posted only on confirmed success. Save Draft is an optional separate action without posting. Definite failure preserves input in Error; unknown outcomes remain Pending. A failed edit preserves the prior valid posting.
+
+Subsystem Posting Contract is the proposed name for the shared internal integration boundary. It does not require separate services or HTTP, approve a Sales module, or bypass current permissions, Close, validation, audit and duplicate-prevention rules. One user action does not remove durable input preservation or atomic accounting changes.
+
 ### Posted journal changes and Close
 
 - Posted status does not itself prohibit editing or deletion.
@@ -207,6 +213,8 @@ All decisions above were recorded on 2026-10-23.
 17. Confirmed TB (no separate GL Summary), GL Detail, Balance Sheet and P&L with core fields, date scope, drilldown navigation and base-currency totals. Exact drilldown mechanisms and year-end calculations remain to be designed and validated.
 
 18. Resumed a bounded foundation technical-design reconciliation and development task list. No receipt/accounting module, implementation, credential setup, merge or deployment is authorized.
+
+19. Confirmed one-click Save with a posting attempt and optional Save Draft. Kept Error, Pending and failed-edit protection; the proposed Subsystem Posting Contract does not add an accounting subsystem to phase one.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 
