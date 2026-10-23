@@ -75,8 +75,8 @@ public sealed class AuthenticationTests(TestHost host)
         await using var db = host.CreateDbContext();
         var userIds = await db.Identities.Where(i => i.Subject == subject).Select(i => i.UserId).ToListAsync(Ct);
         Assert.Single(userIds);
-        var orphanUsers = await db.Users.CountAsync(u => !db.Identities.Any(i => i.UserId == u.Id), Ct);
-        Assert.Equal(0, orphanUsers);
+        // Losing requests roll back their user row: only one user carries this subject's name.
+        Assert.Equal(1, await db.Users.CountAsync(u => u.DisplayName == $"{subject}@example.test", Ct));
         clients.ForEach(c => c.Dispose());
     }
 
