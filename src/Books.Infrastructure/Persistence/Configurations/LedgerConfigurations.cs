@@ -54,3 +54,26 @@ internal sealed class LedgerGrantConfiguration : IEntityTypeConfiguration<Ledger
         b.HasOne<User>().WithMany().HasForeignKey(x => x.GrantedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
+{
+    public void Configure(EntityTypeBuilder<Account> b)
+    {
+        b.ToTable("accounts", t => t.HasCheckConstraint(
+            "ck_accounts_type", "type IN ('assets', 'liabilities', 'equity', 'income', 'cost_and_expense')"));
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Code).HasMaxLength(Account.MaxCodeLength);
+        b.Property(x => x.Name).HasMaxLength(200);
+        b.Property(x => x.Currency).HasMaxLength(3).IsFixedLength();
+        b.HasAlternateKey(x => new { x.LedgerId, x.Id });
+        // Rule 16: Code is unique within a ledger; other ledgers may reuse it.
+        b.HasIndex(x => new { x.LedgerId, x.Code }).IsUnique();
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        // The composite key keeps a parent inside the same ledger.
+        b.HasOne<Account>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.ParentId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
