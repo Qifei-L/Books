@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<MembershipService>();
         services.AddScoped<InvitationService>();
         services.AddScoped<AccountService>();
+        services.AddScoped<AccountGroupService>();
         return services;
     }
 

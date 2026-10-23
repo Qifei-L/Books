@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Books.Tests.Ledger;
 
-/// <summary>Rules 15 and 16 for changes: stable IDs, unique codes, and a tree without cycles.</summary>
+/// <summary>Rule 16 for changes: stable IDs and unique codes.</summary>
 public sealed class AccountUpdateTests(TestHost host)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -23,42 +23,6 @@ public sealed class AccountUpdateTests(TestHost host)
         Assert.Equal(cash.Id(), renamed.Id());
         Assert.Equal("1010", renamed.GetProperty("code").GetString());
         await taken.AssertProblemAsync(HttpStatusCode.Conflict, "ACCOUNT_CODE_TAKEN");
-    }
-
-    [Fact]
-    public async Task An_account_cannot_move_under_itself_or_a_descendant()
-    {
-        var (admin, orgId, ledger) = await new AccountTests(host).LedgerAsync();
-        var top = await AccountTests.CreateAsync(admin, orgId, ledger, "1000", "Assets", "assets");
-        var middle = await AccountTests.CreateAsync(admin, orgId, ledger, "1100", "Current", "assets", top.Id());
-        var bottom = await AccountTests.CreateAsync(admin, orgId, ledger, "1110", "Cash", "assets", middle.Id());
-
-        var self = await PatchAsync(admin, orgId, ledger, top.Id(), new { parent_id = top.Id() }, 1);
-        var cycle = await PatchAsync(admin, orgId, ledger, top.Id(), new { parent_id = bottom.Id() }, 1);
-        var toTop = await (await PatchAsync(admin, orgId, ledger, bottom.Id(), new { parent_id = (Guid?)null }, 1)).DataAsync();
-
-        await self.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
-        await cycle.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
-        Assert.Equal(JsonValueKind.Null, toTop.GetProperty("parent_id").ValueKind);
-        var accounts = (await AccountTests.ListAsync(admin, orgId, ledger)).EnumerateArray().ToDictionary(a => a.GetProperty("code").GetString()!);
-        Assert.True(accounts["1100"].GetProperty("is_leaf").GetBoolean());
-    }
-
-    [Fact]
-    public async Task A_parent_of_another_type_is_rejected_and_types_change_only_on_leaves()
-    {
-        var (admin, orgId, ledger) = await new AccountTests(host).LedgerAsync();
-        var assets = await AccountTests.CreateAsync(admin, orgId, ledger, "1000", "Assets", "assets");
-        await AccountTests.CreateAsync(admin, orgId, ledger, "1010", "Cash", "assets", assets.Id());
-        var sales = await AccountTests.CreateAsync(admin, orgId, ledger, "4000", "Sales", "income");
-
-        var wrongParent = await PatchAsync(admin, orgId, ledger, sales.Id(), new { parent_id = assets.Id() }, 1);
-        var parentType = await PatchAsync(admin, orgId, ledger, assets.Id(), new { type = "liabilities" }, 1);
-        var leafType = await (await PatchAsync(admin, orgId, ledger, sales.Id(), new { type = "cost_and_expense" }, 1)).DataAsync();
-
-        await wrongParent.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
-        await parentType.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
-        Assert.Equal("cost_and_expense", leafType.GetProperty("type").GetString());
     }
 
     [Fact]

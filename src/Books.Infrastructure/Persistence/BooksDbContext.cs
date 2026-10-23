@@ -19,6 +19,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<Ledger> Ledgers => Set<Ledger>();
     public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<AccountGroup> AccountGroups => Set<AccountGroup>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

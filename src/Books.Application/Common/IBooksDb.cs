@@ -20,6 +20,7 @@ public interface IBooksDb
     DbSet<Company> Companies { get; }
     DbSet<Ledger> Ledgers { get; }
     DbSet<Account> Accounts { get; }
+    DbSet<AccountGroup> AccountGroups { get; }
     DatabaseFacade Database { get; }
     ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

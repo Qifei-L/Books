@@ -23,9 +23,11 @@ EF Core handles ordinary CRUD. Posting and reporting use explicit SQL through Np
 ledgers(id, org_id, company_id UNIQUE, base_currency, fy_start_month,
         closed_through date NULL, version)
 
-accounts(id, ledger_id, parent_id, code, name, type, is_leaf,
+account_groups(id, ledger_id, parent_id NULL, name, type)   -- headings, never posted to
+
+accounts(id, ledger_id, group_id NULL, code, name, type,
          is_control, is_bank, currency NULL, active,
-         UNIQUE(ledger_id, code))
+         UNIQUE(ledger_id, lower(code)))
 
 journals(id, ledger_id, journal_no, source_kind NULL, source_id NULL,
          effective_revision_id NULL, version,
@@ -54,7 +56,7 @@ BEGIN
   check current access (membership + grant)
   check idempotency key (unique row; replay returns the saved result)
   check expected version
-  validate (pure function): dates vs closed_through (old and new), leaf and active accounts,
+  validate (pure function): dates vs closed_through (old and new), active accounts (never groups),
         control account ⇒ party, currency and precision, balance, document rules
   ok    → insert posted revision + lines, move pointer, write tax entries, audit, receipt
   error → insert error revision with issues; effective posting untouched

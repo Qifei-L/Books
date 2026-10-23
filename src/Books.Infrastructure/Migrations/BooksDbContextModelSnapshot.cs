@@ -511,6 +511,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnName("currency")
                         .IsFixedLength();
 
+                    b.Property<Guid?>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("group_id");
+
                     b.Property<bool>("IsBank")
                         .HasColumnType("boolean")
                         .HasColumnName("is_bank");
@@ -518,6 +522,58 @@ namespace Books.Infrastructure.Migrations
                     b.Property<bool>("IsControl")
                         .HasColumnType("boolean")
                         .HasColumnName("is_control");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_accounts");
+
+                    b.HasAlternateKey("LedgerId", "Id")
+                        .HasName("ak_accounts_ledger_id_id");
+
+                    b.HasIndex("LedgerId", "GroupId")
+                        .HasDatabaseName("ix_accounts_ledger_id_group_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_accounts_org_id_ledger_id");
+
+                    b.ToTable("accounts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_accounts_type", "type IN ('assets', 'liabilities', 'equity', 'income', 'cost_and_expense')");
+                        });
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.AccountGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<Guid>("LedgerId")
                         .HasColumnType("uuid")
@@ -548,20 +604,20 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnName("version");
 
                     b.HasKey("Id")
-                        .HasName("pk_accounts");
+                        .HasName("pk_account_groups");
 
                     b.HasAlternateKey("LedgerId", "Id")
-                        .HasName("ak_accounts_ledger_id_id");
+                        .HasName("ak_account_groups_ledger_id_id");
 
                     b.HasIndex("LedgerId", "ParentId")
-                        .HasDatabaseName("ix_accounts_ledger_id_parent_id");
+                        .HasDatabaseName("ix_account_groups_ledger_id_parent_id");
 
                     b.HasIndex("OrgId", "LedgerId")
-                        .HasDatabaseName("ix_accounts_org_id_ledger_id");
+                        .HasDatabaseName("ix_account_groups_org_id_ledger_id");
 
-                    b.ToTable("accounts", null, t =>
+                    b.ToTable("account_groups", null, t =>
                         {
-                            t.HasCheckConstraint("ck_accounts_type", "type IN ('assets', 'liabilities', 'equity', 'income', 'cost_and_expense')");
+                            t.HasCheckConstraint("ck_account_groups_type", "type IN ('assets', 'liabilities', 'equity', 'income', 'cost_and_expense')");
                         });
                 });
 
@@ -758,12 +814,12 @@ namespace Books.Infrastructure.Migrations
 
             modelBuilder.Entity("Books.Domain.Ledgers.Account", b =>
                 {
-                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                    b.HasOne("Books.Domain.Ledgers.AccountGroup", null)
                         .WithMany()
-                        .HasForeignKey("LedgerId", "ParentId")
+                        .HasForeignKey("LedgerId", "GroupId")
                         .HasPrincipalKey("LedgerId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_accounts_accounts_ledger_id_parent_id");
+                        .HasConstraintName("fk_accounts_account_groups_ledger_id_group_id");
 
                     b.HasOne("Books.Domain.Ledgers.Ledger", null)
                         .WithMany()
@@ -772,6 +828,24 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_accounts_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.AccountGroup", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.AccountGroup", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "ParentId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_account_groups_account_groups_ledger_id_parent_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_account_groups_ledgers_org_id_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Ledgers.Company", b =>

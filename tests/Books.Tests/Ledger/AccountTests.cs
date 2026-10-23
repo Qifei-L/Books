@@ -6,7 +6,7 @@ using Npgsql;
 
 namespace Books.Tests.Ledger;
 
-/// <summary>Rules 15 and 16: a per-ledger tree of typed accounts; codes unique within a ledger.</summary>
+/// <summary>Rule 16: codes unique within a ledger; rules 2, 4, 5 for chart access.</summary>
 public sealed class AccountTests(TestHost host)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -46,53 +46,6 @@ public sealed class AccountTests(TestHost host)
     }
 
     [Fact]
-    public async Task Only_leaf_accounts_are_postable()
-    {
-        var (admin, orgId, ledger) = await LedgerAsync();
-        var parent = await CreateAsync(admin, orgId, ledger, "1000", "Current assets", "assets");
-
-        var child = await CreateAsync(admin, orgId, ledger, "1010", "Cash", "assets", parent.Id());
-
-        var accounts = (await ListAsync(admin, orgId, ledger)).EnumerateArray().ToDictionary(a => a.GetProperty("code").GetString()!);
-        Assert.False(accounts["1000"].GetProperty("is_leaf").GetBoolean());
-        Assert.False(accounts["1000"].GetProperty("postable").GetBoolean());
-        Assert.True(accounts["1010"].GetProperty("postable").GetBoolean());
-        Assert.Equal(parent.Id(), child.GetProperty("parent_id").GetGuid());
-    }
-
-    [Fact]
-    public async Task A_parent_must_be_in_the_same_ledger_and_of_the_same_type()
-    {
-        var (admin, orgId, ledger) = await LedgerAsync();
-        var otherLedger = await admin.CreateLedgerAsync(orgId, "Other");
-        var assets = await CreateAsync(admin, orgId, ledger, "1000", "Assets", "assets");
-        var elsewhere = await CreateAsync(admin, orgId, otherLedger, "1000", "Assets", "assets");
-
-        var wrongType = await PostAsync(admin, orgId, ledger, new { code = "4000", name = "Sales", type = "income", parent_id = assets.Id() });
-        var wrongLedger = await PostAsync(admin, orgId, ledger, new { code = "1100", name = "Bank", type = "assets", parent_id = elsewhere.Id() });
-
-        await wrongType.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
-        await wrongLedger.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
-    }
-
-    [Fact]
-    public async Task The_database_keeps_a_parent_inside_its_ledger()
-    {
-        var (admin, orgId, ledger) = await LedgerAsync();
-        var otherLedger = await admin.CreateLedgerAsync(orgId, "Other");
-        var elsewhere = await CreateAsync(admin, orgId, otherLedger, "1000", "Assets", "assets");
-        await using var db = host.CreateDbContext();
-
-        var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlAsync(
-            $"""
-            INSERT INTO accounts (id, org_id, ledger_id, parent_id, code, name, type, is_control, is_bank, active, created_at, version)
-            VALUES ({Guid.NewGuid()}, {orgId}, {ledger}, {elsewhere.Id()}, '1100', 'Bank', 'assets', false, false, true, now(), 1)
-            """, Ct));
-
-        Assert.Equal("23503", error.SqlState);
-    }
-
-    [Fact]
     public async Task Ledger_access_controls_who_reads_and_who_changes_accounts()
     {
         var (admin, orgId, ledger) = await LedgerAsync();
@@ -121,8 +74,8 @@ public sealed class AccountTests(TestHost host)
     internal static Task<HttpResponseMessage> PostAsync(HttpClient client, Guid orgId, Guid ledgerId, object body) =>
         client.PostAsync($"/api/v1/organizations/{orgId}/ledgers/{ledgerId}/accounts", body);
 
-    internal static async Task<JsonElement> CreateAsync(HttpClient client, Guid orgId, Guid ledgerId, string code, string name, string type, Guid? parentId = null) =>
-        await (await PostAsync(client, orgId, ledgerId, new { code, name, type, parent_id = parentId })).DataAsync(HttpStatusCode.Created);
+    internal static async Task<JsonElement> CreateAsync(HttpClient client, Guid orgId, Guid ledgerId, string code, string name, string type, Guid? groupId = null) =>
+        await (await PostAsync(client, orgId, ledgerId, new { code, name, type, group_id = groupId })).DataAsync(HttpStatusCode.Created);
 
     internal static async Task<JsonElement> ListAsync(HttpClient client, Guid orgId, Guid ledgerId) =>
         await (await client.GetAsync($"/api/v1/organizations/{orgId}/ledgers/{ledgerId}/accounts", Ct)).DataAsync();
