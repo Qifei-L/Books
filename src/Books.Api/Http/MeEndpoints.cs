@@ -26,6 +26,13 @@ public static class MeEndpoints
 
 public static class Envelope
 {
-    public static IResult Ok(HttpContext http, object data) =>
-        Results.Ok(new { data, request_id = http.TraceIdentifier });
+    /// <summary>Wraps data as {"data", "request_id"}; a version (sent as a decimal string) also sets a strong ETag.</summary>
+    public static IResult Ok(HttpContext http, object data, string? version = null)
+    {
+        if (version is not null)
+        {
+            http.Response.Headers.ETag = $"\"v{version}\"";
+        }
+        return Results.Ok(new { data, request_id = http.TraceIdentifier });
+    }
 }
