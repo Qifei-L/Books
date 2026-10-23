@@ -49,7 +49,7 @@ public sealed class BooksReadTools(PrincipalAccessor principals, OrganizationSer
 
     internal static CallToolResult Problem(BooksProblem problem)
     {
-        var error = BooksJson.Serialize(new { status = problem.Status, code = problem.Code, detail = problem.Message });
+        var error = BooksJson.Serialize(new { status = problem.Status, code = problem.Code, detail = problem.Message, issues = problem.Issues });
         return new CallToolResult { IsError = true, Content = [new TextContentBlock { Text = error }] };
     }
 }

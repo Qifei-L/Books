@@ -10,7 +10,7 @@ namespace Books.Api;
 /// <summary>Writes application/problem+json with a stable <c>code</c>. Never includes SQL, stacks or tokens.</summary>
 public static class Problems
 {
-    public static Task WriteAsync(HttpContext context, int status, string code, string detail)
+    public static Task WriteAsync(HttpContext context, int status, string code, string detail, object? issues = null)
     {
         var problem = new ProblemDetails
         {
@@ -21,6 +21,10 @@ public static class Problems
         };
         problem.Extensions["code"] = code;
         problem.Extensions["request_id"] = context.TraceIdentifier;
+        if (issues is not null)
+        {
+            problem.Extensions["issues"] = issues;
+        }
         context.Response.StatusCode = status;
         return context.Response.WriteAsJsonAsync(problem, (System.Text.Json.JsonSerializerOptions?)null, "application/problem+json");
     }
@@ -33,7 +37,7 @@ public sealed class ProblemExceptionHandler : IExceptionHandler
         switch (exception)
         {
             case BooksProblem problem:
-                await Problems.WriteAsync(context, problem.Status, problem.Code, problem.Message);
+                await Problems.WriteAsync(context, problem.Status, problem.Code, problem.Message, problem.Issues);
                 return true;
             case DomainException domain:
                 await Problems.WriteAsync(context, 400, "INVALID_ARGUMENT", domain.Message);

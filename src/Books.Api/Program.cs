@@ -63,6 +63,7 @@ api.MapPartyEndpoints();
 api.MapTaxCodeEndpoints();
 api.MapBankEndpoints();
 api.MapItemEndpoints();
+api.MapTransferEndpoints();
 api.MapJournalEndpoints();
 api.MapReportEndpoints();
 

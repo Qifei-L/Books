@@ -485,6 +485,111 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("identities", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.BankTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid?>("FeeAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("fee_account_id");
+
+                    b.Property<decimal>("FeeAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("fee_amount");
+
+                    b.Property<Guid>("FromAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("from_account_id");
+
+                    b.Property<Guid?>("JournalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("journal_id");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reference");
+
+                    b.Property<Guid>("ToAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("to_account_id");
+
+                    b.Property<long>("TransferNo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("transfer_no");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_bank_transfers");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_bank_transfers_created_by");
+
+                    b.HasIndex("LedgerId", "FeeAccountId")
+                        .HasDatabaseName("ix_bank_transfers_ledger_id_fee_account_id");
+
+                    b.HasIndex("LedgerId", "FromAccountId")
+                        .HasDatabaseName("ix_bank_transfers_ledger_id_from_account_id");
+
+                    b.HasIndex("LedgerId", "JournalId")
+                        .HasDatabaseName("ix_bank_transfers_ledger_id_journal_id");
+
+                    b.HasIndex("LedgerId", "ToAccountId")
+                        .HasDatabaseName("ix_bank_transfers_ledger_id_to_account_id");
+
+                    b.HasIndex("LedgerId", "TransferNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_bank_transfers_ledger_id_transfer_no");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_bank_transfers_org_id_ledger_id");
+
+                    b.ToTable("bank_transfers", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_bank_transfers_amounts", "amount > 0 AND fee_amount >= 0 AND from_account_id <> to_account_id");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Journals.Journal", b =>
                 {
                     b.Property<Guid>("Id")
@@ -523,6 +628,15 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("revision_count");
 
+                    b.Property<Guid?>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("SourceKind")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("source_kind");
+
                     b.Property<long>("Version")
                         .HasColumnType("bigint")
                         .HasColumnName("version");
@@ -542,6 +656,11 @@ namespace Books.Infrastructure.Migrations
 
                     b.HasIndex("OrgId", "LedgerId")
                         .HasDatabaseName("ix_journals_org_id_ledger_id");
+
+                    b.HasIndex("SourceKind", "SourceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_journals_source_kind_source_id")
+                        .HasFilter("source_kind IS NOT NULL");
 
                     b.ToTable("journals", (string)null);
                 });
@@ -1454,6 +1573,54 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_identities_users_user_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.BankTransfer", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_transfers_users_created_by");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "FeeAccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_bank_transfers_accounts_ledger_id_fee_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "FromAccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_transfers_accounts_ledger_id_from_account_id");
+
+                    b.HasOne("Books.Domain.Journals.Journal", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "JournalId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_bank_transfers_journals_ledger_id_journal_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "ToAccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_transfers_accounts_ledger_id_to_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_transfers_ledgers_org_id_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Journals.Journal", b =>
