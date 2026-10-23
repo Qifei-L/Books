@@ -47,6 +47,20 @@ Status: Review record. No coding or deployment is approved.
 - Search, filters, sorting and pagination follow consistent rules.
 - Retries must not create duplicates. Concurrent changes must not silently overwrite each other. Upgrades must not silently break existing callers.
 
+### COA labels and P&L grouping
+
+- Rename Expense to **Cost & Expense**.
+- Use two top-level P&L groups: **Income (add)** and **Cost & Expense (subtract)**.
+- This is reporting classification, not a change to debit/credit treatment or an instruction to discard signed or contra balances.
+
+### Initial System Account purposes
+
+- Identify System Accounts by fixed function mapped to account identity, not by name or code.
+- Retained Earnings holds prior-year accumulated results; the detailed closing policy remains open.
+- Opening Balance Clearing is temporary during opening-balance setup and must be zero when setup is complete.
+- Rounding Differences is enabled only if automatic rounding adjustments are needed.
+- These purposes are accepted, not an instruction to create all accounts initially or to implement them.
+
 ### Technology direction
 
 Use C#, ASP.NET Core, EF Core and PostgreSQL. API and MCP come first. Do not add ABP in phase one. A modular monolith is the proposed application structure, not an instruction to implement it.
@@ -55,7 +69,9 @@ This replaces the earlier Go proposal. It does not select exact package versions
 
 ## Proposed, not approved
 
-The accounting chapters now contain a complete starting proposal. They are not a statement of approved accounting policy.
+The accounting chapters now contain a complete starting proposal. Except for the specifically confirmed labels, P&L grouping and initial System Account purposes above, they are not a statement of approved accounting policy.
+
+Default Accounts as optional starter templates remain proposed. Current Year Profit is proposed as a calculated display rather than a routine posting account. Further proposed candidates are Suspense, realized/unrealized FX gains or losses, and AR/AP/Inventory/Tax controls only with the relevant modules. They are not approved by acceptance of the three initial System Account purposes. No account or mapping has been created.
 
 The detailed technical contract proposes .NET/EF Core/Npgsql version families, Keycloak evaluation, authenticated invitation inboxes, transaction and lock rules, API fields, MCP delegation and development stages. Exact implementation details remain under review.
 
@@ -70,7 +86,7 @@ The recommended defaults are proposals. Answer by topic; do not repeat the confi
 | Topic | What needs a decision |
 | --- | --- |
 | 1. Ledger setup | Base currency for each company, whether foreign-currency transactions are needed in the first accounting release, fiscal year and business time zone. |
-| 2. Accounts | Flat accounts or a parent-child structure; custom code rules; whether duplicate names are acceptable; how account changes and deactivation should work. |
+| 2. Accounts | Flat accounts or a parent-child structure; custom code rules; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and optional starter templates. |
 | 3. Posting and corrections | Opening balances, who can post, period closing/reopening and the correction process for posted entries. |
 | 4. First reports | Which reports are required, date and balance presentation, and whether export is needed initially. |
 
@@ -107,6 +123,8 @@ All decisions above were recorded on 2026-10-23.
 7. Completed the remaining review drafts and rewrote the full set in plain English.
 8. Separated engineering-owned design tasks from owner business decisions. Existing technical proposals remain subject to review and validation.
 9. Standardized the term Frontend and added business workflow diagrams. Frontend implementation remains deferred; business interaction planning is in scope. Proposed accounting flows are not approved by their inclusion.
+
+10. Confirmed Cost & Expense naming, two P&L groups and three conditional System Account purposes. Default templates and further System Account candidates remain proposed.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

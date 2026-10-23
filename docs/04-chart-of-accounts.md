@@ -1,12 +1,14 @@
 # Chart of Accounts
 
-Status: Review draft. Ledger access rules are confirmed. Account structure and maintenance rules below are proposed and need approval.
+Status: Review draft. Ledger access rules, the Cost & Expense label, two P&L groups and initial System Account purposes are confirmed. Account structure and maintenance rules below are proposed and need approval.
 
 The proposed tree, repeated account names, fixed codes after use and deactivation with a remaining balance are new review recommendations. They are alternatives for discussion, not previously confirmed accounting policies. These accounting features belong to a later accounting stage, not the organization foundation's phase-one API contract.
 
 ## Confirmed
 
 Each account belongs to one ledger. Organization administrators can manage their own organization's ledgers. Members can read or edit accounts only within their assigned ledger access. Edit access does not allow a member to grant permissions.
+
+Use **Cost & Expense** instead of Expense. The P&L has two top-level groups: **Income (add)** and **Cost & Expense (subtract)**. These are reporting groups, not debit/credit rules. Preserve signed balances and contra-account effects; do not turn every amount into a positive value.
 
 ## Proposed: Account identity and code
 
@@ -24,7 +26,7 @@ Code length and allowed characters remain open. The chosen rule must work consis
 
 ## Proposed: Types and groups
 
-Start with five account types: assets, liabilities, equity, income and expenses. These types drive report classification. They are a product proposal, not a prescribed local chart of accounts.
+Start with five account types: Assets, Liabilities, Equity, Income and Cost & Expense. These types drive report classification. The overall type model remains proposed; the Cost & Expense label and two P&L groups are confirmed. This is not a prescribed local chart of accounts.
 
 Use a parent-child tree to organize accounts. A parent and its children belong to the same ledger and account type. An account cannot be its own parent or form a loop.
 
@@ -33,6 +35,27 @@ Only leaf accounts accept postings. Parent accounts show the total of their desc
 Use debit-positive amounts for internal reconciliation. Show a clear debit or credit balance to the user. An account's usual balance direction is a display aid, not a reason to reject a valid opposite balance. Detailed report signs are described in [Reports](06-reports.md).
 
 Custom account types, jurisdiction-specific templates, control accounts and subledgers are not included in this proposed first-release scope.
+
+## System Accounts and Default Accounts
+
+These are two different concepts. System Accounts and the three initial purposes below are accepted. Default Accounts remain proposed. This does not require every account at launch or authorize automatic creation.
+
+- **System Accounts (Confirmed):** explicit mappings from a system function to an account in the same ledger. A function uses the mapped account identity, not a fixed account name or code.
+- **Default Accounts (Proposed):** an optional starter chart template. Users would review or adapt it when setting up a ledger. An account supplied by a template does not automatically become a System Account.
+
+Accepted System Account purposes:
+
+| System purpose | Accepted purpose and limit |
+| --- | --- |
+| Retained Earnings | Prior-year results within an agreed year-end process. Closing and transfer rules still need review; do not double-count current-year profit. |
+| Opening Balance Clearing | Temporary offset while setting up opening balances. It must be zero when setup is complete; it is not a way to conceal an unresolved difference. |
+| Rounding Differences | Only if an approved feature actually needs automatic rounding adjustments. Do not create it by default or use it to hide an unbalanced journal. |
+
+**Current Year Profit** is proposed as a calculated report value, not an ordinary posting account. Its relationship to closing entries and retained earnings still needs an agreed reporting policy.
+
+Further candidates, still Proposed: Suspense for unresolved classification; realized and unrealized foreign-exchange gains/losses only if foreign-currency accounting is added; and receivable, payable, inventory and tax control accounts only when the relevant module is enabled. Their posting and clearing policies need separate review. Do not enable them just because a starter template includes similarly named accounts.
+
+Codes, names, template contents, mapping permissions and safeguards for changing a used mapping remain proposals. No accounts or mappings are created by this document.
 
 ## Proposed: Create, change and deactivate
 
@@ -70,5 +93,6 @@ These scenarios have not been executed. Proposed behavior must be approved befor
 2. Are the five account types enough, or are templates, control accounts or subledgers required?
 3. Is fixing a used account's code, type and parent acceptable?
 4. Do historical reports need the exact account labels shown when originally issued?
+5. Are any additional System Account functions or optional Default Account templates needed? The three accepted purposes do not approve these additions or template contents.
 
 [Next: Journals and Posting](05-journals-posting.md) · [Document index](README.md)

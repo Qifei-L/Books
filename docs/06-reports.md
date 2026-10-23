@@ -1,6 +1,6 @@
 # Balances and Reports
 
-Status: Review draft. Ledger access and separation are confirmed. Report scope, calculations and presentation below are proposed and need approval. No statutory reporting compliance is claimed.
+Status: Review draft. Ledger access, separation, the Cost & Expense label and the two P&L groups are confirmed. Report scope, calculations and presentation below are proposed and need approval. No statutory reporting compliance is claimed.
 
 These reports are proposed for a later accounting stage. They do not expand the organization foundation's phase-one API contract.
 
@@ -10,13 +10,15 @@ Reports belong to a specific ledger. Read-only members can read authorized ledge
 
 There is no automatic consolidated report for all companies in an organization.
 
+The P&L uses two top-level groups: **Income (add)** and **Cost & Expense (subtract)**. There is no separate top-level Cost group. This confirms the grouping, not every calculation, closing rule or report feature below.
+
 ## Proposed: First-release reports
 
 - Journal list and journal detail, with status, accounting date and posting reference.
 - Account transaction detail: opening balance, individual movements and closing balance.
 - Trial balance: opening balances, period debits and credits, and closing balances by account.
 - Balance sheet: assets, liabilities and equity at a selected date.
-- Income statement: income and expenses for a selected date range.
+- Income statement: Income and Cost & Expense for a selected date range.
 
 Cash-flow statements, budgets, tax returns, comparative periods, segment reporting and consolidated accounts are outside this proposed first release. The proposed balance sheet and income statement need an approved classification and year-end policy before they can be accepted as complete features.
 
@@ -50,10 +52,14 @@ The trial balance must reconcile total debits and credits for movements and for 
 
 For the proposed five account types:
 
-- Assets and expenses normally display debit-minus-credit amounts.
+- Assets and Cost & Expense normally display debit-minus-credit amounts.
 - Liabilities, equity and income normally display credit-minus-debit amounts.
 - An opposite balance stays visible; do not hide it or force it to zero.
-- Income statement profit is income less expenses for the selected range.
+- P&L profit is signed Income less signed Cost & Expense for the selected range.
+
+The add/subtract groups are not debit/credit labels. Preserve contra movements and opposite balances. For example, Income of 100 with an income reduction of 10 gives net Income of 90. Cost & Expense of 40 with a refund of 5 gives net Cost & Expense of 35. Proposed presentation: profit is 90 minus 35, or 55. Do not take absolute values and turn reductions into extra income or expense.
+
+Current Year Profit is proposed as a calculated report value, not an ordinary posting account. The accepted Retained Earnings purpose and other system-function mappings are described in [Chart of Accounts](04-chart-of-accounts.md#system-accounts-and-default-accounts). Acceptance of a purpose does not settle year-end calculations or create accounts.
 
 A balance sheet also needs a defined treatment of current-year profit, previous-year results and closing entries. Those rules are not yet approved. Do not add an unexplained “balancing figure,” double-count transferred profit, or label an unbalanced result as final. Until the year-end and equity presentation rules are agreed, treat statement layouts as review drafts; trial balance and detail remain the reconciliation references.
 
