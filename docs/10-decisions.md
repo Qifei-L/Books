@@ -83,6 +83,12 @@ Include incomplete data, unusable records and import or processing errors in Sus
 
 Add Item (product or service) to journal lines, separate from Account. Item is optional, including for pure adjustment journals. Selecting Item may suggest a default Account; the actual Account used is saved on the line. This does not approve the full header/line model, inventory, quantity, costing or FX behavior.
 
+### Journal transaction currency
+
+Each journal uses one transaction currency, with the same currency on all lines. No independent line-currency override is allowed. Base-currency conversion amounts are valuations, not mixed transaction currencies.
+
+Header Currency and line transaction/base amounts are proposed field placement. Supported currencies, rate direction/source/precision, rate scope, rounding and account-currency constraints remain separate decisions. Cross-currency transfers require a separate future workflow. No tax or FX implementation is approved.
+
 ### Technology direction
 
 Use C#, ASP.NET Core, EF Core and PostgreSQL. API and MCP come first. Do not add ABP in phase one. A modular monolith is the proposed application structure, not an instruction to implement it.

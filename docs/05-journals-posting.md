@@ -1,6 +1,6 @@
 # Journals and Posting
 
-Status: Review draft. Access boundaries and a separate Item field on each journal line are confirmed. The journal workflow and accounting controls below are proposals, not approved accounting policy.
+Status: Review draft. Access boundaries, the agreed Item behavior and one transaction currency per journal are confirmed. The journal workflow and accounting controls below are proposals, not approved accounting policy.
 
 These workflows are proposed for a later accounting stage. They do not add journal endpoints or other accounting work to the organization foundation's phase-one API contract.
 
@@ -9,6 +9,8 @@ These workflows are proposed for a later accounting stage. They do not add journ
 Every journal belongs to one ledger. A member needs edit access to change ledger data; read-only access never permits a write. An organization administrator's access is limited to that organization and does not bypass accounting checks. Members cannot delegate access.
 
 A journal line includes **Item** (the product or service) separately from **Account** (the accounting destination). Adding Item does not approve the full journal header/line model, inventory processing, quantities, costing or foreign-currency rules.
+
+Confirmed currency boundary: each journal has **one transaction currency** shared by all its lines. Lines cannot select or override their own transaction currency. A converted base-currency amount is a valuation of the same line, not a second transaction currency.
 
 ## Proposed: First-release scope
 
@@ -41,6 +43,7 @@ At the moment of posting, verify:
 - The company is active and its required accounting settings are complete.
 - There are at least two non-zero lines. Each line has a debit or a credit, never both, and never a negative amount.
 - Every account belongs to this ledger and is active and eligible for posting.
+- Enforce the confirmed single transaction currency for all lines; reject mixed-currency lines or independent line-currency overrides.
 - Debit total equals credit total exactly at the agreed amount precision.
 - The accounting date is valid, no earlier than the ledger opening date, and belongs to an open accounting period.
 - The journal has not already been posted or cancelled, and the submitted draft version is current.
@@ -51,7 +54,11 @@ Do not invent a balancing line or silently round an unbalanced journal into bala
 
 Use decimal amounts, not binary floating point, throughout entry, storage, calculations and exports. The number of decimal places, maximum amount and rounding rule remain open. In this proposal, input beyond the approved precision is rejected rather than silently rounded.
 
-Single-base-currency journals are the proposed starting point. Foreign-currency amounts and exchange gains or losses require a separate approved design.
+The earlier base-currency-only starting point is a release-scope proposal, not the meaning of the confirmed one-currency-per-journal rule. That rule does not select supported currencies or approve an FX engine.
+
+Proposed field placement: put Currency in the journal Header. Each line stores its amount in that shared transaction currency and, where conversion is supported, the corresponding ledger base-currency amount. Do not allow an independent Currency override on a line.
+
+Rate direction, source, precision, rounding, whether rates are shared or line-specific, and account-currency constraints remain undecided. Cross-currency transfers need a separate future workflow; they do not relax the one-transaction-currency rule. No tax fields or FX implementation are approved by this decision.
 
 Keep three concepts separate:
 
