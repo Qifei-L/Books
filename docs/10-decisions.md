@@ -79,6 +79,10 @@ This approval covers the tree, not automatic account generation, new field requi
 
 Include incomplete data, unusable records and import or processing errors in Suspense review. Distinguish valid entries posted to a Suspense Account from invalid or failed records kept unposted for review. This does not authorize posting invalid entries or select a Frontend layout.
 
+### Journal line Item
+
+Add Item (product or service) to journal lines, separate from Account. Item is optional, including for pure adjustment journals. Selecting Item may suggest a default Account; the actual Account used is saved on the line. This does not approve the full header/line model, inventory, quantity, costing or FX behavior.
+
 ### Technology direction
 
 Use C#, ASP.NET Core, EF Core and PostgreSQL. API and MCP come first. Do not add ABP in phase one. A modular monolith is the proposed application structure, not an instruction to implement it.

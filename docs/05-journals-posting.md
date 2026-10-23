@@ -1,12 +1,14 @@
 # Journals and Posting
 
-Status: Review draft. Access boundaries are confirmed. The journal workflow and accounting controls below are proposals, not approved accounting policy.
+Status: Review draft. Access boundaries and a separate Item field on each journal line are confirmed. The journal workflow and accounting controls below are proposals, not approved accounting policy.
 
 These workflows are proposed for a later accounting stage. They do not add journal endpoints or other accounting work to the organization foundation's phase-one API contract.
 
 ## Confirmed
 
 Every journal belongs to one ledger. A member needs edit access to change ledger data; read-only access never permits a write. An organization administrator's access is limited to that organization and does not bypass accounting checks. Members cannot delegate access.
+
+A journal line includes **Item** (the product or service) separately from **Account** (the accounting destination). Adding Item does not approve the full journal header/line model, inventory processing, quantities, costing or foreign-currency rules.
 
 ## Proposed: First-release scope
 
@@ -16,7 +18,9 @@ Ledger editors and organization administrators would be able to prepare, post an
 
 ## Proposed: Journal content
 
-A journal contains its ledger, accounting date, description, stable identity, status and lines. Each line contains an account, an optional description, and debit or credit amount. Keep the creator, creation time, latest editor and posting actor/time separately.
+A journal contains its ledger, accounting date, description, stable identity, status and lines. Each line contains an Account and a separate Item field, plus the proposed optional description and debit or credit amount. Keep the creator, creation time, latest editor and posting actor/time separately.
+
+Confirmed Item behavior: Item is optional, so a pure adjustment journal need not select one. Selecting Item may suggest a default Account, but the line stores the actual Account selected for that entry. Changing an Item's default later must not rewrite historical lines or their Account references. Optionality, the default-Account suggestion and saving the actual line Account are confirmed. A suggested Account does not bypass account validity or posting checks.
 
 Use a stable internal identity from creation. Assign an immutable human-readable posting number when posting succeeds. The numbering format and sequence scope remain open; do not promise gap-free numbering before those rules are defined.
 
