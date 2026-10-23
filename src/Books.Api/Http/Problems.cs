@@ -1,4 +1,7 @@
+using System.Data.Common;
 using Books.Application.Common;
+using Books.Domain.Access;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
@@ -31,6 +34,15 @@ public sealed class ProblemExceptionHandler : IExceptionHandler
         {
             case BooksProblem problem:
                 await Problems.WriteAsync(context, problem.Status, problem.Code, problem.Message);
+                return true;
+            case DomainException domain:
+                await Problems.WriteAsync(context, 400, "INVALID_ARGUMENT", domain.Message);
+                return true;
+            case DbException { SqlState: "23505" }:
+                await Problems.WriteAsync(context, 409, "CONFLICT", "The change conflicts with existing data.");
+                return true;
+            case DbUpdateException { InnerException: DbException { SqlState: "23505" } }:
+                await Problems.WriteAsync(context, 409, "CONFLICT", "The change conflicts with existing data.");
                 return true;
             case BadHttpRequestException:
                 await Problems.WriteAsync(context, 400, "INVALID_ARGUMENT", "The request body or parameters are invalid.");
