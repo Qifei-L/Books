@@ -30,8 +30,13 @@ Current focus: Journal requirements, common/subsystem/Account validation and the
 - [Reports](06-reports.md): TB, GL Detail, Balance Sheet and P&L. **Report set/core layout confirmed; detailed mechanics proposed.**
 - [API and MCP principles](07-api-conventions.md): shared access checks and consistent request/result behavior. **Principles confirmed; exact contracts proposed.**
 
+### Supporting modules
+
+- [Party](12-party.md): complete Party scope, fields, operations, history rules and acceptance. **Line relationship confirmed; master-data policies proposed.**
+
 ## 4. Technical design
 
+- [Party technical design](design/party-technical-design.md): proposed typed API, schema, transaction/race protection and acceptance matrix. **Design only; no code or tests.**
 - [Journal posting contract](design/journal-posting-contract.md): proposed C# request/result shapes, rule composition, versions, transactions and recovery. **Not implemented or tested.**
 - [Organization and access design](design/organizations-permissions.md): identity, membership, invitation and grant responsibilities. **Design proposal.**
 - [Foundation technical contract](design/phase-1-technical-contract.md): proposed API/data models, constraints, transactions, MCP and development tasks. **Foundation only; not accounting implementation.**
@@ -61,3 +66,4 @@ Planning → Requirements & Workflow → System/Technical Design → Development
 ## Historical material
 
 [Earlier account requirements](requirements.md) is a superseded summary retained for context, not the current contract.
+

@@ -6,7 +6,7 @@ Status: Technical proposal, not implemented or tested. This document explains th
 
 **Confirmed requirements**
 
-- JournalLine includes Qty and Item separately from Account.
+- JournalLine includes Qty, Item and optional PartyId separately from Account. Party requiredness follows the applicable business and Account rules, not a blanket rule for every line.
 - Effective requirements combine Journal common rules, the subsystem's rules and each selected Account's rules. They add requirements; one layer cannot waive another.
 - Normal Save preserves input and attempts posting in one user action. Save Draft does not post.
 - Valid official source changes and their Journal/accounting effects must succeed together. A failed edit preserves the last valid source version and posting.
@@ -56,7 +56,7 @@ Blank Usage is undeclared, not universal suitability and not an automatic denial
 
 Save the actual AccountId. Suggestions and later Usage changes never rewrite historical selections. Item may still suggest an Account without introducing Default Account settings. No Default Usage, Default Account, Link or Account Non-Usage field is added.
 
-Proposed source-linked example: a Receipt settling a particular Sales source should use the corresponding receivable account rather than silently choose a different one with the same Usage. This illustrates source consistency; it does not approve Receipt allocation policy or implementation.
+Confirmed source relationship: a Receipt settling a particular Sales source keeps the corresponding Party and receivable account rather than silently choosing another account with the same Usage. This does not approve the complete Receipt allocation policy or implementation.
 
 ## 3. Proposed typed C# shapes
 
@@ -70,6 +70,7 @@ record SourceRef(string Kind, Guid Id);
 record JournalLineCandidate(
     Guid LineId,
     Guid AccountId,
+    Guid? PartyId,
     Guid? ItemId,
     decimal? Qty,
     Guid? UnitId,
@@ -123,6 +124,15 @@ IDs are stable across retries. The server allocates or validates IDs in the auth
 
 Expected versions refer to the current official versions for an edit. ExpectedCandidateVersion protects candidate revisions, including Save Draft; the initial candidate uses an explicit create-only expectation, not a wildcard update. New-record semantics, version tokens and identity allocation must be finalized before implementation. RuleSetVersion identifies a preview, not a permission or waiver.
 
+### Party reference
+
+Use [Party](../12-party.md) and its [technical design](party-technical-design.md) as supporting requirements, not a separate accounting engine. PartyId is an optional typed Journal line reference; when a rule requires Party, validate it along with the selected Account. Do not accept a separate CustomerId/SupplierId as an alternative path that bypasses the Party rule.
+
+Proposed storage: Party records have stable identities and belong to the current ledger. A future shared master-data catalog would require explicit ownership/access mapping; it is not enabled by reusing an ID. All supplied references must pass current scope, availability and version checks. Preserve relevant historical Party labels by revision/snapshot, not by rewriting old postings from today's master settings.
+
+
+Party is not an invoice-allocation key. Source links, line links and future allocation records remain separate identities. The confirmed source Party/A/R relationship is checked by the subsystem adapter and the common commit contract; full allocation behavior remains future scope.
+
 ## 4. Durable candidate and atomic official effects
 
 Keep two logical concepts, which may share one database:
@@ -144,7 +154,7 @@ For SaveAndPost, begin the accounting transaction after the candidate exists:
 
 1. Acquire the agreed authorization and ledger operation locks in a deterministic order. Recheck current actor access, ownership, current official/candidate versions and request state.
 2. Check Close under the same serialization boundary used to change the cutoff. For an existing posting, both original and proposed accounting dates must be open. New postings must be after the cutoff.
-3. Resolve current common, subsystem and Account rules. Revalidate the saved candidate and generate/check the journal proposal. Changes to posting-relevant rules and posting-relevant reference eligibility, including Account, Item and Unit participate in the same lock/version protocol; verify validated versions remain current at commit so a change cannot slip between validation and posting.
+3. Resolve current common, subsystem and Account rules. Revalidate the saved candidate and generate/check the journal proposal. Changes to posting-relevant rules and posting-relevant reference eligibility, including Account, Party, Item and Unit participate in the same lock/version protocol; verify validated versions remain current at commit so a change cannot slip between validation and posting.
 4. Validate same-ledger references, one transaction currency, shared rate, amount precision and debit/credit balance. No source adapter may write balances directly.
 5. Commit the accepted source version, Journal revision, complete accounting effect, source-to-journal linkage, successful operation receipt and audit evidence together.
 6. For an edit, replace the old effective impact atomically; never expose old plus new as two current postings. For a permitted delete, remove the current effect and update the source's current-posting indication in the same transaction while retaining identity/history.
@@ -217,3 +227,4 @@ All cases are **Not run**:
 No provider has been selected, no code or migrations written, and no tests run by this document.
 
 [Journal requirements](../05-journals-posting.md#journal-core-contract) · [Document index](../README.md)
+

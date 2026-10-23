@@ -10,6 +10,10 @@ Read the [System Design Principles](00-system-design-principles.md) for the over
 
 Every journal belongs to one ledger. A member needs edit access to change ledger data; read-only access never permits a write. An organization administrator's access is limited to that organization and does not bypass accounting checks. Members cannot delegate access.
 
+A journal line includes optional **PartyId**, pointing to a customer, supplier or other party. Require Party on receivable/payable lines only when the applicable business and Account rules require it; ordinary income/expense lines are not universally required to carry one. Different lines may reference different Parties. Party identifies the counterparty, not the invoice-allocation relationship.
+
+For a Sales source, carry its customer to the receivable line. A Receipt settling that source retains the corresponding Party and A/R account. These relationships do not settle full Sales/Receipt allocation behavior or authorize those modules. See the [Party requirements](12-party.md).
+
 A journal line includes **Qty**. Qty does not automatically calculate money, move stock or select inventory costing. Unit is a proposed companion where a relevant rule needs it; permitted signs, precision and unit policy depend on the intended use.
 
 A journal line includes **Item** (the product or service) separately from **Account** (the accounting destination). Adding Item does not approve the full journal header/line model, inventory processing, quantities, costing or foreign-currency rules.
@@ -101,7 +105,7 @@ Ledger editors and organization administrators would be able to prepare, post an
 
 ## Proposed: Journal content
 
-A journal contains its ledger, accounting date, description, stable identity, status and lines. Each line contains an Account, separate Item and Qty fields, plus the proposed optional description and debit or credit amount. Keep the creator, creation time, latest editor and posting actor/time separately.
+A journal contains its ledger, accounting date, description, stable identity, status and lines. Each line contains an Account, optional PartyId, separate Item and Qty fields, plus the proposed optional description and debit or credit amount. Keep the creator, creation time, latest editor and posting actor/time separately.
 
 Confirmed Item behavior: Item is optional, so a pure adjustment journal need not select one. Selecting Item may suggest a default Account, but the line stores the actual Account selected for that entry. Changing an Item's default later must not rewrite historical lines or their Account references. Optionality, the default-Account suggestion and saving the actual line Account are confirmed. A suggested Account does not bypass applicable subsystem business-purpose rules, current ledger access, account validity or composed posting checks. This retained Item suggestion does not introduce a separate Default Account setting. Users may select another account suitable for the operation; the actual selection is saved. Account Usage describes business purpose, not caller permission. A blank Usage does not automatically block a manual journal; common and Account rules still apply.
 
@@ -250,3 +254,4 @@ These are proposed acceptance scenarios, not completed tests.
 
 [Business workflow diagrams](11-workflows.md)
 [Next: Balances and Reports](06-reports.md) · [Document index](README.md)
+

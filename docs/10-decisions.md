@@ -92,6 +92,12 @@ Call the second category **Error**, replacing the earlier label Suspense Review.
 
 Add Item (product or service) to journal lines, separate from Account. Item is optional, including for pure adjustment journals. Selecting Item may suggest an Account; the actual Account used is saved on the line. This is not a separate Default Account setting and does not restrict the user to one eligible account. This does not approve the full header/line model, inventory, quantity, costing or FX behavior.
 
+### Journal Party
+
+Add optional PartyId to JournalLine rather than separate CustomerId/SupplierId fields. Receivable/payable lines require Party when the business and Account rules require it; ordinary income/expense lines do not all require Party. Different Journal lines may have different Parties. A Sales customer carries to its receivable line; a Receipt settling that source keeps the corresponding Party and A/R. Party is not the invoice-allocation link.
+
+The [Party requirements](12-party.md) and [technical design](design/party-technical-design.md) are review drafts. Concrete master-data fields, maintenance rights, code policies, historical snapshots and maintenance mechanisms remain proposed unless individually confirmed. This does not approve full Sales or Receipt implementation.
+
 ### Journal Qty and requirement composition
 
 Add Qty to JournalLine. The effective requirements are Journal common rules + subsystem requirements + each line's Account requirements. One layer cannot waive another; manual journals still apply common and Account checks. Frontend, API and MCP share the authoritative server validation contract.
@@ -242,6 +248,11 @@ All decisions above were recorded on 2026-10-23.
 
 25. Confirmed Account Usage as a many-to-many business-purpose association. Only the same account/Usage pair is unique within a ledger. Blank is undeclared, not all-purpose and not a manual-Journal prohibition. This supersedes the earlier subsystem/caller eligibility wording without changing permissions or composed validation.
 
+26. Confirmed optional JournalLine PartyId and its rule-based source relationship. Party requirements and technical design remain review drafts; no module implementation is authorized.
+
+27. Expanded Party into a complete functional and technical review draft. Field policies, maintenance rights, code uniqueness, snapshots, inactive-reference behavior and deletion mechanisms remain proposals. No publication or implementation authority follows from the draft itself.
+
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 
 [Documentation index](README.md)
+
