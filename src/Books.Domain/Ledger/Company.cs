@@ -67,8 +67,38 @@ public sealed class Ledger
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
 
+    /// <summary>When the first journal was posted; base currency and fiscal year are fixed from then on (rules 10, 12).</summary>
+    public DateTimeOffset? FirstPostedAt { get; private set; }
+
     /// <summary>Issues the next Journal No. Call only while holding the write lock.</summary>
     public long IssueJournalNo() => ++LastJournalNo;
+
+    public void RecordPosting(DateTimeOffset at) => FirstPostedAt ??= at;
+
+    /// <summary>Changes setup before the first posting only; null arguments leave a field unchanged.</summary>
+    public void ChangeSettings(string? baseCurrency, int? fiscalYearStartMonth)
+    {
+        var currency = baseCurrency is null ? BaseCurrency : Currencies.Require(baseCurrency).Code;
+        var month = fiscalYearStartMonth ?? FyStartMonth;
+        if (FirstPostedAt is not null && (currency != BaseCurrency || month != FyStartMonth))
+        {
+            throw new DomainException("Base currency and fiscal year start cannot change after the first posting.");
+        }
+        if (month is < 1 or > 12)
+        {
+            throw new DomainException("fy_start_month must be 1–12.");
+        }
+        BaseCurrency = currency;
+        FyStartMonth = month;
+        Version++;
+    }
+
+    /// <summary>Sets the inclusive Close date. Moving it back (reopening) or clearing it is allowed (owner decision).</summary>
+    public void CloseThrough(DateOnly? date)
+    {
+        ClosedThrough = date;
+        Version++;
+    }
 }
 
 public sealed record Currency(string Code, int MinorUnits);

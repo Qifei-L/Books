@@ -32,6 +32,10 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
 
             var journal = new Journal(Guid.CreateVersion7(), orgId, ledgerId, ledger.IssueJournalNo(), principal.UserId, scope.Now);
             var revision = AddRevision(journal, draft, status, issues, principal.UserId, scope.Now);
+            if (status == RevisionStatus.Posted)
+            {
+                ledger.RecordPosting(scope.Now);
+            }
             db.Journals.Add(journal);
             scope.Audit($"journal.{Text.Of(status)}", "journal", journal.Id, new
             {
@@ -68,6 +72,10 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
 
             await SupersedeAsync(journal, keepEffective: status != RevisionStatus.Posted, scope.Now, ct);
             var revision = AddRevision(journal, draft, status, issues, principal.UserId, scope.Now);
+            if (status == RevisionStatus.Posted)
+            {
+                ledger.RecordPosting(scope.Now);
+            }
             scope.Audit($"journal.{Text.Of(status)}", "journal", journal.Id, new
             {
                 journal_no = journal.JournalNo,
