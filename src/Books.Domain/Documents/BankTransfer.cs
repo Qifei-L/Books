@@ -4,6 +4,12 @@ using Books.Domain.Journals;
 namespace Books.Domain.Documents;
 
 /// <summary>
+/// Draft: saved without accounting effect, either by choice or because posting failed (with the reasons in
+/// Issues). Posted: its journal is effective. Deleted: removed, history kept.
+/// </summary>
+public enum DocumentStatus { Draft, Posted, Deleted }
+
+/// <summary>
 /// Money moved between two bank accounts of the same ledger, with an optional bank fee (P10). The first document
 /// type: it posts through the document framework, so the transfer and its journal always change together
 /// (rule 31) and the journal is changed only through the transfer (rule 32).
@@ -40,7 +46,10 @@ public sealed class BankTransfer
     public string? Reference { get; private set; }
     public string? Description { get; private set; }
     public Guid? JournalId { get; private set; }
-    public bool Deleted { get; private set; }
+    public DocumentStatus Status { get; private set; } = DocumentStatus.Draft;
+
+    /// <summary>Why the document is not posted (JSON validation issues); null when posted or when none were found.</summary>
+    public string? Issues { get; private set; }
     public Guid CreatedBy { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
@@ -74,11 +83,19 @@ public sealed class BankTransfer
         }
     }
 
-    public void PostedAs(Guid journalId) => JournalId = journalId;
+    public void PostedAs(Guid journalId)
+    {
+        JournalId = journalId;
+        Status = DocumentStatus.Posted;
+        Issues = null;
+    }
+
+    /// <summary>Kept as a draft, with the reasons it could not be posted (or none when saved as a draft on purpose).</summary>
+    public void KeptAsDraft(string? issues) => Issues = issues;
 
     public void Delete()
     {
-        Deleted = true;
+        Status = DocumentStatus.Deleted;
         Version++;
     }
 

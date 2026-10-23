@@ -508,10 +508,6 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("date")
                         .HasColumnName("date");
 
-                    b.Property<bool>("Deleted")
-                        .HasColumnType("boolean")
-                        .HasColumnName("deleted");
-
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
@@ -530,6 +526,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("from_account_id");
 
+                    b.Property<string>("Issues")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("issues");
+
                     b.Property<Guid?>("JournalId")
                         .HasColumnType("uuid")
                         .HasColumnName("journal_id");
@@ -546,6 +546,12 @@ namespace Books.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("reference");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
 
                     b.Property<Guid>("ToAccountId")
                         .HasColumnType("uuid")
@@ -587,6 +593,8 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("bank_transfers", null, t =>
                         {
                             t.HasCheckConstraint("ck_bank_transfers_amounts", "amount > 0 AND fee_amount >= 0 AND from_account_id <> to_account_id");
+
+                            t.HasCheckConstraint("ck_bank_transfers_status", "status IN ('draft', 'posted', 'deleted') AND (status <> 'posted' OR journal_id IS NOT NULL)");
                         });
                 });
 

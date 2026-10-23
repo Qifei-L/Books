@@ -6,6 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Books.Application.Documents;
 
+/// <summary>Either the posted journal, or the issues that stopped the posting (nothing was posted).</summary>
+public sealed record PostingOutcome(Journal? Journal, IReadOnlyList<JournalIssue> Issues);
+
 /// <summary>
 /// The document framework. A document service builds its journal lines with a posting adapter and calls this
 /// inside its own write transaction, so the document and its journal are saved together or not at all (rule 31).
@@ -14,10 +17,11 @@ namespace Books.Application.Documents;
 public sealed class DocumentPosting(IBooksDb db, JournalService journals)
 {
     /// <summary>
-    /// Posts a new journal for the document, or replaces the posting of its existing journal. If the lines fail
-    /// validation nothing is saved: the whole transaction, document included, is rolled back with a 422.
+    /// Posts a new journal for the document, or replaces the posting of its existing journal. When the lines fail
+    /// validation nothing is posted and the issues are returned: the caller keeps a new or draft document as a
+    /// draft with those reasons, and refuses a failed edit of a posted document (rule 28).
     /// </summary>
-    public async Task<Journal> PostAsync(WriteScope scope, Ledger ledger, string sourceKind, Guid sourceId, Guid? journalId, JournalDraft draft, CancellationToken ct)
+    public async Task<PostingOutcome> PostAsync(WriteScope scope, Ledger ledger, string sourceKind, Guid sourceId, Guid? journalId, JournalDraft draft, CancellationToken ct)
     {
         JournalService.RefuseAgentPosting(scope.Principal, touchesPosting: true);
         var journal = journalId is { } id ? await db.Journals.SingleAsync(j => j.Id == id, ct) : null;
@@ -28,7 +32,7 @@ public sealed class DocumentPosting(IBooksDb db, JournalService journals)
         var issues = JournalService.RejectUnknownReferences(JournalValidator.Validate(draft, context));
         if (issues.Count > 0)
         {
-            throw new BooksProblem(422, "DOCUMENT_INVALID", "The document's posting is not valid; nothing was saved.") { Issues = issues };
+            return new PostingOutcome(null, issues);
         }
 
         if (journal is null)
@@ -43,8 +47,12 @@ public sealed class DocumentPosting(IBooksDb db, JournalService journals)
         }
         journals.AddRevision(journal, draft, RevisionStatus.Posted, [], scope.Principal.UserId, scope.Now);
         ledger.RecordPosting(scope.Now);
-        return journal;
+        return new PostingOutcome(journal, []);
     }
+
+    /// <summary>Validates without posting, for a document saved as a draft on purpose: the reasons it would not post yet.</summary>
+    public async Task<IReadOnlyList<JournalIssue>> CheckAsync(Ledger ledger, JournalDraft draft, CancellationToken ct) =>
+        JournalService.RejectUnknownReferences(JournalValidator.Validate(draft, await journals.ContextAsync(ledger, draft, null, ct) with { FromDocument = true }));
 
     /// <summary>Removes the document's posting while its date is after Close; history stays as revisions.</summary>
     public async Task DeleteAsync(WriteScope scope, Ledger ledger, Guid journalId, CancellationToken ct)

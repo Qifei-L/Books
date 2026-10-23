@@ -148,7 +148,7 @@ public static class DemoData
         await journals.CreateAsync(principal, Meta(), orgId, ledgerId,
             new JournalDraft(DateOnly.Parse("2026-10-30"), [new DraftLine(rent, 1_200m), new DraftLine(bank, -1_200m)], "RENT-11", "November rent (draft)"), false, ct);
         await transfers.CreateAsync(principal, Meta(), orgId, ledgerId,
-            new BankTransferInput(DateOnly.Parse("2026-10-20"), bank, acleda, 3_000m, 2m, bankCharges, "TT-2026-014", "Move funds to ACLEDA"), ct);
+            new BankTransferInput(DateOnly.Parse("2026-10-20"), bank, acleda, 3_000m, 2m, bankCharges, "TT-2026-014", "Move funds to ACLEDA"), true, ct);
         await settings.CloseAsync(principal, Meta(ledgerVersion), orgId, ledgerId, DateOnly.Parse("2026-09-30"), ct);
         return orgId;
     }
