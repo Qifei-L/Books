@@ -2,7 +2,8 @@ namespace Books.Api.Auth;
 
 public static class DevTokenEndpoint
 {
-    public sealed record DevTokenRequest(string Subject, string? Email, string? Name);
+    /// <param name="Mcp">True for a token for the MCP endpoint instead of the HTTP API.</param>
+    public sealed record DevTokenRequest(string Subject, string? Email, string? Name, bool? Mcp);
 
     /// <summary>
     /// Development only: issues a short-lived token from the in-memory local issuer so the API
@@ -14,8 +15,11 @@ public static class DevTokenEndpoint
         {
             return;
         }
-        var audience = app.Services.GetRequiredService<AuthOptions>().Audience;
+        var options = app.Services.GetRequiredService<AuthOptions>();
         app.MapPost("/dev/token", (DevTokenRequest request) =>
-            Results.Ok(new { access_token = issuer.CreateToken(request.Subject, audience, request.Email, name: request.Name) }));
+        {
+            var audience = request.Mcp == true ? options.McpAudience : options.Audience;
+            return Results.Ok(new { access_token = issuer.CreateToken(request.Subject, audience, request.Email, name: request.Name) });
+        });
     }
 }

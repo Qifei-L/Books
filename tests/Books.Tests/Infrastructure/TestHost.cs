@@ -20,6 +20,7 @@ namespace Books.Tests.Infrastructure;
 public sealed class TestHost : IAsyncLifetime
 {
     public const string Audience = "books-api";
+    public const string McpAudience = "books-mcp";
 
     private PostgreSqlContainer? _container;
     private WebApplicationFactory<Program>? _factory;
@@ -62,6 +63,7 @@ public sealed class TestHost : IAsyncLifetime
             builder.UseSetting("ConnectionStrings:Books", ConnectionString);
             builder.UseSetting("Auth:UseLocalIssuer", "true");
             builder.UseSetting("Auth:Audience", Audience);
+            builder.UseSetting("Auth:McpAudience", McpAudience);
             builder.UseSetting("Logging:LogLevel:Default", "Warning");
         });
         // Start the server now: lazy start from parallel tests is not thread-safe and could build two hosts with different keys.

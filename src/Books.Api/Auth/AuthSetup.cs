@@ -11,12 +11,18 @@ public sealed class AuthOptions
     /// <summary>Audience the Books HTTP API accepts.</summary>
     public string Audience { get; set; } = "books-api";
 
+    /// <summary>Audience the MCP endpoint accepts. Kept separate so a token for one entry point cannot be used at the other.</summary>
+    public string McpAudience { get; set; } = "books-mcp";
+
     /// <summary>Use the in-memory <see cref="LocalTokenIssuer"/>. Allowed only in Development and Testing.</summary>
     public bool UseLocalIssuer { get; set; }
 }
 
 public static class AuthSetup
 {
+    public const string ApiPolicy = "api";
+    public const string McpPolicy = "mcp";
+
     public static void AddBooksAuthentication(this WebApplicationBuilder builder)
     {
         var options = builder.Configuration.GetSection("Auth").Get<AuthOptions>() ?? new AuthOptions();
@@ -44,7 +50,7 @@ public static class AuthSetup
                 jwt.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidIssuer = options.UseLocalIssuer ? LocalTokenIssuer.Issuer : options.Issuer,
-                    ValidAudience = options.Audience,
+                    ValidAudiences = [options.Audience, options.McpAudience],
                     ValidAlgorithms = [SecurityAlgorithms.RsaSha256, SecurityAlgorithms.EcdsaSha256],
                     RequireExpirationTime = true,
                     RequireSignedTokens = true,
@@ -67,8 +73,12 @@ public static class AuthSetup
                         context.Response.Headers.WWWAuthenticate = "Bearer";
                         await Problems.WriteAsync(context.HttpContext, 401, "UNAUTHENTICATED", "Authentication is required.");
                     },
+                    OnForbidden = context =>
+                        Problems.WriteAsync(context.HttpContext, 403, "INSUFFICIENT_SCOPE", "This token is not issued for this endpoint."),
                 };
             });
-        builder.Services.AddAuthorization();
+        builder.Services.AddAuthorizationBuilder()
+            .AddPolicy(ApiPolicy, policy => policy.RequireAuthenticatedUser().RequireClaim("aud", options.Audience))
+            .AddPolicy(McpPolicy, policy => policy.RequireAuthenticatedUser().RequireClaim("aud", options.McpAudience));
     }
 }
