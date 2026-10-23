@@ -6,53 +6,124 @@ Current sequence: Planning -> Requirements & Workflow -> Technical Design -> Dev
 
 The diagrams show business steps, not final Frontend layouts or endpoint contracts. Frontend interaction planning and links to API business operations are in scope. Frontend implementation is deferred. API and MCP must use the same backend access rules.
 
+## First-phase workflow index
+
+- [Sign in and select an organization](#enter-books)
+- [Create an organization](#explicitly-create-an-organization)
+- [Create a company and its ledger](#2-create-a-company-and-its-ledger)
+- [Send, accept or revoke an invitation](#3-invite-and-join)
+- [Grant or remove ledger access](#4-grant-or-remove-ledger-access)
+- [Leave, remove a member or hand over administration](#5-leave-remove-a-member-or-demote-an-administrator)
+
+The interaction diagrams are proposals around the confirmed business rules. API names describe business operations, not new technical contracts. The accounting diagrams below remain separate proposals; this update does not change them.
+
 ## 1. Sign in, choose an organization, or create one
 
 Confirmed: A registered user with a verified identity may explicitly create an organization. After successful creation, that user is its first administrator. Signing in is not organization creation.
 
 ### Enter Books
 
-Proposed interaction flow: Check sign-in and identity verification separately, then show the organizations and invitations available to this user.
+Proposed interaction planning. Each diagram separates who acts:
+- **User:** chooses what to do.
+- **Frontend:** presents choices and results.
+- **API:** checks trusted identity and current access.
+
+API labels below are business operations, not final URLs or fields. Sign-in and verification use the future identity service; these diagrams do not make Books the password handler or choose an authentication provider.
+
+#### A. Check sign-in
 
 ```mermaid
-flowchart TD
-    A["Open Books"] --> B{"Valid signed-in session?"}
-    B -->|No| C{"Already have an account?"}
-    C -->|Yes| D["Sign in to the existing account"]
-    C -->|No| E["Sign up for a new account"]
-    D --> B
-    E --> B
-    B -->|Yes| F{"Identity verified?"}
-    F -->|No| G["Complete identity verification"]
-    G --> F
-    F -->|Yes| H["Show accessible organizations and invitations"]
-    H --> M["Review a pending invitation using section 3"]
-    H --> N["Choose Create organization using the separate flow below"]
-    H --> I["Choose an existing organization"]
-    I --> J{"Current membership allows access?"}
-    J -->|No| K["Explain unavailable access and refresh the list"]
-    J -->|Yes| L["Enter that organization with current permissions"]
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Open Books
+    F->>A: Check current sign-in status
+    alt No valid sign-in
+        A-->>F: Sign-in required
+        F-->>U: Sign in, or sign up if you have no account
+        U->>F: Complete the chosen identity-service flow
+        F->>A: Check sign-in status again
+        A-->>F: Current status
+    else Valid sign-in
+        A-->>F: Signed-in identity
+    end
 ```
 
-- An expired or invalid session sends the person to sign in, not to create another account or organization.
-- A pending invitation is not membership. The person must explicitly accept a valid invitation using the flow in section 3.
-- If the list is empty, offer invitation review or the explicit Create organization action. Do not create an organization automatically.
-- A person who already belongs to an organization can select it. They may also explicitly create a different organization under the confirmed creation policy.
+Continue to B only after sign-in succeeds. A failed or cancelled sign-in stays at this step. An expired session requires sign-in again, not another account or organization.
+
+#### B. Verify identity and show choices
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    F->>A: Check identity verification status
+    alt Verification needed
+        A-->>F: Verification required
+        F-->>U: Complete identity verification
+        U->>F: Complete the identity-service verification flow
+        F->>A: Check verification status again
+        A-->>F: Current status
+    else Identity verified
+        A-->>F: Verified
+    end
+```
+
+Continue only when the API confirms verification. Otherwise explain what is still needed. Then request accessible organizations and relevant invitations and show three separate choices:
+1. Select an existing organization using C.
+2. Review and explicitly accept a valid invitation using section 3.
+3. Explicitly choose Create organization using the separate flow below.
+
+An empty organization list is a normal result. It does not create an organization or accept an invitation automatically.
+
+#### C. Select an existing organization
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    F->>A: List accessible organizations and relevant invitations
+    A-->>F: Current permitted choices
+    F-->>U: Show choices
+    U->>F: Select an existing organization
+    F->>A: Request access to the selected organization
+    alt Current membership allows access
+        A-->>F: Authorized organization and current permissions
+        F-->>U: Enter the selected organization
+    else Access is no longer allowed
+        A-->>F: Access unavailable
+        F-->>U: Explain and refresh choices
+    end
+```
+
+The API checks current access, even if the organization appeared in an earlier list. Selection does not create an organization, change membership or carry permissions from another organization. Each later operation still needs its own access check.
+
+A pending invitation is not membership. A person who already belongs to an organization may also explicitly create a different organization under the confirmed creation policy.
 
 ### Explicitly create an organization
 
 ```mermaid
-flowchart TD
-    A["Frontend: user chooses Create organization"] --> B["Enter organization details and confirm creation"]
-    B --> C["API business operation: create organization"]
-    C --> D{"Current sign-in and verified identity valid?"}
-    D -->|No| E["Return to sign-in or verification; do not create"]
-    D -->|Yes| F["Create organization and first administrator together"]
-    F --> G{"Creation succeeds?"}
-    G -->|No| H["Show failure or check uncertain outcome; no blind duplicate request"]
-    G -->|Yes| I["Return the new organization"]
-    I --> J["Frontend: show or enter the new organization as administrator"]
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Choose Create organization and confirm details
+    F->>A: Create organization
+    A->>A: Check current sign-in and verified identity
+    alt Eligible and creation succeeds
+        A->>A: Create organization with creator as first administrator
+        A-->>F: New organization
+        F-->>U: Show or enter the organization as administrator
+    else Rejected or failed
+        A-->>F: Explain the blocker
+        F-->>U: Correct details or complete sign-in or verification
+    end
 ```
+
+Creation fields remain proposed. A failure never grants administrator rights. If the response is lost, check the outcome rather than starting a new creation request blindly.
 
 Proposed mechanism: Organization and first-administrator creation succeed together, with no partial result or duplicate organization on retry. A timeout is not proof that creation failed. Company creation is a separate explicit action in section 2; it is not a side effect of sign-in.
 
@@ -72,6 +143,28 @@ Proposed workflow: Only an administrator creates a company. Create the company a
 
 Proposed steps: Check that the caller is a current administrator of this organization, create the company and ledger together, and return one clear result. A failure or retry must not leave a usable partial company or duplicate ledger. Complete agreed ledger settings before later accounting work.
 
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Select organization and choose Create company
+    F-->>U: Show proposed company details for review
+    U->>F: Confirm creation
+    F->>A: Create company in selected organization
+    A->>A: Check current administrator access and submitted details
+    alt Authorized and creation succeeds
+        A->>A: Create company and its one ledger together
+        A-->>F: Company and ledger
+        F-->>U: Show the created company and ledger
+    else Rejected or failed
+        A-->>F: Explain the blocker
+        F-->>U: Show no successful creation; allow correction
+    end
+```
+
+The exact required company fields and later accounting settings are not approved by this diagram. If the response is uncertain, check the saved outcome before retrying; never leave a company with two ledgers.
+
 Ordinary ledger edit access does not allow permission management. The proposed company-creation restriction is separate from that confirmed rule. An organization does not itself keep accounting records or automatically consolidate its companies.
 
 See [Companies and ledgers](03-companies-ledgers.md).
@@ -80,16 +173,47 @@ See [Companies and ledgers](03-companies-ledgers.md).
 
 Confirmed: Only an administrator can invite a specific person. That person must sign in, verify their identity and actively accept before becoming a member. Invitations expire after seven days and can be revoked before acceptance.
 
+### Send an invitation
+
+Proposed interaction. Here User is the administrator; below, User is the invited person.
+
 ```mermaid
-flowchart TD
-    A["Administrator invites a specific person"] --> B["Invitation awaits acceptance for up to seven days"]
-    B --> C["Invited person signs in and requests acceptance"]
-    C --> D{"Verified identity matches the invitation?"}
-    D -->|No| E["Reject acceptance and grant no membership"]
-    D -->|Yes| F{"Invitation is still valid?"}
-    F -->|No| G["Reject acceptance; current administrator must issue a new invitation"]
-    F -->|Yes| H["Person actively accepts the invitation"]
-    H --> I["Create membership and apply explicit permissions"]
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Choose Invite member and explicit role and permissions
+    F->>A: Invite organization member
+    A->>A: Check current administrator rights and invitation scope
+    alt Valid request
+        A-->>F: Invitation pending acceptance, with expiry
+        F-->>U: Show pending status, not active membership
+    else Rejected
+        A-->>F: Explain invalid access or details
+        F-->>U: Show the issue; no new membership
+    end
+```
+
+### Accept an invitation
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Sign in and choose an invitation to accept
+    F-->>U: Show organization and proposed access
+    U->>F: Explicitly accept
+    F->>A: Accept invitation
+    A->>A: Check verified target identity and current invitation validity
+    alt Valid acceptance
+        A->>A: Add membership with explicit permissions once
+        A-->>F: Membership and current access
+        F-->>U: Show the joined organization
+    else Expired, revoked, invalidated or wrong identity
+        A-->>F: Reject acceptance
+        F-->>U: Explain why; no access granted
+    end
 ```
 
 - Expired or revoked invitations cannot be accepted.
@@ -99,21 +223,26 @@ flowchart TD
 
 Proposed mechanisms: Accept once, make concurrent acceptance and revocation produce one clear result, and prevent an invitation from silently upgrading an existing member. Revoking an already accepted invitation would not remove the member; member management would handle removal.
 
-### Frontend and API interaction example
-
-Proposed interaction planning, not an approved Frontend or endpoint design:
+### Revoke an invitation
 
 ```mermaid
-flowchart TD
-    A["Frontend: administrator chooses person and permissions"] --> B["API business operation: invite organization member"]
-    B --> C{"Current administrator and valid invitation scope?"}
-    C -->|No| D["API result: invitation rejected"]
-    D --> E["Frontend: explain the issue; no invitation created"]
-    C -->|Yes| F["API result: invitation pending acceptance"]
-    F --> G["Frontend: show pending status, not active membership"]
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Administrator selects a pending invitation to revoke
+    F->>A: Revoke invitation
+    A->>A: Check current administrator rights and invitation state
+    alt Still pending and caller authorized
+        A-->>F: Invitation revoked
+        F-->>U: Show that acceptance is no longer possible
+    else Already accepted or caller unauthorized
+        A-->>F: Explain current state or denied access
+        F-->>U: Do not claim the member was removed
+    end
 ```
 
-The invited person must still complete the separate acceptance workflow above.
+Invitation discovery and notification remain proposed: an authenticated inbox is the existing suggestion, not a promise of email delivery. Revocation cannot undo a completed membership; use member removal instead. Concurrent acceptance and revocation must have one clear outcome.
 
 See [Organizations and permissions](02-organizations-permissions.md).
 
@@ -122,16 +251,23 @@ See [Organizations and permissions](02-organizations-permissions.md).
 Confirmed: Only an administrator manages permissions. An ordinary member can hold read-only access to one ledger and editable access to another. Neither kind of access allows delegation.
 
 ```mermaid
-flowchart TD
-    A["Request a ledger grant change for an ordinary member"] --> B{"Caller is a current administrator of this organization?"}
-    B -->|No| C["Reject the permission change"]
-    B -->|Yes| D{"Target is an active member and ledger belongs to this organization?"}
-    D -->|No| C
-    D -->|Yes| E{"Requested change?"}
-    E -->|Grant or replace| F["Assign explicit read-only or editable access"]
-    E -->|Remove| G["Remove the ledger grant"]
-    F --> H["Use current membership and ledger permissions for each operation"]
-    G --> H
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Administrator selects ordinary member and ledger access
+    F-->>U: Show explicit read-only, editable or remove-access choice
+    U->>F: Confirm change
+    F->>A: Change ledger grants
+    A->>A: Check current administrator, target membership and same-organization ledger
+    alt Valid change
+        A->>A: Apply explicit grants or remove the grant
+        A-->>F: Current permissions
+        F-->>U: Show updated access
+    else Rejected
+        A-->>F: Explain denied access or invalid target
+        F-->>U: Do not show the change as saved
+    end
 ```
 
 Administrators already manage every ledger in their own organization and do not need individual ledger grants. Read-only access never permits accounting writes. Editable access remains subject to accounting rules and never permits invitations, role changes or sharing access.
@@ -144,19 +280,55 @@ See [Organizations and permissions](02-organizations-permissions.md).
 
 Confirmed: Normal membership or role changes must not leave the organization without an administrator. The last administrator must first appoint another active member as administrator.
 
+### Request a membership change
+
+User means the member leaving, or an administrator managing another member.
+
 ```mermaid
-flowchart TD
-    A["Request leaving, member removal or administrator demotion"] --> B{"Caller is authorized for this membership change?"}
-    B -->|No| C["Reject the change"]
-    B -->|Yes| D{"Would the change remove the last administrator?"}
-    D -->|Yes| E["Block the change until another active member is appointed administrator"]
-    E --> F["Current administrator appoints another active member as administrator"]
-    F --> D
-    D -->|No| G["Apply the membership or role change"]
-    G --> H{"Person remains as an ordinary member?"}
-    H -->|Yes| I["Require explicit new ledger grants; do not restore old grants"]
-    H -->|No| J["End this organization membership and access"]
-    J --> K["Returning later requires a new invitation and new permissions"]
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Choose Leave, Remove member or Demote administrator
+    F-->>U: Show the effect and request confirmation
+    U->>F: Confirm the explicit change
+    F->>A: Change membership or role
+    A->>A: Check caller rights and whether a last administrator would be lost
+    alt Unauthorized or last-administrator protection applies
+        A-->>F: Reject change with reason
+        F-->>U: Explain denial or require administrator handover
+    else Allowed
+        A->>A: Apply membership change and current access
+        A-->>F: Updated membership or removal
+        F-->>U: Show result and refresh available organizations
+    end
+```
+
+For a demotion, the request must explicitly state new ledger grants; an empty list means no ledger access. Removal ends access to this organization, including from an existing session. Neither action restores historical grants.
+
+### Hand over before the last administrator leaves
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Last administrator selects another active member
+    F-->>U: Confirm promotion to administrator
+    U->>F: Confirm
+    F->>A: Promote selected member
+    A->>A: Check current administrator and active target membership
+    alt Promotion succeeds
+        A-->>F: Another administrator is now active
+        F-->>U: Handover succeeded; you may request leaving or demotion
+        U->>F: Explicitly request leaving or demotion
+        F->>A: Apply membership change with fresh checks
+        A-->>F: Result after rechecking administrator protection
+        F-->>U: Show actual result
+    else Promotion fails
+        A-->>F: Explain failure
+        F-->>U: Remain administrator; do not proceed as if handover succeeded
+    end
 ```
 
 Only administrators manage other members or their roles. A member leaving one organization keeps their account and any independent access to other organizations. Losing administrator rights also invalidates that person's pending invitations.
@@ -166,6 +338,13 @@ The last-administrator rule must hold during concurrent changes. The enforcement
 Security exception: Do not block urgent suspension of a compromised account, even if it is the last usable administrator. A locked-organization recovery process needs separate review before production. Do not silently promote another member. That exception is not the normal leaving workflow above.
 
 See [Organizations and permissions](02-organizations-permissions.md) and [Decisions](10-decisions.md).
+
+## Remaining business choices for these workflows
+
+- Which organization and company details should users supply at creation? Field requirements remain proposed.
+- Is an authenticated invitation inbox enough initially, or do users also need email notifications? No delivery method is confirmed.
+
+These choices do not reopen the confirmed roles, seven-day invitation policy, membership rules or administrator handover. API paths, schema and authentication mechanisms are engineering tasks for the later design stage, not owner questions.
 
 ## 6. Prepare and post a journal
 
