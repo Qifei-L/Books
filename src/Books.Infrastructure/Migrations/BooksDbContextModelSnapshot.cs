@@ -827,6 +827,40 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.AccountPurpose", b =>
+                {
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Purpose")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("purpose");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.HasKey("LedgerId", "Purpose")
+                        .HasName("pk_account_purposes");
+
+                    b.HasIndex("LedgerId", "AccountId")
+                        .HasDatabaseName("ix_account_purposes_ledger_id_account_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_account_purposes_org_id_ledger_id");
+
+                    b.ToTable("account_purposes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_account_purposes_purpose", "purpose IN ('retained_earnings', 'opening_balance_clearing', 'rounding_differences')");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.Company", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1115,6 +1149,25 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_account_groups_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.AccountPurpose", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "AccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_account_purposes_accounts_ledger_id_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_account_purposes_ledgers_org_id_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Ledgers.Company", b =>

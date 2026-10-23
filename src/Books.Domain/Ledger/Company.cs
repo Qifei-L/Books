@@ -75,6 +75,9 @@ public sealed class Ledger
 
     public void RecordPosting(DateTimeOffset at) => FirstPostedAt ??= at;
 
+    /// <summary>Marks a setup change (such as a system purpose) so concurrent setup edits conflict.</summary>
+    public void Touch() => Version++;
+
     /// <summary>Changes setup before the first posting only; null arguments leave a field unchanged.</summary>
     public void ChangeSettings(string? baseCurrency, int? fiscalYearStartMonth)
     {
