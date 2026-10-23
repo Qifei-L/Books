@@ -56,6 +56,16 @@ All cases below are Not run. The Basis column separates confirmed business rules
 | ORG-21 | Proposed history and audit safeguards | Inject a failure during a permission change. Inspect state, history, and audit records. | Successful changes and audit records agree. Failed changes do not appear successful. Keep historical operators. |
 | ORG-22 | Confirmed | Attempt the same unauthorized operation through API and MCP. | Both deny it. MCP must not use elevated access to bypass the backend. |
 
+Additional entry-flow checks, also Not run:
+
+- ORG-23: An existing account signs in again, including after session expiry. Proposed interaction result: resolve the same account, show only accessible organizations and relevant invitations, and create no account or organization merely because of sign-in.
+- ORG-24: A user selects an existing organization. Confirmed access result: recheck current membership and use its current permissions. A guessed organization ID or matching company name grants no access.
+- ORG-25: A user with no organizations signs in. Proposed interaction result: show an empty list and explicit invitation-review or Create organization choices. Do not create anything automatically.
+- ORG-26: The user explicitly requests organization creation. Confirmed creation policy: require current authenticated and verified identity; on success the creator is the first administrator. Proposed interaction and retry safeguards: failed verification creates nothing, and an uncertain response is checked before retrying the same operation without duplicates.
+- ORG-27: A new account signs up but has not completed identity verification. Proposed entry flow: request verification separately from sign-in. Do not create an organization before verification and an explicit creation request.
+
+These cases clarify the [entry and creation workflows](11-workflows.md#1-sign-in-choose-an-organization-or-create-one). They do not approve a new identity provider or claim that integration has been tested.
+
 Additional confirmed-policy checks, also Not run:
 
 - A registered user with verified identity can create an organization and becomes its first administrator.

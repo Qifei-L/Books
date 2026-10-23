@@ -6,23 +6,63 @@ Current sequence: Planning -> Requirements & Workflow -> Technical Design -> Dev
 
 The diagrams show business steps, not final Frontend layouts or endpoint contracts. Frontend interaction planning and links to API business operations are in scope. Frontend implementation is deferred. API and MCP must use the same backend access rules.
 
-## 1. Create an organization
+## 1. Sign in, choose an organization, or create one
 
-Confirmed: A registered user with a verified identity can create an organization and becomes its first administrator. A usable organization must not be left without an administrator.
+Confirmed: A registered user with a verified identity may explicitly create an organization. After successful creation, that user is its first administrator. Signing in is not organization creation.
+
+### Enter Books
+
+Proposed interaction flow: Check sign-in and identity verification separately, then show the organizations and invitations available to this user.
 
 ```mermaid
 flowchart TD
-    A["Request organization creation"] --> B{"Registered user with verified identity?"}
-    B -->|No| C["Do not create the organization"]
-    B -->|Yes| D["Create organization with creator as first administrator"]
-    D --> E["Proposed next step: administrator requests company creation"]
-    E --> F["Proposed: create company and its one separate ledger together"]
-    F --> G["Each additional company has its own separate ledger"]
+    A["Open Books"] --> B{"Valid signed-in session?"}
+    B -->|No| C{"Already have an account?"}
+    C -->|Yes| D["Sign in to the existing account"]
+    C -->|No| E["Sign up for a new account"]
+    D --> B
+    E --> B
+    B -->|Yes| F{"Identity verified?"}
+    F -->|No| G["Complete identity verification"]
+    G --> F
+    F -->|Yes| H["Show accessible organizations and invitations"]
+    H --> M["Review a pending invitation using section 3"]
+    H --> N["Choose Create organization using the separate flow below"]
+    H --> I["Choose an existing organization"]
+    I --> J{"Current membership allows access?"}
+    J -->|No| K["Explain unavailable access and refresh the list"]
+    J -->|Yes| L["Enter that organization with current permissions"]
 ```
 
-Proposed mechanism: Create the organization and first administrator together, with no partial result or duplicate organization on retry. This diagram does not select a transaction or identity-verification design.
+- An expired or invalid session sends the person to sign in, not to create another account or organization.
+- A pending invitation is not membership. The person must explicitly accept a valid invitation using the flow in section 3.
+- If the list is empty, offer invitation review or the explicit Create organization action. Do not create an organization automatically.
+- A person who already belongs to an organization can select it. They may also explicitly create a different organization under the confirmed creation policy.
 
-See [Organizations and permissions](02-organizations-permissions.md).
+### Explicitly create an organization
+
+```mermaid
+flowchart TD
+    A["Frontend: user chooses Create organization"] --> B["Enter organization details and confirm creation"]
+    B --> C["API business operation: create organization"]
+    C --> D{"Current sign-in and verified identity valid?"}
+    D -->|No| E["Return to sign-in or verification; do not create"]
+    D -->|Yes| F["Create organization and first administrator together"]
+    F --> G{"Creation succeeds?"}
+    G -->|No| H["Show failure or check uncertain outcome; no blind duplicate request"]
+    G -->|Yes| I["Return the new organization"]
+    I --> J["Frontend: show or enter the new organization as administrator"]
+```
+
+Proposed mechanism: Organization and first-administrator creation succeed together, with no partial result or duplicate organization on retry. A timeout is not proof that creation failed. Company creation is a separate explicit action in section 2; it is not a side effect of sign-in.
+
+### How Books recognizes existing records
+
+Books recognizes the signed-in account, then finds that account's current organization memberships. Each existing organization has its own identifier. A matching organization or company name does not identify the account or prove membership.
+
+The existing [identity proposal](design/phase-1-technical-contract.md#4-identity-and-authentication) maps the identity provider's stable issuer and subject to a Books user ID. Email or display-name matches must not merge accounts. This is a reference to the existing draft, not a new provider choice or verified integration.
+
+See [Organizations and permissions](02-organizations-permissions.md) and [acceptance checks](08-testing-acceptance.md).
 
 ## 2. Create a company and its ledger
 
