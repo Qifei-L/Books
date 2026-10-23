@@ -61,11 +61,12 @@ This approval covers the tree, not automatic account generation, new field requi
 
 ### Account fields
 
-- Add Default Usage as subsystem + purpose. It is distinct from Type and System Purpose.
+- Use Account Usage as eligible subsystem + purpose. The same usage may offer several accounts, such as Sales → A/R. Save the actual account selected.
+- Do not add separate Default Usage, Default Account or Link fields/settings. This supersedes the earlier default-usage proposal. Keep Type, System Purpose and required-detail validation separate.
 - Include optional Description and Sort Order.
 - Code is user-entered and editable. A stable Account ID preserves journal identity when Code changes.
 - Code must be unique within the same ledger; different ledgers may use the same Code. Editable Code must still satisfy this rule.
-- Specific subsystem lists and multiple Default Usages per account remain proposals; accepting the field does not activate those modules.
+- Specific additional subsystem lists and several usages per account remain proposals. Several accounts per usage is confirmed; it does not activate a subsystem or grant permission.
 
 ### Initial System Account purposes
 
@@ -81,7 +82,7 @@ Call the second category **Error**, replacing the earlier label Suspense Review.
 
 ### Journal line Item
 
-Add Item (product or service) to journal lines, separate from Account. Item is optional, including for pure adjustment journals. Selecting Item may suggest a default Account; the actual Account used is saved on the line. This does not approve the full header/line model, inventory, quantity, costing or FX behavior.
+Add Item (product or service) to journal lines, separate from Account. Item is optional, including for pure adjustment journals. Selecting Item may suggest an Account; the actual Account used is saved on the line. This is not a separate Default Account setting and does not restrict the user to one eligible account. This does not approve the full header/line model, inventory, quantity, costing or FX behavior.
 
 ### Journal Qty and requirement composition
 
@@ -150,7 +151,7 @@ This replaces the earlier Go proposal. It does not select exact package versions
 
 The accounting chapters now contain a complete starting proposal. Only the policies explicitly listed under Confirmed above are approved; other proposals are not approved merely because they appear in a complete draft.
 
-Default Accounts as optional starter templates remain proposed. Current Year Profit's non-posting place in the tree is accepted; calculation and closing details remain open. The posted-account versus unposted-review distinction is accepted. A shared or separate page layout remains proposed. Suspense, Error and Pending remain distinct categories, not interchangeable accounting balances. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. FX and AR/AP/Inventory placeholders are accepted in the planning tree, but their module activation and behavior are not approved. A tax-control mapping remains a further proposal. No account or mapping has been created.
+The earlier Default Accounts/default-usage concepts are superseded by Account Usage; no separate default configuration is adopted. Current Year Profit's non-posting place in the tree is accepted; calculation and closing details remain open. The posted-account versus unposted-review distinction is accepted. A shared or separate page layout remains proposed. Suspense, Error and Pending remain distinct categories, not interchangeable accounting balances. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. FX and AR/AP/Inventory placeholders are accepted in the planning tree, but their module activation and behavior are not approved. A tax-control mapping remains a further proposal. No account or mapping has been created.
 
 The detailed technical contract proposes .NET/EF Core/Npgsql version families, Keycloak evaluation, authenticated invitation inboxes, transaction and lock rules, API fields, MCP delegation and development stages. Exact implementation details remain under review.
 
@@ -165,7 +166,7 @@ The recommended defaults are proposals. Answer by topic; do not repeat the confi
 | Topic | What needs a decision |
 | --- | --- |
 | 1. Ledger setup | Base currency for each company, whether foreign-currency transactions are needed in the first accounting release, fiscal year and business time zone. |
-| 2. Accounts | The tree is accepted. Code format and comparison rules; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and optional starter templates. |
+| 2. Accounts | The tree is accepted. Code format and comparison rules; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and Account Usage eligibility. |
 | 3. Posting and corrections | Opening balances, who can post and who can reopen. The confirmed administrator Close cutoff and open-journal correction rules do not need reconfirmation. |
 | 4. Reports | The four reports and core layout are confirmed. Agree fiscal-year/profit-transfer details, export needs and optional presentation choices. |
 
@@ -203,12 +204,12 @@ All decisions above were recorded on 2026-10-23.
 8. Separated engineering-owned design tasks from owner business decisions. Existing technical proposals remain subject to review and validation.
 9. Standardized the term Frontend and added business workflow diagrams. Frontend implementation remains deferred; business interaction planning is in scope. Proposed accounting flows are not approved by their inclusion.
 
-10. Confirmed Cost & Expense naming, two P&L groups and three conditional System Account purposes. Default templates and further System Account candidates remain proposed.
+10. Confirmed Cost & Expense naming, two P&L groups and three conditional System Account purposes. The earlier default-template proposal was later superseded; further System Account candidates remain proposals.
 11. Included incomplete, unusable and errored records in the review category, later renamed Error. Added proposed safe review and resolution handling without approving invalid posting.
 
 12. Accepted the revised account tree with no Other Income group and generic asset names. Conditional activation and operational rules remain separate decisions.
 
-13. Added Default Usage as subsystem + purpose, optional Description, Sort Order and user-editable Code. Confirmed Code uniqueness within each ledger; the same Code may exist in different ledgers. The earlier fixed-Code-after-use proposal is superseded.
+13. Initially added Default Usage as subsystem + purpose (later superseded by Account Usage), optional Description, Sort Order and user-editable Code. Confirmed Code uniqueness within each ledger; the same Code may exist in different ledgers. The earlier fixed-Code-after-use proposal is superseded.
 
 14. Added Edit, Deactivate and Delete Account workflow drafts. Requesting these diagrams does not approve their proposed operation restrictions or authorize real account changes.
 
@@ -226,6 +227,8 @@ All decisions above were recorded on 2026-10-23.
 
 21. Added JournalLine Qty, combined common/subsystem/Account requirements and the atomic official source-plus-Journal boundary. Added a technical proposal and unexecuted acceptance cases; no inventory, Sales, code or production scope was added.
 22. Organized the reading path into system principles, business requirements, technical details and acceptance/decisions. Status labels preserve confirmed rules versus proposed mechanisms.
+
+23. Replaced Default Usage with Account Usage only. One purpose may have several eligible accounts; persist the actual selection. Do not introduce Default Account or Link settings. Required Details remains separate, and the earlier Item account suggestion remains an optional suggestion rather than an exclusive default.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

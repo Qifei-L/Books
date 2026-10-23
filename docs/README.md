@@ -25,7 +25,7 @@ Current focus: Journal requirements, common/subsystem/Account validation and the
 
 - [Organizations, members and access](02-organizations-permissions.md): who belongs to a team and who may do what. **Core policies confirmed; some interactions proposed.**
 - [Companies and ledgers](03-companies-ledgers.md): one ledger per company and accounting setup boundaries. **Relationship confirmed; setup options remain open.**
-- [Chart of accounts](04-chart-of-accounts.md): account tree, fields, System/Default Usage and maintenance rules. **Accepted baseline plus proposed operations.**
+- [Chart of accounts](04-chart-of-accounts.md): account tree, fields, System Purpose/Account Usage and maintenance rules. **Accepted baseline plus proposed operations.**
 - [Journals and posting](05-journals-posting.md): Qty, combined requirements, Save/Draft, Close and posting outcomes. **Confirmed requirements with labelled remaining choices.**
 - [Reports](06-reports.md): TB, GL Detail, Balance Sheet and P&L. **Report set/core layout confirmed; detailed mechanics proposed.**
 - [API and MCP principles](07-api-conventions.md): shared access checks and consistent request/result behavior. **Principles confirmed; exact contracts proposed.**

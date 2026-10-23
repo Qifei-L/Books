@@ -414,7 +414,7 @@ See [Balances and reports](06-reports.md).
 
 ## 8. Edit Account
 
-Status: Proposed workflow. Confirmed fields include editable Code unique within the ledger, optional Description, Sort Order and Default Usage as subsystem + purpose. Exact account-edit permissions and structural restrictions below remain proposals.
+Status: Proposed workflow. Confirmed fields include editable Code unique within the ledger, optional Description, Sort Order and Account Usage as subsystem + purpose. Exact account-edit permissions and structural restrictions below remain proposals.
 
 ```mermaid
 sequenceDiagram
@@ -447,7 +447,7 @@ Proposed rules:
 - Ledger editors or organization administrators may edit; read-only members may not. The API rechecks access when saving.
 - Existing transactions do not by themselves block Name, Code, Description or Sort Order changes. Code remains unique within its ledger. Account ID and historical journal references stay unchanged.
 - Before first use, structural corrections still require valid references and classifications. After use, reject unsupported Type/parent changes; changing a System Purpose or any future account currency needs a separately approved safe policy. This does not add an account-currency field.
-- Validate Default Usage subsystem + purpose. If an active function relies on a System/default mapping, validate its replacement before removing or changing that mapping. Do not silently break other records or enable a new subsystem.
+- Validate Account Usage eligibility without making one purpose exclusive to one account. If an active system function relies on a required System Purpose mapping, validate its replacement before removing or changing that mapping. Do not silently break other records or enable a new subsystem.
 - A conflicting edit must not overwrite a newer save. Let the user refresh and reconcile their changes. If a response is lost, check the saved state before retrying or showing success.
 
 [Account rules](04-chart-of-accounts.md#proposed-create-change-and-deactivate)
@@ -488,8 +488,8 @@ sequenceDiagram
 Proposed rules:
 - Use the same current ledger-edit permission check as account editing. Recheck dependencies at confirmation, not just when the form opens.
 - Permit a remaining balance; do not require or invent a zero balance. Show the balance and impact before confirmation. This nonzero-balance policy is still proposed.
-- Replace active required System/default mappings with a valid account before deactivation. Recheck the replacement and protected references; do not silently redirect historical entries.
-- Block new postings and new active default use. Existing drafts must be revalidated before posting and corrected if they reference the inactive account.
+- Replace active required System Purpose mappings with a valid account before deactivation. Account Usage is an eligibility set, not a single default-account mapping. Recheck the replacement and protected references; do not silently redirect historical entries.
+- Block new postings and new selection through Account Usage. Existing drafts must be revalidated before posting and corrected if they reference the inactive account.
 - Preserve the account identity, transactions, balances and historical reports. A separate authorized reactivation may be proposed; deletion has its own separate eligibility checks below.
 - An uncertain response is not success or failure. Check current account state before retrying. Record changes and their outcomes without exposing data from another ledger.
 
@@ -527,7 +527,7 @@ sequenceDiagram
 ```
 
 Proposed rules:
-- Allow deletion only if the account has never been used and has no document, System Purpose or Default Usage references.
+- Allow deletion only if the account has never been used and has no document, System Purpose or Account Usage references.
 - Posted history blocks deletion even if the balance is zero. Offer deactivation instead, subject to its own checks.
 - A draft or mapping reference must be handled explicitly before eligibility is reconsidered. Do not remove references silently.
 - A Group with children cannot be deleted directly or by an automatic cascade.

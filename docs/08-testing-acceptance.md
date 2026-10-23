@@ -156,6 +156,15 @@ All cases are **Not run**. Qty and combined requirements are confirmed; exact ty
 - JCORE-08: TB, GL Detail and statements reconcile to the same effective posting; failed source revisions and Error records do not alter totals.
 - JCORE-09: Save Draft preserves incomplete input without posting. Saving a candidate change does not unpost or replace the existing valid version.
 
+## Account Usage checks
+
+All cases are **Not run**. Several eligible accounts per usage and saving the actual selection are confirmed; mapping storage and enforcement mechanisms remain proposed.
+
+- USAGE-01: Offer two same-ledger accounts eligible for Sales → A/R. Either may be selected; the saved Journal line keeps the actual Account ID. Do not force a unique purpose-to-account relation.
+- USAGE-02: An Item suggests an account. Select another eligible account; save that selection. Later changes to suggestions or eligibility do not rewrite historical lines.
+- USAGE-03: Attempt selection of a wrong-ledger, inactive, unauthorized or ineligible account. Reject it without bypassing common/subsystem/Account required-detail checks.
+- USAGE-04: Remove an eligibility mapping concurrently with Save. Apply the proposed rule/reference synchronization protocol; no stale unchecked selection or silent redirection.
+
 ## Evidence for each test
 
 Cover service logic, storage constraints, and API/MCP integration where relevant. Inject failures between transaction steps. Check the final data, permissions, history, and audit records together.

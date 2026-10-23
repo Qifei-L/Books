@@ -44,6 +44,12 @@ Frontend, direct API and MCP use this same server contract. A proposed requireme
 
 Return errors with stable line ID, field, code and rule origin (Common, Subsystem or Account). Do not reveal another ledger's account or rule details. Unknown fields and unauthorized reference values are rejected, not saved as unrestricted extension data.
 
+### Account Usage is eligibility, not a default
+
+Account Usage identifies subsystem + purpose eligibility. Several accounts may be eligible for the same purpose, such as Sales → A/R. Save the actual selected AccountId; do not require a unique purpose-to-account mapping or add separate Default Usage, Default Account or Link settings. An eligibility mapping may be unique by ledger + account + usage to prevent duplicate mappings without limiting the number of eligible accounts.
+
+Validate current ledger ownership, usability, permission and composed required details after selection. Eligibility is not authorization and does not replace Account rules. Retain the agreed Item-based account suggestion as a suggestion only; users can select another eligible account. Changes to suggestions or usage mappings never rewrite historical selections. Sales is an example, not an implemented module.
+
 ## 3. Proposed typed C# shapes
 
 These are illustrative design signatures, not source files or compiled code. Exact serialization and API routes remain to be reviewed. Decimal values use decimal strings on the wire and checked decimal representations internally; precision and ranges must be explicit. AccountingDate below means a dedicated accounting-date value, not an implicit UTC timestamp.

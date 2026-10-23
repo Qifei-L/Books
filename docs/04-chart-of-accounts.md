@@ -1,6 +1,6 @@
 # Chart of Accounts
 
-Status: Review draft. Ledger access rules, the Cost & Expense label, two P&L groups and initial System Account purposes are confirmed. The account tree below is the accepted planning baseline. Default Usage, optional Description, Sort Order and user-editable Code are also accepted. Other field requirements and maintenance rules remain proposed.
+Status: Review draft. Ledger access rules, the Cost & Expense label, two P&L groups and initial System Account purposes are confirmed. The account tree below is the accepted planning baseline. Account Usage, optional Description, Sort Order and user-editable Code are also accepted. Other field requirements and maintenance rules remain proposed.
 
 The tree is accepted for planning, not automatic account generation. Repeated account names and deactivation with a remaining balance remain review recommendations, not confirmed maintenance policies. These accounting features belong to a later accounting stage, not the organization foundation's phase-one API contract.
 
@@ -10,15 +10,19 @@ Each account belongs to one ledger. Organization administrators can manage their
 
 Use **Cost & Expense** instead of Expense. The P&L has two top-level groups: **Income (add)** and **Cost & Expense (subtract)**. These are reporting groups, not debit/credit rules. Preserve signed balances and contra-account effects; do not turn every amount into a positive value.
 
-## Account identity, Code and Default Usage
+<a id="account-identity-code-and-default-usage"></a>
+
+## Account identity, Code and Account Usage
 
 Confirmed: Code is entered and edited by the user. Account ID is the stable internal identity used by journals; changing Code must not move or break historical references.
 
-Confirmed: add **Default Usage** as **subsystem + purpose** to identify how a subsystem uses an account by default, for example Sales → Default Revenue. Keep it separate from Type (accounting classification) and System Purpose (a fixed system function).
+Confirmed: **Account Usage** identifies eligible **subsystem + purpose** combinations. The same usage can have several eligible accounts, for example Sales → A/R may offer several receivable accounts. The user selects one and the document/journal saves the actual Account ID. Do not make the purpose unique to one account.
+
+Do not add separate Default Usage, Default Account or Link fields/settings. Account Usage is distinct from Type (accounting classification), System Purpose (fixed system function) and Required Details (validation requirements). Changing eligibility later does not rewrite the Account on historical documents.
 
 Confirmed fields: **Description** is optional; **Sort Order** controls display order, not accounting calculations.
 
-Proposed subsystem examples: Sales, Purchases, Banking, Payroll and Inventory. Allowing several usages on one account is proposed, not yet confirmed. Default Usage does not itself grant access, enable a subsystem or approve automatic postings.
+Other subsystem examples, such as Purchases, Banking, Payroll and Inventory, remain future proposals. Several accounts for one usage is confirmed; several usages on one account remains a proposed mapping capability. Eligibility never grants permission or enables a module. The selected account must still belong to the current ledger, be usable for the operation and satisfy common + subsystem + Account requirements. A suggested account is only a suggestion, not the only eligible choice.
 
 **Confirmed:** Code must be unique within the same ledger. Different ledgers may use the same Code. Code remains user-editable; edits must satisfy this uniqueness rule.
 
@@ -109,12 +113,11 @@ Use debit-positive amounts for internal reconciliation. Show a clear debit or cr
 
 Custom account types, jurisdiction-specific templates, control accounts and subledgers are not included in this proposed first-release scope.
 
-## System Accounts and Default Accounts
+<a id="system-accounts-and-default-accounts"></a>
 
-These are two different concepts. System Accounts and the three initial purposes below are accepted. Default Accounts remain proposed. This does not require every account at launch or authorize automatic creation.
+## System Accounts
 
-- **System Accounts (Confirmed):** explicit mappings from a system function to an account in the same ledger. A function uses the mapped account identity, not a fixed account name or code.
-- **Default Accounts (Proposed):** an optional starter chart template. Users would review or adapt it when setting up a ledger. An account supplied by a template does not automatically become a System Account.
+System Accounts and the three initial purposes below remain accepted. They are distinct from Account Usage eligibility. A system function uses its mapped account identity in the same ledger, not a fixed name or code. This does not require every account at launch or authorize automatic creation. The earlier Default Accounts proposal is superseded; no separate default-account configuration is part of the current model.
 
 Accepted System Account purposes:
 
@@ -126,9 +129,9 @@ Accepted System Account purposes:
 
 **Current Year Profit** is shown in the accepted tree as a calculated report item, not an ordinary posting account. Its relationship to closing entries and retained earnings still needs an agreed reporting policy.
 
-Conditional future scope: the tree includes realized/unrealized FX and receivable, payable and inventory control placeholders. Their activation depends on the relevant modules. A tax-control mapping remains a further proposal. Their posting and clearing policies need separate review. Do not enable them just because a starter template includes similarly named accounts.
+Conditional future scope: the tree includes realized/unrealized FX and receivable, payable and inventory control placeholders. Their activation depends on the relevant modules. A tax-control mapping remains a further proposal. Their posting and clearing policies need separate review. Account Usage examples do not enable these modules.
 
-Account codes, additional template contents, mapping permissions and safeguards for changing a used mapping remain proposals. No accounts or mappings are created by this document.
+Account codes, mapping permissions and safeguards for changing a used mapping remain proposals. No accounts or mappings are created by this document.
 
 ## Suspense and Error
 
@@ -161,9 +164,9 @@ After first posting:
 - Revalidate a draft at posting time. A draft referencing a now-inactive account cannot post until corrected or the account is reactivated through an authorized change.
 - Permit reactivation with an audit record. It does not remove the earlier deactivation history.
 
-Proposed safeguards: check Default Usage subsystem + purpose and protect existing references. Before changing an active System Purpose/default mapping or deactivating its account, select and validate a suitable replacement where that function remains required. Do not leave an active subsystem pointing to an unusable account. Structural changes to Type, parent, System Purpose or any future account-level currency need separate checks; after use, reject unsupported changes rather than silently reinterpreting history. Account-level currency is not a newly approved field.
+Proposed safeguards: validate Account Usage eligibility and protect existing document references. Removing an eligibility mapping prevents new selection; it must not redirect historical entries. Before changing a required active System Purpose mapping or deactivating its account, validate a suitable replacement where that system function remains required. Account Usage alone does not impose a single replacement/default account. Structural changes to Type, parent, System Purpose or any future account-level currency need separate checks; after use, reject unsupported changes rather than silently reinterpreting history. Account-level currency is not a newly approved field.
 
-Proposed deletion is limited to unused accounts with no document or System/default mapping references. Accounts with posted history cannot be deleted, even at zero balance. Resolve draft and mapping references before considering deletion. A Group with children cannot be deleted as a cascade. Exact storage, recovery and retention mechanisms remain for later technical design; do not promise permanent erasure or recovery. Preserve audit evidence and do not reuse a deleted account's stable identity. Inactive accounts remain available in historical searches.
+Proposed deletion is limited to unused accounts with no document or System Purpose or Account Usage references. Accounts with posted history cannot be deleted, even at zero balance. Resolve draft and mapping references before considering deletion. A Group with children cannot be deleted as a cascade. Exact storage, recovery and retention mechanisms remain for later technical design; do not promise permanent erasure or recovery. Preserve audit evidence and do not reuse a deleted account's stable identity. Inactive accounts remain available in historical searches.
 
 Historical reports would use the current account name, with stable identity and a name-change audit trail. If exact reproduction of old report labels is needed, that requires an additional snapshot or versioning requirement.
 
@@ -185,6 +188,6 @@ These scenarios have not been executed. Proposed behavior must be approved befor
 2. Are any additional templates or subledgers needed beyond the accepted planning tree? Conditional future items are not enabled by this approval.
 3. Is fixing a used account's type and parent acceptable? Code remains editable.
 4. Do historical reports need the exact account labels shown when originally issued?
-5. Are any additional System Account functions or optional Default Account templates needed? The three accepted purposes do not approve these additions or template contents.
+5. Are additional System Account functions needed? The three accepted purposes do not approve other functions.
 
 [Next: Journals and Posting](05-journals-posting.md) · [Document index](README.md)
