@@ -339,6 +339,14 @@ Security exception: Do not block urgent suspension of a compromised account, eve
 
 See [Organizations and permissions](02-organizations-permissions.md) and [Decisions](10-decisions.md).
 
+## Account maintenance workflows
+
+- [Edit Account](#8-edit-account)
+- [Deactivate Account](#9-deactivate-account)
+- [Delete Account](#10-delete-account)
+
+These are operation workflows, not a COA classification flowchart. The account tree remains in the COA document. Restrictions beyond confirmed fields remain Proposed.
+
 ## Remaining business choices for these workflows
 
 - Which organization and company details should users supply at creation? Field requirements remain proposed.
@@ -396,6 +404,131 @@ Drafts and cancelled drafts would not affect balances. Original entries and post
 Trial balance and account detail are proposed reconciliation references. Balance sheet and income statement layouts remain drafts until account classification, current-year profit and year-end rules are agreed. No statutory or tax compliance is claimed.
 
 See [Balances and reports](06-reports.md).
+
+## 8. Edit Account
+
+Status: Proposed workflow. Confirmed fields include editable Code unique within the ledger, optional Description, Sort Order and Default Usage as subsystem + purpose. Exact account-edit permissions and structural restrictions below remain proposals.
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Open account and choose Edit
+    F->>A: Read account with current ledger access
+    A-->>F: Authorized account details or access denied
+    F-->>U: Show editable details only if authorized
+    alt User cancels
+        U->>F: Cancel
+        F-->>U: Discard unsaved changes
+    else User saves
+        U->>F: Submit intended changes
+        F->>A: Edit account
+        A->>A: Check current edit access, unique Code and current record
+        A->>A: Check history, structural changes and active mappings
+        alt Valid change
+            A-->>F: Saved account
+            F-->>U: Show saved values
+        else Denied, invalid or concurrent conflict
+            A-->>F: Explain the blocker
+            F-->>U: Keep edits for review; do not claim success
+        end
+    end
+```
+
+Proposed rules:
+- Ledger editors or organization administrators may edit; read-only members may not. The API rechecks access when saving.
+- Existing transactions do not by themselves block Name, Code, Description or Sort Order changes. Code remains unique within its ledger. Account ID and historical journal references stay unchanged.
+- Before first use, structural corrections still require valid references and classifications. After use, reject unsupported Type/parent changes; changing a System Purpose or any future account currency needs a separately approved safe policy. This does not add an account-currency field.
+- Validate Default Usage subsystem + purpose. If an active function relies on a System/default mapping, validate its replacement before removing or changing that mapping. Do not silently break other records or enable a new subsystem.
+- A conflicting edit must not overwrite a newer save. Let the user refresh and reconcile their changes. If a response is lost, check the saved state before retrying or showing success.
+
+[Account rules](04-chart-of-accounts.md#proposed-create-change-and-deactivate)
+
+## 9. Deactivate Account
+
+Status: Proposed workflow and deactivation policy. Deactivation stops new use; it does not delete transactions or remove the account from historical reports.
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Choose Deactivate account
+    F->>A: Review current account and dependencies
+    A-->>F: Authorized details or access denied
+    F-->>U: Show impact and required mapping replacements if authorized
+    alt User cancels
+        U->>F: Cancel
+        F-->>U: Leave account unchanged
+    else User confirms
+        U->>F: Confirm deactivation
+        F->>A: Deactivate account
+        A->>A: Recheck edit access, current state and references
+        alt Active required mapping lacks a valid replacement
+            A-->>F: Replacement required
+            F-->>U: Resolve mapping; account remains active
+        else Other validation or concurrent conflict
+            A-->>F: Explain the blocker
+            F-->>U: Review or refresh; do not claim success
+        else Valid deactivation
+            A-->>F: Account inactive
+            F-->>U: Show inactive status; retain historical access
+        end
+    end
+```
+
+Proposed rules:
+- Use the same current ledger-edit permission check as account editing. Recheck dependencies at confirmation, not just when the form opens.
+- Permit a remaining balance; do not require or invent a zero balance. Show the balance and impact before confirmation. This nonzero-balance policy is still proposed.
+- Replace active required System/default mappings with a valid account before deactivation. Recheck the replacement and protected references; do not silently redirect historical entries.
+- Block new postings and new active default use. Existing drafts must be revalidated before posting and corrected if they reference the inactive account.
+- Preserve the account identity, transactions, balances and historical reports. A separate authorized reactivation may be proposed; deletion has its own separate eligibility checks below.
+- An uncertain response is not success or failure. Check current account state before retrying. Record changes and their outcomes without exposing data from another ledger.
+
+[Account rules](04-chart-of-accounts.md#proposed-create-change-and-deactivate)
+
+## 10. Delete Account
+
+Status: Proposed rules for review. This is a documentation workflow only, not permission to delete any real account. Unlike deactivation, deletion removes an eligible unused account from normal use; it must not erase posted accounting history.
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant F as Frontend
+    participant A as API
+    U->>F: Choose Delete account
+    F->>A: Review current account and deletion eligibility
+    A-->>F: Eligibility and blockers, only with current access
+    F-->>U: Show blockers or ask explicit deletion confirmation
+    alt User cancels
+        U->>F: Cancel
+        F-->>U: Leave account unchanged
+    else User confirms an eligible deletion
+        U->>F: Confirm Delete
+        F->>A: Delete selected unused account
+        A->>A: Recheck edit authority, history, references and children
+        alt Still eligible
+            A->>A: Remove account from normal use and retain audit identity
+            A-->>F: Deletion completed
+            F-->>U: Show result and refresh account list
+        else Now used, referenced, unauthorized or changed
+            A-->>F: Reject with current blocker
+            F-->>U: Keep account; review current state
+        end
+    end
+```
+
+Proposed rules:
+- Allow deletion only if the account has never been used and has no document, System Purpose or Default Usage references.
+- Posted history blocks deletion even if the balance is zero. Offer deactivation instead, subject to its own checks.
+- A draft or mapping reference must be handled explicitly before eligibility is reconsidered. Do not remove references silently.
+- A Group with children cannot be deleted directly or by an automatic cascade.
+- Use the proposed current account-edit authority check and recheck after confirmation. A preview does not reserve eligibility against concurrent posting or edits.
+- Keep audit evidence and the stable identity needed to explain what happened. Do not recycle that identity. Soft versus hard deletion, retention and recovery are later design choices, not promised behavior.
+- A lost response requires checking the outcome before retrying. Do not show deletion as successful without confirmation.
+
+[Account rules](04-chart-of-accounts.md#proposed-create-change-and-deactivate)
 
 ## Review boundary
 

@@ -61,10 +61,11 @@ This approval covers the tree, not automatic account generation, new field requi
 
 ### Account fields
 
-- Add Default Usage to identify the subsystems that use an account by default. It is distinct from Type and System Purpose.
+- Add Default Usage as subsystem + purpose. It is distinct from Type and System Purpose.
+- Include optional Description and Sort Order.
 - Code is user-entered and editable. A stable Account ID preserves journal identity when Code changes.
 - Code must be unique within the same ledger; different ledgers may use the same Code. Editable Code must still satisfy this rule.
-- Specific subsystem examples and multiple Default Usages per account remain proposals.
+- Specific subsystem lists and multiple Default Usages per account remain proposals; accepting the field does not activate those modules.
 
 ### Initial System Account purposes
 
@@ -146,7 +147,9 @@ All decisions above were recorded on 2026-10-23.
 
 12. Accepted the revised account tree with no Other Income group and generic asset names. Conditional activation and operational rules remain separate decisions.
 
-13. Added Default Usage and user-editable Code. Confirmed Code uniqueness within each ledger; the same Code may exist in different ledgers. The earlier fixed-Code-after-use proposal is superseded.
+13. Added Default Usage as subsystem + purpose, optional Description, Sort Order and user-editable Code. Confirmed Code uniqueness within each ledger; the same Code may exist in different ledgers. The earlier fixed-Code-after-use proposal is superseded.
+
+14. Added Edit, Deactivate and Delete Account workflow drafts. Requesting these diagrams does not approve their proposed operation restrictions or authorize real account changes.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

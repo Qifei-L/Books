@@ -1,6 +1,6 @@
 # Chart of Accounts
 
-Status: Review draft. Ledger access rules, the Cost & Expense label, two P&L groups and initial System Account purposes are confirmed. The account tree below is the accepted planning baseline. Default Usage and user-editable Code are also accepted. Other field requirements and maintenance rules remain proposed.
+Status: Review draft. Ledger access rules, the Cost & Expense label, two P&L groups and initial System Account purposes are confirmed. The account tree below is the accepted planning baseline. Default Usage, optional Description, Sort Order and user-editable Code are also accepted. Other field requirements and maintenance rules remain proposed.
 
 The tree is accepted for planning, not automatic account generation. Repeated account names and deactivation with a remaining balance remain review recommendations, not confirmed maintenance policies. These accounting features belong to a later accounting stage, not the organization foundation's phase-one API contract.
 
@@ -14,9 +14,11 @@ Use **Cost & Expense** instead of Expense. The P&L has two top-level groups: **I
 
 Confirmed: Code is entered and edited by the user. Account ID is the stable internal identity used by journals; changing Code must not move or break historical references.
 
-Confirmed: add **Default Usage** to identify which subsystems use an account by default. Keep it separate from Type (accounting classification) and System Purpose (a fixed system function).
+Confirmed: add **Default Usage** as **subsystem + purpose** to identify how a subsystem uses an account by default, for example Sales → Default Revenue. Keep it separate from Type (accounting classification) and System Purpose (a fixed system function).
 
-Proposed examples: Sales, Purchases, Banking, Payroll and Inventory. Allowing several usages on one account is proposed, not yet confirmed. Default Usage does not itself grant access, enable a subsystem or approve automatic postings.
+Confirmed fields: **Description** is optional; **Sort Order** controls display order, not accounting calculations.
+
+Proposed subsystem examples: Sales, Purchases, Banking, Payroll and Inventory. Allowing several usages on one account is proposed, not yet confirmed. Default Usage does not itself grant access, enable a subsystem or approve automatic postings.
 
 **Confirmed:** Code must be unique within the same ledger. Different ledgers may use the same Code. Code remains user-editable; edits must satisfy this uniqueness rule.
 
@@ -144,20 +146,24 @@ Correction requires validation again. A posted item is resolved through the agre
 
 ## Proposed: Create, change and deactivate
 
+See the proposed [Edit Account](11-workflows.md#8-edit-account) and [Deactivate Account](11-workflows.md#9-deactivate-account) and [Delete Account](11-workflows.md#10-delete-account) workflows. All operation restrictions remain proposed unless separately confirmed.
+
 Ledger editors and organization administrators would create and maintain accounts. Read-only members would view them only.
 
 Before an account has posted entries, allow corrections to its code, name, type and parent, subject to the agreed Code policy, hierarchy and existing draft-reference checks.
 
 After first posting:
 
-- Allow a name or description correction and record the old and new values.
+- Allow Name, Description and Sort Order edits and record changes. Existing transactions alone do not block these edits.
 - Code remains user-editable, including after use; history keeps the same Account ID. Proposed: audit Code changes.
 - Keep type and parent fixed in the first release as a separate proposal to avoid silently reclassifying earlier reports.
 - Deactivate instead of deleting. Deactivation stops new postings but preserves history and report visibility, even if the account still has a balance.
 - Revalidate a draft at posting time. A draft referencing a now-inactive account cannot post until corrected or the account is reactivated through an authorized change.
 - Permit reactivation with an audit record. It does not remove the earlier deactivation history.
 
-For simplicity, use deactivation for unused accounts too. Hard deletion is not part of this proposal. Inactive accounts remain available in historical searches.
+Proposed safeguards: check Default Usage subsystem + purpose and protect existing references. Before changing an active System Purpose/default mapping or deactivating its account, select and validate a suitable replacement where that function remains required. Do not leave an active subsystem pointing to an unusable account. Structural changes to Type, parent, System Purpose or any future account-level currency need separate checks; after use, reject unsupported changes rather than silently reinterpreting history. Account-level currency is not a newly approved field.
+
+Proposed deletion is limited to unused accounts with no document or System/default mapping references. Accounts with posted history cannot be deleted, even at zero balance. Resolve draft and mapping references before considering deletion. A Group with children cannot be deleted as a cascade. Exact storage, recovery and retention mechanisms remain for later technical design; do not promise permanent erasure or recovery. Preserve audit evidence and do not reuse a deleted account's stable identity. Inactive accounts remain available in historical searches.
 
 Historical reports would use the current account name, with stable identity and a name-change audit trail. If exact reproduction of old report labels is needed, that requires an additional snapshot or versioning requirement.
 
