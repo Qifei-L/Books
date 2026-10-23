@@ -52,6 +52,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
         configurationBuilder.Properties<RevisionStatus>().HaveConversion<LowerCaseEnumConverter<RevisionStatus>>().HaveMaxLength(20);
         configurationBuilder.Properties<SystemPurpose>().HaveConversion<LowerCaseEnumConverter<SystemPurpose>>().HaveMaxLength(40);
         configurationBuilder.Properties<TaxKind>().HaveConversion<LowerCaseEnumConverter<TaxKind>>().HaveMaxLength(20);
+        configurationBuilder.Properties<Books.Domain.Documents.DocumentStatus>().HaveConversion<LowerCaseEnumConverter<Books.Domain.Documents.DocumentStatus>>().HaveMaxLength(20);
         configurationBuilder.Properties<MembershipStatus>().HaveConversion<LowerCaseEnumConverter<MembershipStatus>>().HaveMaxLength(20);
     }
 }

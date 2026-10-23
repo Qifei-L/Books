@@ -227,7 +227,8 @@ async function renderSetup() {
     <h3 style="margin-top:16px">Bank transfers</h3>
     <table><tr><th>No.</th><th>Date</th><th>From</th><th>To</th><th class="num">Amount</th><th class="num">Fee</th><th>Journal</th></tr>
     ${transfers.map((t) => `<tr><td>${t.transfer_no}</td><td>${t.date}</td><td>${esc(accountName(t.from_account_id))}</td><td>${esc(accountName(t.to_account_id))}</td>
-      <td class="num">${t.amount}</td><td class="num">${t.fee_amount}</td><td>${t.deleted ? "deleted" : `No. ${t.journal_no}`}</td></tr>`).join("")}</table>
+      <td class="num">${t.amount}</td><td class="num">${t.fee_amount}</td>
+      <td>${t.status === "posted" ? `posted, journal No. ${t.journal_no}` : `<span class="pill draft">${t.status}</span> ${t.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>
     <h3 style="margin-top:16px">Items</h3>
     <table><tr><th>Item</th><th>Unit</th><th>Suggests account</th><th>Suggests tax</th></tr>
     ${items.map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.unit)}</td><td>${i.default_account_id ? esc(accountName(i.default_account_id)) : ""}</td><td>${esc(taxName(i.default_tax_code_id))}</td></tr>`).join("")}</table>`;
