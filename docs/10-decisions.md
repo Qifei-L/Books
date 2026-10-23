@@ -1,91 +1,104 @@
-# 决策与待办
+# Decisions and open questions
 
-状态：持续记录已确认决策与待审阅事项；未明确确认的内容不视为批准。
+Updated: 2026-10-23  
+Status: Review record. No coding or deployment is approved.
 
-## 目的
+## Confirmed
 
-集中记录已确认事项、待决问题及后续变更。
+### Project and delivery
 
-## 章节安排
+- Build Books as a bookkeeping backend.
+- Start with organizations and access control.
+- Keep the Books Web interface out of the current scope.
+- Complete and review the documents before development.
+- Write all documents in plain, direct English.
 
-- 已确认事项
-- 待决问题
-- 决策记录格式
-- 版本与变更摘要
+### Organizations and ledgers
 
-## 已确认事项
+- An organization manages a team.
+- One organization can manage several companies.
+- Each company has one independent ledger in the first release.
+- An organization does not post entries or automatically consolidate its companies.
 
-- 多组织先行。
-- 当前处于文档定义与逐章审阅阶段；只有明确记录的规则已确认，不代表全部需求或技术方案获批。
-- Web 暂不纳入；C# 路线已确认，会计引擎、身份供应商及部署细节尚未确定。
+### Roles and permissions
 
-## 2026-10-23：首期组织权限规则
+- Organization administrators manage all ledgers, members and grants in their own organization.
+- An administrator role in one organization gives no rights in another.
+- Ordinary members access only assigned ledgers. Each assignment is read-only or editable.
+- Only administrators invite and manage members or grant and revoke access.
+- Ordinary members cannot delegate access, including when they can edit a ledger.
+- The last administrator must hand over before leaving. Appoint another active member as administrator first.
+- Administrator rights do not bypass accounting validation, history protection or audit.
 
-确认范围：
+### Creation and membership
 
-1. 组织管理员能够管理本组织全部账套、成员和授权，不能凭该身份访问其他组织。
-2. 普通成员只能进入被分配的账套，每个账套分别授予“只读”或“可编辑”。
-3. 只有组织管理员能够邀请和管理成员、授予或收回权限；普通成员不能转授权，“可编辑”也不包含权限管理。
-4. 最后一位组织管理员退出前必须先完成交接：先将另一位成员设为管理员，再退出。负责人即组织管理员，不新增独立角色；组织应始终保留至少一位管理员。
+- Registered users with verified identity may create an organization and become its first administrator.
+- One account may join several organizations. Roles and permissions are independent in each.
+- An administrator invites a user. The user must accept before joining.
+- Invitations last seven days, may be revoked, and must be reissued after expiry.
+- When an inviter loses administrator rights, their pending invitations become invalid.
+- Rejoining members and administrators downgraded to members need explicit new grants. Do not restore old rights automatically.
 
-上述规则已确认，不再将“组织管理员是否默认管理全部账套”列为待决问题。管理员仍须遵守各业务模块的会计校验和审计要求。详见[组织 成员与权限](02-organizations-permissions.md)。
+### API and MCP
 
-本次确认仅针对首期权限规则，不批准整份项目需求、引擎或技术选型，也不授权实施、迁移、部署或修改实际系统权限。具体界面、邀请有效期及各业务操作细节在后续设计时补充，不要求重复确认已确定的权限原则。
+- Clients share one backend. MCP is another entry point, not a privileged bypass.
+- The backend verifies identity and the relevant organization and ledger scope. Client-supplied IDs do not prove permission.
+- Requests, results and errors follow consistent rules. Money, dates and null values need clear meanings.
+- Search, filters, sorting and pagination follow consistent rules.
+- Retries must not create duplicates. Concurrent changes must not silently overwrite each other. Upgrades must not silently break existing callers.
 
-## 2026-10-23：组织、公司与账套关系
+### Technology direction
 
-已确认组织管理团队，一个组织可以管理多个公司，首期每家公司对应一个独立账套。组织本身不直接记账，也不因管理多个公司而自动汇总账务。
+Use C#, ASP.NET Core, EF Core and PostgreSQL. API and MCP come first. Do not add ABP in phase one. A modular monolith is the proposed application structure, not an instruction to implement it.
 
-该对应关系不再作为待决问题。币种、会计年度和业务时区尚未确定，本次确认不扩展为引擎、实现或部署授权。详见[公司与账套](03-companies-ledgers.md)。
+This replaces the earlier Go proposal. It does not select exact package versions, an identity provider, hosting or production settings.
 
-## 2026-10-23：接口五项原则与 MCP 入口
+## Proposed, not approved
 
-已确认：
+The accounting chapters now contain a complete starting proposal. They are not a statement of approved accounting policy.
 
-1. 所有客户端共用同一套后端 API，MCP 也作为调用入口；Web 暂不开发，测试工具可先调用。
-2. 后端根据操作范围验证身份、组织和目标账套，不信任客户端编号；并非所有接口都必须提供尚不存在的组织或账套。
-3. 请求、响应和错误统一，金额、日期及空值的含义需要明确。
-4. 搜索、筛选、排序和分页采用一致规则。
-5. 重复提交不重复创建，并发修改不静默覆盖，接口升级不能随意破坏已有调用。
+The detailed technical contract proposes .NET/EF Core/Npgsql version families, Keycloak evaluation, authenticated invitation inboxes, transaction and lock rules, API fields, MCP delegation and development stages. Exact implementation details remain under review.
 
-MCP 共用后端权限和业务校验，不直接绕过 API 修改数据库，也不因 AI 调用获得更高权限。具体工具按模块定义。详见[接口约定](07-api-conventions.md)。
+ASP.NET Core Identity is not, by itself, a complete OAuth/OIDC authorization server. Moving to C# does not authorize replacing the external identity-provider plan with homemade authentication.
 
-本次确认仅确定上述接口原则，不指定登录方案、接口路径、字段、金额精度、日期格式、空值默认行为或数据库实现；不授权实际 MCP 设置、凭据生成、权限变更、代码实施或部署。
+No tests have been run. No production service, database, account, credential, invitation or permission has been created by this documentation work.
 
-## 2026-10-23：补充流程、验收与技术提案
+## Short business review list
 
-已同意补充组织流程、异常处理、验收案例，并单独编写[多组织与权限技术设计](design/organizations-permissions.md)。这项同意是文档工作范围，不表示其中新增策略已经批准。
+The recommended defaults are proposals. Answer by topic; do not repeat the confirmed decisions above.
 
-其中创建组织、邀请有效期、邀请人降权失效和重新授权业务政策已在下节进一步确认。重复邀请的技术处理及具体技术选型、接口细节、认证、事务、幂等参数仍待设计，不创建凭据或修改真实权限。
+| Topic | What needs a decision |
+| --- | --- |
+| 1. Ledger setup | Base currency for each company, whether foreign-currency transactions are needed in the first accounting release, fiscal year and business time zone. |
+| 2. Accounts | Flat accounts or a parent-child structure; custom code rules; whether duplicate names are acceptable; how account changes and deactivation should work. |
+| 3. Posting and corrections | Opening balances, who can post, period closing/reopening and the correction process for posted entries. |
+| 4. First reports | Which reports are required, date and balance presentation, and whether export is needed initially. |
 
-## 2026-10-23：四项补充业务政策已确认
+Read the corresponding chapter for the proposed behavior and a concrete example. Once a choice is accepted, update that chapter and this record together.
 
-1. 注册并验证身份的用户都可以创建组织，创建者自动成为首位管理员。
-2. 一个账号可以加入多个组织，各组织的角色和权限分别计算。
-3. 管理员邀请，用户接受后加入；邀请 7 天有效、可撤销，过期后重新邀请。邀请人失去管理员权限时，未接受的邀请也失效。
-4. 退出后重新加入，或管理员降为普通成员时，重新明确授权，不自动恢复旧权限，也不保留原来的全部账套访问权。
+## Technical and release review
 
-以上四项不再作为待决业务政策。实现机制仍是技术提案；所有验收案例仍未执行。本次确认不表示完整技术设计获批，不授权开发、合并、真实邀请、权限配置或部署。
+These do not require immediate answers to finish the drafts:
 
-## 2026-10-23：详细技术设计与接口契约提案
+- Review the detailed phase-one contract, identity provider and its operating cost.
+- Agree on test scope, final acceptance owner and pass/fail evidence.
+- Before production, choose hosting, budget, operators, recovery targets and release procedure.
+- Give a separate instruction before coding, and a separate authorization before deployment.
 
-已同意继续编写详细技术设计、接口和任务清单，文档见[首期多组织基础技术契约](design/phase-1-technical-contract.md)。已确认的四项业务政策保持不变。
+Security suspension and recovery of the last usable administrator need a reviewed recovery process before production. The system must not prevent urgent suspension or silently promote someone else.
 
-原 Go 路线提案已被下述 C# 决策取代。Keycloak 候选验证方向、具体版本、数据约束、HTTP/MCP 契约、委托机制和阶段任务仍为技术提案，尚未批准实际实施。认证兼容、并发、迁移和验收测试均未执行，不能以文档审阅代替测试证据。
+## Change record
 
-下一关口是审阅技术方案并另行明确是否开始编码；生产资源、费用、凭据、权限和部署不在本次文档授权范围。
+All decisions above were recorded on 2026-10-23.
 
-## 2026-10-23：改用 C# 技术路线
+1. Created a requirements-only review branch.
+2. Prioritized organizations and built the document outline.
+3. Confirmed organization roles, company/ledger structure and API/MCP principles.
+4. Confirmed organization creation, membership, invitation and reauthorization policies.
+5. Added technical proposals and acceptance scenarios.
+6. Replaced the Go proposal with the C# direction.
+7. Completed the remaining review drafts and rewrote the full set in plain English.
 
-按用户要求，将后端路线改为 C# + ASP.NET Core + EF Core + PostgreSQL，保持模块化单体、API/MCP 优先，首期不引入 ABP。原有 Go 库、迁移工具、测试与 MCP SDK 选型已在详细设计中同步替换。
+Step 7 changes presentation and fills gaps. It does not approve new accounting policies or start development.
 
-建议以受支持的 .NET 10、EF Core 10、Npgsql EF provider 10 系列为验证基线；精确版本、迁移 SQL、认证及 SDK 兼容仍需在实施前核验并锁定。采用官方 MCP C# SDK 的 HTTP 适配，不改动已确认的权限及委托安全边界。
-
-身份供应商单独待定，Keycloak 仅为候选；ASP.NET Core Identity 不自动替代 OAuth/OIDC 身份服务。本次只批准路线调整及文档同步，不批准全部技术细节，也不授权编码、合并、部署、凭据创建或修改真实权限。现有业务决策保持不变，测试仍未执行。
-
-## 待确认问题
-
-- 本位币、外币需求、会计年度和业务时区。组织与公司账套关系及首期权限规则已确认，不重复询问。
-- 后续章节按审阅顺序逐步完善，不将占位内容视为默认批准。
-
-[返回文档目录](README.md)
+[Documentation index](README.md)

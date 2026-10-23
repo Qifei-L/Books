@@ -1,50 +1,142 @@
-# 测试与验收
+# Testing and acceptance
 
-状态：组织权限验收草案，未实施、未执行测试。“已确认规则”与“建议流程/技术提案”分别标示。创建组织、多组织成员、邀请与重新授权四项业务政策已确认，但全部案例仍未执行，确认不等于测试通过。
+Status: Test plan draft. No cases in this document have been run. A confirmed requirement is not a passed test.
 
-## 目的与测试准备
+## Purpose
 
-将组织与权限要求转换为可复核场景。使用合成用户、组织 A/B、公司及独立账套，不写入真实客户数据。准备组织管理员、普通只读成员、可编辑成员、被移除成员及未加入用户；同时通过 API 与 MCP 入口检查关键权限。
+Turn the requirements into cases that can be checked and recorded. Preserve the organization and permission cases, then add accounting cases for review.
 
-## 组织权限验收矩阵
+## Confirmed
 
-| 编号 | 依据 | 场景 | 预期结果 |
+The organization roles, one-ledger-per-company relationship, administrator handover, creation policy, multiple memberships, invitation policy, and explicit reauthorization rules are confirmed. The five API principles and MCP's use of the same backend are also confirmed.
+
+The accounting policies used in the proposed cases below are not yet confirmed. Adding a test case does not approve its policy or prove that the product supports it.
+
+## Proposed test setup
+
+Use synthetic users, Organizations A and B, companies, and separate ledgers. Do not use real customer records.
+
+Prepare these users:
+
+- An organization administrator.
+- An ordinary member with read-only access.
+- An ordinary member with editable access.
+- A removed member.
+- A user who has not joined the organization.
+- One user with different roles in A and B.
+
+Check key permissions through both the API and MCP. Use controlled concurrent requests rather than trying to click quickly by hand.
+
+## Organization and permission cases
+
+All cases below are Not run. The Basis column separates confirmed business rules from proposed workflows and technical safeguards.
+
+| ID | Basis | Scenario | Expected result |
 | --- | --- | --- | --- |
-| ORG-01 | 已确认规则 | A 管理员操作 A 的全部账套；替换为 B 编号 | A 内允许对应合法操作；无 B 授权时拒绝，不泄露 B 数据。 |
-| ORG-02 | 已确认规则 | 普通成员访问未分配账套或只读账套写入 | 拒绝；没有写入残留。 |
-| ORG-03 | 已确认规则 | 可编辑成员邀请成员、修改角色或转授权 | 拒绝；可编辑不等于管理权限。 |
-| ORG-04 | 已确认规则 | 同一用户从 A 管理员切换到 B 普通成员 | 按 B 授权重新判断，不沿用 A 权限。 |
-| ORG-05 | 已确认规则 | 创建公司的首期账套关系 | 每家公司一个独立账套；相同科目编码不会混账。 |
-| ORG-06 | 已确认规则 | 最后一位管理员退出；先交接后退出 | 无交接时拒绝；另一管理员生效后允许退出。 |
-| ORG-07 | 已确认规则的并发保证 | 两位管理员同时退出、互相移除或降级 | 至少保留一位有效管理员；不只测试顺序执行。 |
-| ORG-08 | 建议流程 | 移除成员后旧会话、重试请求、MCP、导出继续访问 | 按当前权限拒绝；不能靠旧会话或缓存结果取数。 |
-| ORG-09 | 建议流程 | 撤权与写入并发 | 撤权先提交则写入失败；写入先提交则记录其发生在撤权前，不留部分变更。 |
-| ORG-10 | 已确认创建政策；原子性/幂等为技术提案 | 创建组织/首位管理员任一步失败、重复提交 | 整体失败无孤立组织；成功重试不重复创建。 |
-| ORG-11 | 已确认邀请加入规则；原子消费为技术提案 | 目标已验证身份匹配并主动接受有效邀请 | 创建一份成员身份及明确授权，邀请消费一次。 |
-| ORG-12 | 已确认 7 天有效期、撤销及主动接受规则 | 其他身份、满 7 天已过期或已撤销邀请、无主动接受 | 不加入、不授权；边界时间按服务端时间验证。 |
-| ORG-13 | 建议流程 | 同内容重复邀请、不同授权重邀 | 不产生冲突的多份有效邀请；替代邀请使旧版本失效。 |
-| ORG-14 | 建议流程 | 已有成员重复接受邀请 | 不重复建立成员，不升级角色，不覆盖现有授权。 |
-| ORG-15 | 建议流程 | 接受与撤销同时执行、双重接受 | 仅一个有效状态转换；已接受后的撤销不等同移除成员。 |
-| ORG-16 | 已确认重新加入与邀请人降权失效规则 | 成员移除后接受旧邀请；邀请人已被撤销管理员 | 旧邀请不能恢复撤销的权限；需当前管理员新邀请。 |
-| ORG-17 | 已确认显式重新授权规则 | 管理员降为普通成员，之后移除并重新加入 | 只保留明确新授权，不自动复活历史账套权限。 |
-| ORG-18 | 技术提案 | 跨组织关联成员和账套授权、重复用户组织身份 | 存储与服务层都拒绝非法关联和重复身份。 |
-| ORG-19 | 技术提案 | 同幂等键不同请求、同记录旧版本更新 | 明确冲突；不复用错误结果，不静默覆盖。 |
-| ORG-20 | 技术提案 | 查询分页、搜索提示、总数与导出 | 只含授权范围；排序稳定，遵循约定的并发分页语义。 |
-| ORG-21 | 技术提案 | 权限操作中注入失败、检查历史与审计 | 成功变更和审计一致；失败不记成功，不删除历史操作者。 |
-| ORG-22 | 已确认规则 | 同一请求经 API 与 MCP 执行越权操作 | 同样拒绝；MCP 不使用更高权限绕过后端。 |
+| ORG-01 | Confirmed | An A administrator uses all A ledgers, then substitutes a B ledger ID without B access. | Allow valid A operations. Deny the B operation without exposing B data. |
+| ORG-02 | Confirmed | An ordinary member opens an unassigned ledger or writes to a read-only ledger. | Deny access or the write. Leave no partial changes. |
+| ORG-03 | Confirmed | An editable member invites someone, changes a role, or grants access. | Deny the action. Editable ledger access is not administrator access. |
+| ORG-04 | Confirmed | The same user switches from administrator in A to ordinary member in B. | Apply B permissions. Do not carry A permissions into B. |
+| ORG-05 | Confirmed | Create companies with their first-release ledger relationship. Use the same account code in two ledgers. | Each company has one independent ledger. Records with the same account code stay separate. |
+| ORG-06 | Confirmed | The last administrator tries to leave, then assigns a replacement and tries again. | Deny departure without a replacement. Allow it once another administrator is active. |
+| ORG-07 | Confirmed rule; concurrency safeguard to design | Two administrators leave, remove each other, or demote each other at the same time. | At least one active administrator remains after normal membership or role changes. Test concurrent as well as sequential requests. This must not block security suspension of a compromised account. |
+| ORG-08 | Proposed enforcement workflow | A removed member uses an old session, retry, MCP call, or export request. | Check current permissions and deny access. Old sessions or cached permissions must not provide new access. |
+| ORG-09 | Proposed concurrency workflow | A permission revocation and a write run together. | If revocation completes first, deny the write. If the write completes first, preserve that order in history. Leave no partial changes. |
+| ORG-10 | Confirmed creation policy; proposed atomicity and retry mechanism | Fail either organization creation or first-administrator creation. Retry a successful request. | Do not leave an organization without its first administrator. Do not create a duplicate on retry. |
+| ORG-11 | Confirmed invitation policy; proposed one-time acceptance mechanism | The intended user verifies their identity and actively accepts a valid invitation. | Create one membership with explicit permissions. Consume the invitation once. |
+| ORG-12 | Confirmed invitation policy; server-time boundary check to design | Use a different identity, an invitation at or beyond its 7-day expiry, a revoked invitation, or no active acceptance. | Do not add membership or grant access. Test the expiry boundary against server time. |
+| ORG-13 | Proposed invitation workflow | Repeat an invitation with identical content, then invite again with different permissions. | Avoid conflicting active invitations. A replacement invalidates the old version. |
+| ORG-14 | Proposed invitation workflow | An existing member accepts an invitation again. | Do not duplicate membership, upgrade the role, or replace current permissions. |
+| ORG-15 | Proposed concurrency workflow | Accept and revoke together, or accept twice at the same time. | Produce one valid state change. Revoking an already accepted invitation does not remove the member. |
+| ORG-16 | Confirmed | A removed member accepts an old invitation, or the inviter is no longer an administrator. | Do not restore access. Require a new invitation from a current administrator. |
+| ORG-17 | Confirmed | Demote an administrator to ordinary member, then remove and reinvite them. | Apply only explicit new permissions. Do not restore historical ledger access automatically. |
+| ORG-18 | Proposed technical safeguard | Link a membership to another organization's ledger permission, or duplicate a user-organization membership. | Reject invalid links and duplicate memberships in both the service and storage layers. |
+| ORG-19 | Proposed mechanism supporting confirmed API principles | Reuse an idempotency key for different input, or update a record using an old version. | Return a clear conflict. Do not return a result for different input or silently overwrite changes. |
+| ORG-20 | Proposed query safeguards | Check pages, search suggestions, counts, and exports. | Include only authorized data. Keep a stable order and follow the agreed rules for changes between pages. |
+| ORG-21 | Proposed history and audit safeguards | Inject a failure during a permission change. Inspect state, history, and audit records. | Successful changes and audit records agree. Failed changes do not appear successful. Keep historical operators. |
+| ORG-22 | Confirmed | Attempt the same unauthorized operation through API and MCP. | Both deny it. MCP must not use elevated access to bypass the backend. |
 
-补充创建政策用例：已注册且身份已验证的用户可创建组织并成为首位管理员；未验证身份不能按此政策创建。一个账号加入多个组织后，各组织成员身份与权限分别计算，不需要重复注册。以上用例均未执行。
+Additional confirmed-policy checks, also Not run:
 
-## 验证方式与证据
+- A registered user with verified identity can create an organization and becomes its first administrator.
+- A user whose identity is not verified cannot create an organization under this policy.
+- One account can join several organizations without registering again. Each membership and its permissions remain independent.
 
-关键场景分别覆盖服务逻辑、持久化约束及 API/MCP 集成；并发用可重复的协调执行验证，不靠手工快速点击。对事务步骤注入失败，核对状态、授权、历史和审计是否一致。检查错误与日志不含其他组织信息或凭据。
+Proposed security exception check, also Not run: Suspend a compromised account that is the last usable administrator. Do not block the suspension to satisfy normal administrator-count protection. Check the separately proposed locked-organization recovery workflow before release.
 
-每条执行记录包含测试版本、数据准备、步骤、预期、实际、证据和结论。尚未执行的案例必须写“未执行”，不能因为写了测试方案就宣称通过。建议流程正式采用后再固定其验收基线。
+## Proposed accounting cases
 
-## 其他模块与发布关口
+All cases below are Proposed and Not run. Review the accounting policies first, then finalize the expected results. Examples use synthetic amounts and do not choose a production currency, decimal scale, or rounding rule.
 
-账务金额、凭证平衡及历史一致性案例随对应章节确认后补充。首期验收规模、最终验收人和发布门槛仍待确定。越权、无管理员组织、撤权后继续写入和历史审计丢失应作为阻止交付的缺陷候选，最终门槛在验收计划中确认。
+### Amounts and balanced entries
 
-本稿不授权测试真实账务、创建真实成员、配置凭据、合并或部署。
+- ACC-01: Post an entry with debit 100 and credit 100 in the same ledger and currency. Proposed result: accept it once all other checks pass. Debit 100 and credit 99 must fail with no balance change.
+- ACC-02: Use decimal amounts such as 0.10 and 0.20. Proposed result: calculate and compare amounts with the agreed decimal rules, without binary floating-point drift. Reject or round excess precision only as the approved policy specifies.
+- ACC-03: Test zero amounts, negative amounts, missing amounts, and both debit and credit on one line. Proposed result: apply explicit line-validation rules. Chapter 05 proposes positive, single-sided lines and at least two non-zero lines at posting. Test that proposal once accepted; the test list does not itself approve it.
+- ACC-04: Fail partway through posting an entry with several lines. Proposed result: save all required posting effects together or none. Do not leave partial journal lines or balances.
 
-[技术设计](design/organizations-permissions.md) · [返回文档目录](README.md)
+### Repeated posting and concurrent changes
+
+- ACC-05: Submit the same posting twice, including a retry after a timeout and two simultaneous requests. Proposed result: one posted entry and one set of balance changes. The no-accidental-duplicates API principle is confirmed; the posting mechanism and lifecycle are not.
+- ACC-06: Submit changed posting data using the same retry identifier. Proposed result: a clear conflict, not a second posting or the result for unrelated data. The identifier mechanism remains proposed.
+- ACC-07: Two users edit or post the same draft. Proposed result: a clear conflict or a single valid state change. Do not silently lose an edit or post twice.
+
+### Posted history and reversals
+
+- ACC-08: Try to edit or delete a posted entry, including as an administrator. Proposed result: reject direct changes and keep the original entry. Immutability of posted entries still needs policy approval.
+- ACC-09: Reverse a posted entry. Proposed result: create a linked correcting entry, retain the original, and show the combined balance effect correctly. The permitted reversal date, accounts, and permissions remain open.
+- ACC-10: Retry or simultaneously request the same reversal. Proposed result: do not reverse the same effect twice. If multiple partial reversals are later allowed, test their limits under that explicit policy.
+
+### Closed periods
+
+- ACC-11: Try to post, backdate, edit, or reverse into a closed period. Proposed result: deny changes to that period. The period-close and reopening policies are not confirmed.
+- ACC-12: Close a period while another request posts into it. Proposed result: one clear order. A posting cannot slip into the period after closure takes effect.
+- ACC-13: Test the last accounting date of one period and the first date of the next. Proposed result: apply the agreed accounting calendar and business time zone consistently. Do not derive an accounting date from a timestamp without the agreed rule.
+
+### Reports and ledger isolation
+
+- ACC-14: Build a small known set of posted entries. Proposed result: ledger movements, account balances, trial balance, and report totals reconcile using the same scope and cutoff. The report set and calculation policies remain open.
+- ACC-15: Add a draft and a reversal to the fixture. Proposed result: each report includes them only as the approved status and reversal policies require. State those policies in the test before running it.
+- ACC-16: Query the same report with different page sizes and filters. Proposed result: pagination does not change the full-query total; a filter changes the total only by changing the query scope. Distinguish a page subtotal from a full-query total. The pagination principle is confirmed; report formulas remain proposed.
+- ACC-17: Use identical account codes in two companies and query as a user with access to only one ledger. Proposed result: no mixed balances, unauthorized rows, counts, or totals. Ledger isolation is confirmed; report implementation remains to be designed.
+
+## Proposed API contract checks
+
+These cases support the confirmed API principles. They are Not run. Exact formats and mechanisms must be defined before execution.
+
+- API-01: Distinguish success, validation failure, denied access, and system failure. Never represent an error as zero balance or an empty successful query.
+- API-02: Test money, accounting dates, timestamps, omitted fields, null, empty lists, and zero against the agreed contract.
+- API-03: Registration and organization creation do not require a ledger that does not yet exist. Ledger operations validate their ledger and organization context.
+- API-04: Run equivalent authorized requests through API and MCP. Check the same business result and validation rules.
+- API-05: Check filters, their combinations, default ordering, pages, and totals against the same contract across similar queries.
+- API-06: Test an API or MCP contract change with an existing client. Follow the agreed compatibility or migration plan rather than silently changing field meanings.
+
+## Evidence for each test
+
+Cover service logic, storage constraints, and API/MCP integration where relevant. Inject failures between transaction steps. Check the final data, permissions, history, and audit records together.
+
+Check that errors and logs do not expose another organization's data or credentials.
+
+Record for every case:
+
+1. Tested version and environment.
+2. Data setup and exact steps.
+3. Expected result and the rule it comes from.
+4. Actual result.
+5. Evidence, such as sanitized responses and state checks.
+6. Conclusion: Not run, Passed, or Failed.
+
+Writing this plan does not change any case from Not run to Passed. Adopt a proposed workflow before using it as a final acceptance requirement.
+
+## Open Questions
+
+- Which proposed accounting policies will be adopted?
+- What test volume and concurrency level are needed for the first release?
+- Who makes the final acceptance decision?
+- What are the release gates?
+
+Candidate release blockers include unauthorized access, normal membership changes leaving an organization with no administrator, writes using revoked access, partial postings, and missing history or audit records. Security suspension of a compromised last administrator is a separate case: it must remain possible, with a reviewed locked-organization recovery workflow. These are proposed gates, not an approved release checklist.
+
+This draft does not authorize tests on real books, real member creation, credential setup, code implementation, merges, or deployment.
+
+[Organization and permission design](design/organizations-permissions.md) · [Back to documentation](README.md)

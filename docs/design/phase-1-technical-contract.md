@@ -1,292 +1,414 @@
-# 首期多组织基础：详细技术设计与接口契约
+# Phase 1: organization access and API contract
 
-版本：0.3；日期：2026-10-23；状态：**C# 技术路线已确认；具体技术提案待审阅，未实施**。
+Version: 0.4 | Date: 2026-10-23 | Status: proposed technical details, not implemented
 
-依据：Qifei-L/Books 的 docs/requirements-review，基准提交 ffdd3fa820caa32a2eef32608a0a75bfe7a34968；[Draft PR #1](https://github.com/Qifei-L/Books/pull/1)。本文承接多组织权限设计，不替代已经确认的业务规则。C# 路线已确认；本文的具体版本、参数、身份供应商及接口路径仍为建议，不表示用户已经批准实施或部署。
+Based on branch `docs/requirements-review`, source commit `f4f2a2dc93ef351402dbee6e04fadd0b24b88c83`. See [Draft PR #1](https://github.com/Qifei-L/Books/pull/1) and the [permissions overview](organizations-permissions.md).
 
-## 1. 结论与实施前关口
+## 1. What is decided, and what is not
 
-已按用户要求改为 **C# + ASP.NET Core + EF Core + PostgreSQL**，采用模块化单体，首期 API/MCP 优先，**不引入 ABP**。标准 OIDC/OAuth 身份服务仍需单独选定。HTTP API 和 MCP 只是两种适配入口，共用应用服务、授权策略、事务和数据访问；不拆微服务，不引入 Redis、消息队列、独立权限引擎或自制 OAuth 授权服务器。
+**Confirmed:** C# + ASP.NET Core + EF Core + PostgreSQL. API/MCP first, with a shared backend. No ABP in phase 1. The business rules below are also confirmed.
 
-身份服务尚未选定，保留 **Keycloak** 作为验证候选提案，先在隔离测试环境验证，再决定实际采用。理由是用户注册、验证、登录、恢复及 OAuth 由成熟产品承担，Books 专注组织权限；代价是多一个服务及其数据库、升级、备份、邮件配置和安全维护。对小项目这可能偏重，不能包装成零成本依赖。若已有合适的组织身份平台，应优先评估复用，但不要在没有确认的情况下增加付费账号或创建新服务。
+**Proposed:** a modular monolith, the specific versions, identity provider, fields, paths, limits and transaction design in this document. HTTP and MCP share application services, authorization, transactions and data access. Do not introduce microservices, Redis, a message queue, a separate permission engine or a custom OAuth server for this phase.
 
-真正需要用户审阅的关口：
-1. C# 路线已经确认，无需重复确认。具体版本组合、首期契约细节及 Keycloak 验证方向仍待审阅；身份供应商与运维承担者尚未选定。
-2. 技术文档审阅后，**另外明确批准开始编码**；本次“继续技术设计”不构成编码批准。
-3. 生产供应商、区域、费用、域名、备份和发布计划另行批准；不随技术栈一起默认批准。
+**Open questions:** exact dependency versions; identity provider and its operator; accounting settings and engine; production provider, region, costs, domain, backup and release plan.
 
-编码批准后先做认证兼容性小验证。Keycloak 与目标 MCP 客户端的 resource 参数、受众、发现及注册方式尚未实际测试；验证不通过就报告差距并修订方案，不能降级为共享管理员令牌。
+**Not approved:** coding, migrations, account or credential creation, production access or deployment. Reviewing this design does not authorize those actions. Obtain a separate instruction to start coding and separate approval for production arrangements.
 
-## 2. 首期范围与已经确认的规则
+Keycloak is a candidate to test, not a selected provider. A mature provider can handle registration, verification, login, recovery and OAuth. It also adds a service, database, upgrades, backups, email setup and security maintenance. That may be too much for a small project. Evaluate a suitable existing identity platform first; do not create services or paid accounts without approval.
 
-首期交付边界：用户身份映射；组织；成员；公司与一对一账套的基础记录；邀请；账套授权；审计；HTTP/MCP 契约和自动化测试。不实现科目、分录、凭证、余额、报表或会计引擎。Web 产品界面暂停；身份平台自带登录页不等于开发 Books Web。
+After coding is approved, start with a small isolated authentication compatibility test. Keycloak and the target MCP client's resource parameter, audience, discovery and registration behavior have not been tested. If they fail, report the gap and revise the design. Never fall back to a shared administrator token.
 
-已确认业务：
-- 已注册且验证身份的用户可以创建组织并成为首位管理员；一个账号可以加入多个组织，各组织独立授权。
-- 一个组织可以管理多个公司，每家公司一个独立账套；组织不直接记账、不自动汇总。
-- 管理员管理本组织全部账套、成员和授权；普通成员按账套获得只读或可编辑权限，不可转授权。
-- 始终保留至少一位管理员；最后管理员退出前必须先交接。
-- 用户主动接受邀请才加入；邀请七天有效、可撤销，过期重新邀请；邀请人失去管理员权限，其未接受邀请失效。
-- 移除后重新加入、管理员降为普通成员，都需明确新授权，不恢复旧权限。
-- 所有入口包括 MCP 都由同一后端验证身份、资源归属、权限和业务规则。
+## 2. Phase-1 scope and confirmed business rules
 
-本位币、会计年度、业务时区及会计引擎仍未确定。首期账套字段只含身份与显示信息，并返回 accounting_setup_status=not_configured；它是组织权限基础记录，不是可记账账套。不能偷偷填 USD、自然年或 UTC 作为业务默认值。系统事件时间使用 UTC，不代表会计业务时区已经确定。
+Proposed phase-one implementation scope, after separate coding approval: identity mapping, organizations, members, company/ledger foundation records, invitations, ledger grants, audit, HTTP/MCP contracts and automated tests. Do not build accounts, entries, vouchers, balances, reports or the accounting engine. The Books Web UI is paused. Using an identity provider's login page is not building a Books Web UI.
 
-## 3. 推荐技术栈与模块
+Confirmed rules:
 
-| 部分 | 推荐 | 边界与理由 |
+- A registered, verified user can create an organization and becomes its first administrator.
+- One user can join several organizations. Each organization has separate permissions.
+- One organization can contain several companies. Each company has one independent ledger. The organization does not post entries or automatically consolidate accounts.
+- Administrators manage all ledgers, members and permissions in their organization. Ordinary members receive `read` or `edit` per ledger and cannot grant access to others.
+- The last administrator must hand over before leaving. Normal membership changes must leave at least one administrator.
+- Joining requires the user's explicit acceptance. Invitations last seven days, can be revoked and must be reissued after expiry. An inviter losing administrator access invalidates their pending invitations.
+- Rejoining and changing from administrator to ordinary member require fresh, explicit grants. Old access does not return automatically.
+- All entry points, including MCP, use the same identity, ownership, permission and business checks.
+
+Base currency, financial year, accounting time zone and engine are not decided. Phase-1 ledgers contain identity and display fields only. Return `accounting_setup_status=not_configured`. These are access-control foundation records, not ledgers ready for posting. Do not silently choose USD, a calendar year or UTC as accounting defaults. UTC system timestamps do not decide the accounting time zone.
+
+## 3. Proposed stack and module boundaries
+
+| Part | Proposal | Conditions |
 | --- | --- | --- |
-| 语言与宿主 | C# + ASP.NET Core；建议 .NET 10 LTS | .NET 10 当前处于支持期；本次官方表列补丁 10.0.13，但仅作核对记录，不作为已批准锁定版本。实施前复核安全补丁并固定 SDK/运行时，避免浮动 latest。 |
-| 数据访问 | EF Core 10 + Npgsql.EntityFrameworkCore.PostgreSQL 10 系列候选 | EF Core 10 要求 .NET 10；Npgsql 官方已有对应 EF 10 提供程序。精确包版本及传递依赖实施时核对兼容范围并锁定，不假定相同补丁号必然匹配。 |
-| 数据库 | PostgreSQL，18 系列仍为候选 | 保留事务、复合外键、行锁方案；实施前复核支持期、补丁与镜像摘要，不采用预发布版本。 |
-| 数据迁移 | EF Core Migrations + 审阅后的 PostgreSQL SQL/迁移 bundle | 生成迁移后检查实际 SQL；必要的延迟约束、触发器等用显式 SQL 纳入同一版本化迁移。独立发布步骤运行，不在应用启动时自动迁移；本次不生成或执行迁移。 |
-| 认证 | ASP.NET Core JWT bearer/OIDC 集成 + 待选标准身份服务 | Keycloak 仍为候选，不因改 C# 而改用自制认证。API 验证 access token，不接受 ID token 代替；ASP.NET Core Identity 是账号管理组件，本身不是完整 OAuth/OIDC 授权服务器。 |
-| MCP | 官方 modelcontextprotocol/csharp-sdk，HTTP 宿主采用 ModelContextProtocol.AspNetCore | Streamable HTTP 适配与 API 同进程；保留委托、受众和当前权限校验，不设超级账号。SDK 精确版本及目标协议兼容实施前验证和固定。 |
-| 契约/测试 | OpenAPI 3.1、JSON Schema；建议 xUnit + ASP.NET Core 集成测试 + 真 PostgreSQL | 使用 dotnet test 运行单元/集成测试；不以 EF InMemory 或 SQLite 代替复合外键、锁和并发验证。具体测试包版本待锁定，首期不做 Books Web UI。 |
+| Host | C# and ASP.NET Core; .NET 10 LTS candidate | The earlier source review recorded patch 10.0.13. This is not a locked or newly verified version. Recheck support and security patches before implementation; pin SDK/runtime, not `latest`. |
+| Data access | EF Core 10 and Npgsql.EntityFrameworkCore.PostgreSQL 10 candidates | EF Core 10 requires .NET 10. Check exact package compatibility and transitive dependencies, then lock versions. Matching patch numbers do not prove compatibility. |
+| Database | PostgreSQL; version 18 candidate | Retain transactions, composite foreign keys and row locks. Check support, patches and image digest before implementation. No prerelease versions. |
+| Migrations | EF Core Migrations plus reviewed PostgreSQL SQL or migration bundle | Review generated SQL. Include deferred constraints/triggers as explicit SQL in versioned migrations where needed. Run migrations as a separate release step, never automatically at application startup. No migration is generated or run now. |
+| Authentication | ASP.NET Core JWT bearer/OIDC with a standard identity provider | Keycloak remains a candidate. Validate access tokens, not ID tokens. ASP.NET Core Identity manages accounts; it is not a complete OAuth/OIDC authorization server. |
+| MCP | Official `modelcontextprotocol/csharp-sdk`; `ModelContextProtocol.AspNetCore` host | Streamable HTTP in the API process. Keep audience, delegation and current-access checks. No superuser account. Verify and pin SDK/protocol compatibility. |
+| Contracts and tests | OpenAPI 3.1, JSON Schema; xUnit, ASP.NET Core integration tests, real PostgreSQL | Run unit/integration tests with `dotnet test` after implementation is approved. EF InMemory and SQLite cannot substitute for PostgreSQL foreign-key, locking or concurrency tests. Test package versions remain open. |
 
-官方核对来源（2026-10-23）：[.NET 支持政策](https://dotnet.microsoft.com/en-us/platform/support/policy)、[EF Core 10 要求与支持](https://learn.microsoft.com/en-us/ef/core/what-is-new/ef-core-10.0/whatsnew)、[Npgsql EF Core 10](https://www.npgsql.org/efcore/release-notes/10.0.html)、[Npgsql provider](https://www.npgsql.org/efcore/)、[EF 迁移发布](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/applying)、[官方 MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)、[ASP.NET Core Identity 的职责](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/identity?view=aspnetcore-10.0)。版本细节不是用户批准的部署清单，尚未安装依赖或运行兼容验证。
+References retained from the source review: [.NET support](https://dotnet.microsoft.com/en-us/platform/support/policy), [EF Core 10](https://learn.microsoft.com/en-us/ef/core/what-is-new/ef-core-10.0/whatsnew), [Npgsql EF Core 10](https://www.npgsql.org/efcore/release-notes/10.0.html), [Npgsql provider](https://www.npgsql.org/efcore/), [migration deployment](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/applying), [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk), [ASP.NET Core Identity](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/identity?view=aspnetcore-10.0). No dependencies have been installed or compatibility tests run.
 
-### EF Core 接入不能削弱原有安全约束
+### EF Core must preserve the security model
 
-建议 DbContext 按请求/应用命令作用域使用，不跨并发操作共享。所有读写保留显式组织条件、服务授权和数据库复合外键；全局查询过滤器只能作为辅助，不能作为唯一隔离措施，也不能用 IgnoreQueryFilters 绕过授权。
+Use one `DbContext` per request/application command. Do not share it across concurrent operations. Every read and write keeps explicit organization conditions, service authorization and composite foreign keys. Global query filters are only an extra guard. `IgnoreQueryFilters` cannot bypass authorization.
 
-保留后文 PostgreSQL 显式组织锁与同事务授权检查。必要的 FOR UPDATE/FOR SHARE 和延迟约束可通过参数化 SQL 及审阅迁移实现，与 EF 操作共享连接和事务；不能把单次 SaveChanges 自动事务误当整个业务事务。
+Use the PostgreSQL locks and same-transaction checks in section 6. Parameterized SQL for `FOR UPDATE`/`FOR SHARE` and reviewed deferred constraints must share the EF connection and transaction. A single `SaveChanges` transaction is not the whole business transaction.
 
-保留正 bigint version 及 API 字符串版本契约，建议映射为 EF 并发令牌，明确递增；DbUpdateConcurrencyException 映射为现有版本冲突语义，不覆盖客户端更新，也不改用 SQL Server rowversion。批量更新或原生 SQL 必须显式携带版本及组织条件。依据[EF 并发说明](https://learn.microsoft.com/en-us/ef/core/saving/concurrency)。
+Use an explicitly incremented positive `bigint version` as an EF concurrency token. Keep the API's decimal-string version. Map `DbUpdateConcurrencyException` to version conflict, not an overwrite. Do not substitute SQL Server `rowversion`. Bulk or raw SQL updates need explicit organization and version conditions. See [EF concurrency](https://learn.microsoft.com/en-us/ef/core/saving/concurrency).
 
-若启用连接重试策略，必须重试完整事务并遵循幂等协议，不能只重试中间 SaveChanges 或重复审计。持久化、审计、幂等结果仍按现有原子边界提交；业务权限仍读取最新服务端状态。
+Connection retries must retry the complete transaction under the idempotency protocol. Do not retry just an intermediate `SaveChanges` or duplicate an audit event. Business state, audit and the successful idempotency result commit together. Read current authorization state.
 
-建议在一个 .NET solution 内按 API/MCP 适配、Application、Domain、Infrastructure 组织模块，业务模块包括 Identity、Organizations、Companies、Memberships、Invitations、Authorization 和 Audit。先保持轻量模块边界，不为每个实体建立独立服务或引入 ABP。路由/DTO、应用服务与 EF Core 持久化分开；授权在服务内强制执行，不能只在 ASP.NET Core middleware 或端点特性中执行。MCP 不能直接访问 DbContext 或数据库 repository。所有写入应用命令都接受服务端建立的 Principal，而不是来自请求体的 actor_user_id。
+Use one .NET solution with API/MCP adapters, Application, Domain and Infrastructure boundaries. Business modules are Identity, Organizations, Companies, Memberships, Invitations, Authorization and Audit. Keep them lightweight; do not make each entity a service or add ABP. Separate routes/DTOs, application services and persistence. Services enforce authorization, not just middleware or endpoint attributes. MCP cannot directly use `DbContext` or repositories. Every write command receives a server-created Principal, never a request-body `actor_user_id`.
 
-## 4. 身份与认证契约
+## 4. Identity and authentication
 
-### 4.1 身份平台和 Books 各自负责什么
+### Responsibilities and client identity
 
-身份平台负责注册、邮件验证、登录、密码恢复、MFA、OAuth 同意、签发和撤销令牌。Books 负责稳定用户编号、组织成员关系和实时授权。直接测试客户端与 MCP 客户端分别注册并由受信任 token 的 client_id/azp 识别，不信任请求头自报客户端。直接 API 同样校验 token scope：本人状态 books:identity；创建组织 books:org-create；组织读/写/管理分别 books:read、books:write、books:org-admin；委托建立/撤销 books:delegations-manage 且客户端必须为批准的直接客户端。业务角色检查始终另行执行，scope 不是组织角色。
+The identity provider handles registration, email verification, login, password recovery, MFA, OAuth consent, token issuance and revocation. Books owns stable user IDs, memberships and current authorization.
 
-不使用邮箱自动合并身份：身份主键是 (issuer, subject)。首期只接一个经过批准的 issuer；多个登录方式绑定和改邮箱迁移另行设计，不能凭同名邮箱自动接管历史账号。
+Register direct test clients and MCP clients separately. Identify them from trusted token `client_id`/`azp`, not a self-declared header. Direct API calls also need scopes:
 
-Books user 在首次有效登录后建立；注册未验证者仅可读取本人状态，不得创建组织、接受邀请或访问组织数据。已验证身份信息从受信任 issuer 的已验证 token / userinfo 取得，不信任请求体中 email_verified=true。
+| Operation | Required scope |
+| --- | --- |
+| Read own identity status | `books:identity` |
+| Create organization | `books:org-create` |
+| Organization reads, writes, administration | `books:read`, `books:write`, `books:org-admin`, respectively |
+| Create/revoke delegations | `books:delegations-manage`, and an approved direct client |
 
-建议初始登录接入：测试客户端使用 Authorization Code + PKCE S256，经身份平台自带页面登录；不采用密码 grant 或 implicit grant。redirect URI 精确注册；验证 state；OIDC 登录验证 nonce。PKCE 与重定向保护依据 [OAuth 安全最佳实践 RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html)。Books 不提供收集密码的 /login 或 /register API。
+Scopes never replace business roles. Use `(issuer, subject)` as the identity key, not email. Phase 1 supports one approved issuer. Multiple-login linking and email migration need separate design. Never merge or take over historical accounts because email strings match.
 
-### 4.2 HTTP API 验证
+Create the Books user after the first valid login. Unverified users can read only their own status, not create organizations, accept invitations or access organization data. Take verified identity details from a trusted issuer's validated token/userinfo. A request's `email_verified=true` proves nothing.
 
-API 使用 Authorization: Bearer access token。每次验证允许的签名算法、issuer、audience、exp、nbf、subject 和客户端身份；从固定 issuer 的元数据/JWKS 取密钥，不能接受令牌自带的任意密钥 URL。缓存公钥但未知 kid 只进行受限刷新；验证失败关闭访问。禁止把 bearer 放查询字符串、日志或审计。
+The direct test client uses Authorization Code + PKCE S256 and the provider's login page. No password or implicit grant. Register exact redirect URIs, validate `state`, and validate `nonce` for OIDC login. See [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html). Books has no password-collecting `/login` or `/register` API.
 
-ID token 的 audience 是登录客户端，不得拿来访问 Books API。access token 的受众必须是已配置的 Books 资源标识，目标部署 URI 尚未确定，本文不虚构域名。建议 access token 5 分钟；刷新及注销由提供商负责。**短令牌有效期不代替即时业务撤权**：每次请求都查当前 membership/grant/delegation。账号停用在 Books 中也有即时拒绝开关；仅在身份平台撤销而无本地同步时，已签发 JWT 的全局登录撤销时延可能到其到期，必须在认证验收记录此限制，不能宣称所有退出都瞬时失效。
+### Token validation and revocation
 
-账号停用不是首期对外管理端点。未来本地停用事务必须锁定该用户及其全部组织（固定排序），常规停用先要求交接；但不能为了保留管理员而阻止安全紧急停用。安全停用导致最后一位可登录管理员丧失资格时，建议将组织转为 locked_recovery，拒绝正常业务读写并走受审计恢复，不可静默留下可用的无人管理组织。该锁定/恢复状态是待审阅的异常技术策略，不增加已批准角色，也不授权自动恢复。外部身份平台单独停用/删号不受 Books 数据库约束控制：在没有验证停用事件同步与人工恢复流程前，只能保证数据库层 active 管理员不为零，不能保证该人仍能登录。身份停用同步、最后管理员恢复与恢复身份核验是上线前必过关口，不是已解决能力；不得自动把普通成员提升为管理员。
+Use `Authorization: Bearer` access tokens. Check allowed signing algorithm, issuer, audience, `exp`, `nbf`, subject and client identity on every request. Obtain keys from the configured issuer's metadata/JWKS, not arbitrary token-supplied key URLs. Cache public keys; rate-limit refresh on an unknown `kid`. Fail closed. Never put bearer tokens in query strings, logs or audit.
 
-无需实现浏览器 cookie 会话。未来有 Web 再设计 BFF/cookie/CSRF；当前 bearer API 拒绝来源不明的认证方式混用。生产强制 TLS，允许的 CORS/Origin 明确列出，不使用通配凭证来源。
+An ID token targets the login client; it cannot access the Books API. Access tokens must target the configured Books resource. Deployment URIs remain undecided; do not invent domains. Proposed access-token lifetime: five minutes. The provider handles refresh and logout.
 
-Keycloak 提供发现、令牌、公钥、userinfo、introspection 和撤销端点，参见[官方 OIDC 接入文档](https://www.keycloak.org/securing-apps/oidc-layers)。能提供这些端点不等于本项目的全部 MCP 接入已经验证。
+Short token life does not replace immediate business revocation. Every request checks current membership, grants and delegation. Books also needs a local disabled-user check. If revocation happens only at the provider and is not synchronized locally, an issued JWT may work until expiry. Record this limitation in acceptance evidence. Do not claim all logout paths revoke access instantly.
 
-## 5. 关系数据模型与约束
+### Last-administrator security disable and recovery
 
-以下是设计规格，不是迁移脚本。所有 id 为服务器生成 UUID；所有被租户复合外键引用的实体均设 UNIQUE(org_id,id)，包括 invitations 和 delegations；时间为 timestamptz；可变聚合 version 为正 bigint，API 以十进制字符串输出，初值 "1"。名称 trim 后 1–200 Unicode 字符。禁止通过更新改变 org_id、company_id、user_id 等归属字段。物理删除组织/公司/账套/用户不在首期 API 内。
+Account disable is not a public phase-1 management endpoint. A future local disable transaction must lock the user and all their organizations in a fixed order. Normal disable requires handover first. Emergency security disable must not be blocked merely because the account is the last administrator.
 
-| 表 | 主要列 | 必要约束 |
+Proposed exception: if security disable removes the last usable administrator, set the organization to `locked_recovery`. Deny normal business reads and writes. Recovery must be audited and separately reviewed. Do not silently leave an active organization without a usable administrator or automatically promote a member. This proposal adds neither an approved role nor permission for automatic recovery.
+
+External provider disable/deletion is outside Books database constraints. Without verified disable-event synchronization and a manual recovery process, the database can guarantee an active administrator record, not that its owner can still log in. Disable synchronization, recovery and recovery identity checks are launch blockers until approved and tested. Document lost/delayed events and provider-outage behavior.
+
+No browser cookie session is needed now. Design BFF/cookies/CSRF if a Web UI is added. Do not mix unapproved authentication methods into the bearer API. Require production TLS and explicit CORS/Origin allowlists, not wildcard credential origins.
+
+Keycloak exposes discovery, token, key, userinfo, introspection and revocation endpoints: [official OIDC documentation](https://www.keycloak.org/securing-apps/oidc-layers). Their existence does not prove this project's MCP compatibility.
+
+## 5. Data model and database constraints
+
+This is a specification, not executable migration code.
+
+- IDs are server-generated UUIDs.
+- Every entity referenced by a tenant composite foreign key has `UNIQUE(org_id,id)`, including invitations and delegations.
+- Timestamps use `timestamptz`.
+- Mutable aggregates use positive `bigint version`, initially `1`. APIs return decimal strings such as `"1"`.
+- Trim names; allow 1–200 Unicode characters.
+- Updates cannot change ownership fields such as `org_id`, `company_id` or `user_id`.
+- Physical deletion of organizations, companies, ledgers and users is outside the phase-1 API.
+
+| Table | Main columns | Required constraints |
 | --- | --- | --- |
-| users | id, status(active/disabled), display_name, created_at, version | 不存密码。关闭用户时所有入口实时拒绝。 |
-| identities | id, user_id, issuer, subject, verified_email, email_verified_at | UNIQUE(issuer,subject)，user FK；邮箱非身份主键。 |
-| organizations | id, name, state(active/locked_recovery，恢复策略待审阅), created_by, created_at, version | active组织至少一位active且本地未停用的admin；locked_recovery不开放正常业务；组织行兼作权限事务锁。 |
-| memberships | id, org_id, user_id, role(admin/member), status(active/removed), generation, version, joined_at, removed_at | UNIQUE(org_id,user_id)，UNIQUE(org_id,id)；generation 正数，每次重新加入递增。 |
-| companies | id, org_id, name, created_at, version | UNIQUE(org_id,id)，组织 FK。 |
-| ledgers | id, org_id, company_id, name, created_at, version | UNIQUE(company_id)，UNIQUE(org_id,company_id)，UNIQUE(org_id,id)；(org_id,company_id) 复合 FK 到 companies。 |
-| ledger_grants | org_id, membership_id, ledger_id, membership_generation, access(read/edit), granted_by, created_at | PK(membership_id,ledger_id)；分别用 (org_id,membership_id)、(org_id,ledger_id) 复合 FK；授权对应当前 active member/generation。 |
-| invitations | id, org_id, target_email_key, inviter_membership_id, proposed_role, status, expires_at, accepted_by, accepted_at, created_at, version | 邀请人复合 FK 到同组织 membership；一组织一目标最多一条 status=pending；expires_at=created_at+7天（168小时）。 |
-| invitation_grants | org_id, invitation_id, ledger_id, access | (org_id,invitation_id)、(org_id,ledger_id) 复合 FK；PK(invitation_id,ledger_id)；admin 邀请不带账套 grants。 |
-| audit_events | id, org_id(nullable for user actions), actor_user_id, actor_client_id, delegation_id, action, target_type/id, safe_change, request_id, occurred_at | 追加写；运行账号不可更新/删除；与对应变更同事务提交。 |
-| idempotency_records | actor_user_id, client_id, scope_key, operation, key, request_hash, outcome_resource_ids, status, created_at, expires_at | 作用域组合 UNIQUE；结果不保存 bearer/邀请秘密；过期后不能再承诺重放。 |
-| delegations | id, user_id, client_id, org_id, resource_mode, scopes, status, expires_at, version | 一个用户/客户端/组织仅一条 active；角色改变不扩大它的权限；无共享用户。 |
-| delegation_ledgers | delegation_id, org_id, ledger_id, access_cap | 同组织复合 FK；只定义允许的最大范围，不直接授予业务权限。 |
+| users | id, status(active/disabled), display_name, created_at, version | No passwords. Disabled users fail at every entry point. |
+| identities | id, user_id, issuer, subject, verified_email, email_verified_at | `UNIQUE(issuer,subject)`; user FK. Email is not the identity key. |
+| organizations | id, name, state(active/locked_recovery), created_by, created_at, version | Active organizations need an active, locally enabled administrator. `locked_recovery` blocks normal business access; recovery remains proposed. The organization row is also the authorization transaction lock. |
+| memberships | id, org_id, user_id, role(admin/member), status(active/removed), generation, version, joined_at, removed_at | `UNIQUE(org_id,user_id)`, `UNIQUE(org_id,id)`; positive generation increments on each rejoin. |
+| companies | id, org_id, name, created_at, version | `UNIQUE(org_id,id)`; organization FK. |
+| ledgers | id, org_id, company_id, name, created_at, version | `UNIQUE(company_id)`, `UNIQUE(org_id,company_id)`, `UNIQUE(org_id,id)`; composite FK `(org_id,company_id)` to companies. |
+| ledger_grants | org_id, membership_id, ledger_id, membership_generation, access(read/edit), granted_by, created_at | PK `(membership_id,ledger_id)`; composite FKs `(org_id,membership_id)` and `(org_id,ledger_id)`; grant matches the current active member/generation. |
+| invitations | id, org_id, target_email_key, inviter_membership_id, proposed_role, status, expires_at, accepted_by, accepted_at, created_at, version | Inviter composite FK to same-organization membership. At most one `pending` row per organization/target. Expiry is creation + 168 hours. States: pending, accepted, revoked, expired, invalidated. |
+| invitation_grants | org_id, invitation_id, ledger_id, access | Composite FKs `(org_id,invitation_id)` and `(org_id,ledger_id)`; PK `(invitation_id,ledger_id)`; administrator invitations have no ledger grants. |
+| audit_events | id, org_id(nullable for user actions), actor_user_id, actor_client_id, delegation_id, action, target_type/id, safe_change, request_id, occurred_at | Append-only. Runtime cannot update/delete. Commit with the corresponding change. |
+| idempotency_records | actor_user_id, client_id, scope_key, operation, key, request_hash, outcome_resource_ids, status, created_at, expires_at | Unique scope combination. No bearer/invitation secrets in results. Replay is not guaranteed after expiry. |
+| delegations | id, user_id, client_id, org_id, resource_mode, scopes, status, expires_at, version | One active delegation per user/client/organization. Role changes do not expand it. No shared user identity. |
+| delegation_ledgers | delegation_id, org_id, ledger_id, access_cap | Same-organization composite FKs. Caps limit access; they do not grant business permission. |
 
-### 5.1 公司必须恰好一个账套
+### Exactly one ledger per company
 
-仅 ledger.company_id UNIQUE 只能保证“最多一个”。额外使 companies 的 (org_id,id) 反向引用 ledgers 的唯一 (org_id,company_id)，两侧外键均 DEFERRABLE INITIALLY DEFERRED。服务同事务插入公司和账套，提交时形成完整一对一，无法提交只有公司的孤立记录。两个方向禁止级联删除；将来如果允许公司删除，另定历史保护流程。
+A unique `ledger.company_id` only gives *at most* one. Add a reverse FK from company `(org_id,id)` to ledger's unique `(org_id,company_id)`. Make both directions `DEFERRABLE INITIALLY DEFERRED`. Insert company and ledger together; commit requires the complete pair. A company-only commit fails. No cascading delete in either direction. Any future deletion needs a history-protection design.
 
-普通 CHECK 不适合跨行管理员计数或查别表；使用复合外键/唯一约束加事务锁，管理员最少一位另配延迟约束触发器作为最后防线。依据 [PostgreSQL 约束文档](https://www.postgresql.org/docs/18/ddl-constraints.html)。触发器也必须遵循组织先锁、再检查当前状态的规则，不能只对旧快照数人数。
+An ordinary CHECK cannot enforce cross-row administrator counts or look up other tables. Use composite FKs, uniqueness and transaction locks. Add a deferred constraint trigger as the final last-administrator guard. The trigger must lock the organization before checking current state, not count an old snapshot. See [PostgreSQL constraints](https://www.postgresql.org/docs/18/ddl-constraints.html).
 
-### 5.2 邮箱和邀请目标
+### Invitation identity and effective grants
 
-首期邀请目标限定为批准身份平台的已验证邮箱。建议定义固定 email_key：trim、域名规范化并转小写，本地部分按身份平台经过验证的唯一性策略规范化；禁止擅自删除加号/点。具体 provider 不同可能影响邮箱等价性，认证小验证必须锁定同一策略用于创建邀请和接受。若无法保证唯一匹配则拒绝接受并报告，不自动猜账号。邮箱变更不转移 membership；接受时重新读取受信任的当前验证邮箱。
+Invitation targets use verified email from the approved provider. Define one `email_key` policy: trim, normalize/lowercase the domain, and normalize the local part only according to the provider's verified uniqueness rules. Never invent plus/dot stripping. The authentication test must establish the same policy for creation and acceptance. Reject ambiguous matches rather than guess. Email changes do not transfer memberships. Re-read the trusted current verified email at acceptance.
 
-### 5.3 有效授权与索引
+A grant works only when membership is active, role is `member`, and grant generation matches membership generation. Delete current grants on promotion. Delete old grants on downgrade/removal. Rejoining increments generation and inserts only the newly approved grants. Audit preserves grant history; old live rows do not restore it.
 
-只有 membership.active 且 role=member 且 grant.membership_generation=membership.generation 时，grant 生效。提升管理员时删当前 grants；降级/移除删旧 grants；重新加入 generation+1，并仅插入本次明确 grants。历史授权留在审计，不通过保留旧活跃行恢复。
+Minimum indexes:
 
-索引至少包括 memberships(user_id,status,org_id)、各组织资源(org_id,created_at,id)、ledger_grants(org_id,ledger_id)、invitations(target_email_key,status,expires_at)、invitations(org_id,inviter_membership_id,status)、audit_events(org_id,occurred_at,id)。不使用基于 now() 的部分唯一索引；创建邀请时先锁组织并将同目标已到期 pending 标为 expired，再利用 status=pending 部分唯一索引。
+- `memberships(user_id,status,org_id)`
+- Organization resources: `(org_id,created_at,id)`
+- `ledger_grants(org_id,ledger_id)`
+- `invitations(target_email_key,status,expires_at)`
+- `invitations(org_id,inviter_membership_id,status)`
+- `audit_events(org_id,occurred_at,id)`
 
-## 6. 事务、并发与撤权的明确次序
+Do not use `now()` in a partial unique index. When creating an invitation, lock the organization, mark elapsed pending invitations for that target `expired`, then rely on the `status=pending` partial unique index.
 
-首期以正确性优先，PostgreSQL READ COMMITTED + 组织级行锁：所有组织内写命令先 SELECT organization FOR UPDATE，再读最新操作者成员身份、目标及授权；单组织变更串行化。所有组织服务先验证 organization.state=active；locked_recovery统一拒绝正常业务并给ORG_RECOVERY_REQUIRED，仅保留经独立审阅的恢复通道。安全相关读使用组织 FOR SHARE，在事务内授权并完整物化有限响应后结束事务。多组织列表只返回当前用户可见元数据，不批量写；如需跨组织锁按 UUID 排序。该保守策略限制同组织并发吞吐，后续依据实测再拆粒度，不能未经证明优化。锁行为依据[官方锁文档](https://www.postgresql.org/docs/18/explicit-locking.html)。
+## 6. Transaction and lock order
 
-锁顺序固定：当前 user 状态锁（FOR SHARE；停用操作需要互斥）→ organization → delegation → membership/invitation/ledger → 幂等记录；同类多行按 id 排序。委托撤销先锁其 organization 再锁 delegation；MCP 请求也在组织锁后检查并锁委托，避免“委托锁等待组织锁”与反向顺序互锁。所有业务写入口包括 MCP 共享此顺序。写入、审计、成功幂等结果一并提交；崩溃或审计失败一起回滚。身份外部网络调用在事务外完成，不持锁等邮件/远程服务。
+Proposed phase-1 strategy: PostgreSQL `READ COMMITTED` plus organization row locks. Correctness comes before throughput.
 
-- 创建组织：串行化当前用户的同类幂等键；插入 organization 与首位 admin membership；组织无管理员不得提交。
-- 创建公司：组织锁内检查当前 admin；公司和唯一账套同时写入。
-- 移除/降级：admin 数量与变更在组织锁内；若结果为零，409 LAST_ADMIN；改变当前操作者自己也同样处理。该成员发出的 pending 邀请标 invalidated，移除目标的旧 pending 邀请也失效；grants、delegations 和审计一致更新。
-- 权限降级：涉及该成员的有效委托保守全部 revoked，之后需本人重新明确建立委托；防止后续晋升静默恢复旧 AI 权限。
-- 邀请接受：锁组织和邀请，检查状态、精确过期时刻、当前邮箱、邀请人仍是 active admin、账套范围、目标是否已有成员；原子创建/恢复成员、写新 grants、消费邀请和审计。
-- 先接受后撤销：409 INVITE_ALREADY_ACCEPTED，不能代替移除成员；先撤销/过期/失效后接受：410 INVITE_UNAVAILABLE。
-- 写命令先取得锁并成功提交，则它发生在撤权前；撤权先提交，之后取得锁的写命令必须按新状态拒绝。不能在事务外验证后无保护提交。
-- 已物化或已经发送的读取无法远程收回。首期无导出/长任务/持续数据流；未来增加时另定分块再授权及取消机制，不承诺当前不具备的中断能力。
+For an organization write, acquire `SELECT organization FOR UPDATE` before reading current actor membership, target and access. Writes within one organization serialize. Every organization service checks `state=active`. `locked_recovery` returns `ORG_RECOVERY_REQUIRED` for normal business operations; only a separately reviewed recovery path may remain available.
 
-建议 lock_timeout=3秒、单命令 statement_timeout=10秒，超时返回可重试错误，不标记成功；死锁/序列化失败至多自动重试2次且保持同一幂等键，禁止重试不明结果外部副作用。
+Security-sensitive reads use organization `FOR SHARE`. Authorize and fully materialize a bounded response inside the transaction. Multi-organization lists return only visible metadata and do not perform bulk writes. Sort any cross-organization locks by UUID. Measure before reducing lock granularity. See [PostgreSQL locks](https://www.postgresql.org/docs/18/explicit-locking.html).
 
-## 7. HTTP API 通用契约
+All entry points use this order:
 
-路径前缀 /api/v1。请求 JSON；未知字段拒绝，重复 JSON key 拒绝，UUID 格式验证。请求体上限 256 KiB，批量 grants 上限100（均为提案）；无浮动权限字段或任意 JSON 扩展字段。未提供字段表示不改；显式 null 只允许规范声明可空字段；[] 表示明确清空列表。首期 name 不可 null，PATCH 仅 name。
+1. Current user's status lock (`FOR SHARE`; disable needs an exclusive lock).
+2. Organization.
+3. Delegation.
+4. Membership, invitation or ledger.
+5. Idempotency record.
 
-成功单对象：{"data":{...},"request_id":"..."}；列表：{"data":[...],"page":{"next_cursor":null},"request_id":"..."}。无总数默认值；空列表不是错误。版本作为字符串如 "3"；返回强 ETag 如 "v3"。PATCH、PUT 和有状态动作要求 If-Match；缺失428 PRECONDITION_REQUIRED，不匹配412 VERSION_CONFLICT。JSON 字段 expected_version 不再重复；MCP 可使用 expected_version 映射同一前置条件。
+Sort multiple rows of the same kind by ID. Delegation revocation locks its organization before the delegation. MCP checks and locks the delegation after the organization too. Never use opposite lock orders.
 
-时间点 ISO 8601 UTC RFC3339，输出带 Z；七天按168小时，now>=expires_at 即失效。首期不出现会计日期/金额字段；未来金额需十进制字符串及币种/精度契约另审，不预先把金额当浮点数。
+Commit business changes, audit and successful idempotency results together. A crash or audit failure rolls them all back. Do external identity calls outside database transactions. Do not wait for email or remote services while holding locks.
 
-错误统一 application/problem+json：type（固定文档类型标识）、title、status、code、detail（安全可读）、instance/request_id，及可选 field_errors。不回传 SQL、堆栈、token、其他组织名称。调用方按 code 而非 detail 文案判断。
+| Command | Transaction rule |
+| --- | --- |
+| Create organization | Serialize the user's matching idempotency key. Insert organization and first administrator together. An organization without an administrator cannot commit. |
+| Create company | Under the organization lock, verify current administrator access and insert company plus its only ledger. |
+| Remove/downgrade | Count administrators and change state under the organization lock. A normal change leaving zero returns `409 LAST_ADMIN`, including self-change. Invalidate the member's pending invitations; removal also invalidates old pending invitations addressed to the target. Update grants, delegations and audit consistently. |
+| Reduce permissions | Conservatively revoke all that user's active delegations in that organization. The user must explicitly create new ones. Later promotion must not revive old AI access. |
+| Accept invitation | Lock organization and invitation. Check state, exact expiry, current email, inviter still active administrator, ledger scope and existing membership. Atomically create/restore membership, write fresh grants, consume invitation and audit. |
+| Accept/revoke race | Acceptance first: later revoke returns `409 INVITE_ALREADY_ACCEPTED`, not member removal. Revoke/expire/invalidate first: acceptance returns `410 INVITE_UNAVAILABLE` only to an authorized viewer. |
 
-| HTTP | code 示例 | 语义 |
+A write that acquires the lock and commits before revocation is a pre-revocation action. If revocation commits first, a later lock holder must reject the write using new permissions. An earlier out-of-transaction check cannot authorize an unprotected commit.
+
+Already materialized or sent reads cannot be recalled. Phase 1 has no exports, long jobs or continuous streams. Define chunk reauthorization and cancellation before adding them; do not claim interruption capabilities that do not exist.
+
+Proposed limits: `lock_timeout=3 seconds`, command `statement_timeout=10 seconds`. Return a retryable failure on timeout, never success. Deadlock/serialization failures may automatically retry the complete transaction at most twice, with the same idempotency key. Do not retry external side effects with uncertain outcomes.
+
+## 7. Common HTTP contract
+
+Prefix: `/api/v1`. Requests are JSON. Reject unknown fields, duplicate JSON keys and invalid UUIDs. Proposed body limit: 256 KiB. Proposed grants limit: 100. No arbitrary permission fields or unrestricted JSON extension fields.
+
+Omitted fields mean unchanged. Explicit `null` is accepted only for fields declared nullable. `[]` means clear the list. `name` is not nullable; phase-1 PATCH accepts only `name`.
+
+Single-object success: `{"data":{...},"request_id":"..."}`.
+
+List success: `{"data":[...],"page":{"next_cursor":null},"request_id":"..."}`. No default total count. An empty list is not an error.
+
+Versions are strings such as `"3"`. Return strong ETags such as `"v3"`. PATCH, PUT and state-changing actions require `If-Match`: missing gives `428 PRECONDITION_REQUIRED`; mismatch gives `412 VERSION_CONFLICT`. Do not duplicate this as an HTTP JSON `expected_version`. MCP's `expected_version` maps to the same condition.
+
+Timestamps use RFC3339/ISO 8601 UTC with `Z`. Seven days means 168 hours. `now >= expires_at` is expired. No accounting dates or amounts appear in phase 1. Future amounts need separately reviewed decimal-string, currency and precision rules, not floating-point defaults.
+
+Errors use `application/problem+json`: fixed documented `type`, `title`, `status`, `code`, safe `detail`, `instance/request_id`, and optional `field_errors`. Never return SQL, stacks, tokens or another organization's name. Clients use `code`, not the wording of `detail`.
+
+| HTTP | Codes | Meaning |
 | --- | --- | --- |
-| 400 | INVALID_ARGUMENT / INVALID_CURSOR | 输入格式或游标不匹配 |
-| 401 | UNAUTHENTICATED | 凭证缺失、过期或验证失败；给适当 WWW-Authenticate |
-| 403 | EMAIL_NOT_VERIFIED / FORBIDDEN / INSUFFICIENT_SCOPE / ORG_RECOVERY_REQUIRED | 已认证但未满足可公开的资格或权限 |
-| 404 | NOT_FOUND | 不存在或不可见组织/账套/邀请；不区分跨租户存在性 |
-| 409 | LAST_ADMIN / ALREADY_MEMBER / INVITE_CONFLICT / IDEMPOTENCY_KEY_REUSED | 业务冲突，不自动覆盖 |
-| 410 | INVITE_UNAVAILABLE | 已验证为目标本人/本组织管理员后才揭示过期/撤销/失效 |
-| 412 / 428 | VERSION_CONFLICT / PRECONDITION_REQUIRED | 防止丢失更新 |
-| 429 | RATE_LIMITED | Retry-After；建议按主体/客户端并按 IP 限制匿名认证入口 |
-| 503 | TEMPORARILY_UNAVAILABLE | DB/验证依赖不可用或锁等待超时；不伪装为空列表 |
+| 400 | INVALID_ARGUMENT / INVALID_CURSOR | Invalid input or mismatched cursor. |
+| 401 | UNAUTHENTICATED | Missing, expired or invalid credentials; appropriate WWW-Authenticate. |
+| 403 | EMAIL_NOT_VERIFIED / FORBIDDEN / INSUFFICIENT_SCOPE / ORG_RECOVERY_REQUIRED | Authenticated but missing a safely disclosable qualification or permission. |
+| 404 | NOT_FOUND | Absent or invisible organization, ledger or invitation. Do not distinguish cross-tenant existence. |
+| 409 | LAST_ADMIN / ALREADY_MEMBER / INVITE_CONFLICT / IDEMPOTENCY_KEY_REUSED / INVITE_ALREADY_ACCEPTED | Business conflict; do not overwrite. |
+| 410 | INVITE_UNAVAILABLE | Reveal expiry/revocation/invalidation only after verifying the viewer is the recipient or organization administrator. |
+| 412 / 428 | VERSION_CONFLICT / PRECONDITION_REQUIRED | Prevent lost updates. |
+| 429 | RATE_LIMITED | Retry-After. Proposed per-user/client limits and IP limits for anonymous authentication entry points. |
+| 503 | TEMPORARILY_UNAVAILABLE | Database/validation dependency unavailable or lock timeout. Never disguise this as an empty list. |
 
-目标不可见先404；目标可见但该操作不允许才403。错误机器码只增加不改义；破坏性字段/语义变化走 /v2 和新 MCP 工具版本，不在 v1 中静默改变。新增可选响应字段允许旧客户端忽略；枚举扩展需明确旧客户端处理方式。
+Invisible target: 404 first. Visible target with a forbidden operation: 403. Add error codes without changing existing meanings. Breaking fields/semantics require `/v2` and a new MCP tool version. Old clients may ignore new optional response fields. Define old-client behavior before extending enums.
 
-### 7.1 幂等
+### Idempotency
 
-所有业务写命令要求 Idempotency-Key（UUID），包括接受/撤销/离开/更改权限。作用域为 user_id + client_id + org或global + operation + key；规范化请求体、路径目标与 If-Match 共同计算指纹。相同键不同指纹409；相同键相同请求重放同一逻辑结果；并发同键等待首次事务后读取结果，超时503让调用方用原键重试。
+Every business write requires `Idempotency-Key` as a UUID, including accept, revoke, leave and permission changes.
 
-建议保留7天，响应返回 Idempotency-Expires-At。超过保留期不得假设仍然去重，创建型客户端应先查询结果；重试未知结果保留原键。仅缓存已提交成功结果；验证失败不消耗键，事务失败不落成功状态。重放前先验证当前身份、委托和目标访问权，不能从缓存绕过撤权。若原请求是本人退出/自降级，允许相同主体仅重放安全的操作收据（id、完成状态、时间），不返回旧组织内容；其他不可见情况404。资源随后改变时重放的是原操作收据/资源ID，不冒充当前详情，客户端另发GET。
+Scope: `user_id + client_id + organization-or-global + operation + key`. Fingerprint the normalized body, path target and `If-Match` together. Same key/different fingerprint: 409. Same key/same request: replay the same logical result. Concurrent identical keys wait for the first transaction, then read its result. A wait timeout gives 503; retry with the original key.
 
-### 7.2 分页与搜索
+Proposed retention: seven days; return `Idempotency-Expires-At`. After expiry, do not assume deduplication. Creation clients should query for the result first. For an uncertain outcome, keep the original key.
 
-列表 limit 默认50、1–100；固定 created_at ASC,id ASC（审计按 occurred_at,id）。next_cursor 不透明、签名且绑定主体、组织、筛选、排序、最后键及首屏截止时间；有效期15分钟。客户端不能拿 A 组织游标查询 B。第一页取截止时间，后页排除其后新建记录；按 keyset 翻页，当前授权每页重新校验。删除/撤权/编辑导致的结果变化不保证跨页快照完整，不宣称永不重漏。
+Cache only committed successes. Validation failure does not consume the key; failed transactions do not record success. Before replay, check current identity, delegation and target access. A cache cannot bypass revocation.
 
-首期仅 name_prefix（大小写不敏感前缀）用于组织/公司/账套；role/status 用于管理员成员列表；邀请 status 过滤。所有筛选组合为 AND，未知筛选/排序返回400。不接受任意 SQL 排序字段；先授权过滤再分页。成员本人只可看自己身份，完整成员/邀请清单限 admin。
+For the original user's own leave/self-downgrade, the same actor may replay only a safe receipt: ID, completion status and time. Do not return old organization content. Other invisible targets return 404. If the resource later changes, replay the original receipt/resource IDs, not a claim of current details; use a separate GET for current state.
 
-## 8. 端点与最小请求/响应
+### Pagination and filters
 
-表中 org 是路径 org_id，member 是 membership_id。所有有目标路径均先检验归属。返回实体统一包含 id、相关 org_id、version、created_at；用户列表不公开身份平台 subject。管理员显示成员邮箱需最小化，审计不能携带认证秘密。
+`limit` defaults to 50 and accepts 1–100. Sort by `created_at ASC,id ASC`; audit uses `occurred_at,id`. `next_cursor` is opaque, signed and bound to actor, organization, filters, ordering, last key and first-page cutoff. Proposed cursor lifetime: 15 minutes. A cursor for A cannot query B.
 
-| 方法与路径（/api/v1 后） | 请求核心字段 | 权限及成功结果 |
+Capture the cutoff on page one. Exclude later-created records on subsequent keyset pages. Recheck current access on every page. Deletion, revocation and edits can change results; this is not a complete cross-page snapshot and does not promise zero omissions/duplicates.
+
+Supported filters: case-insensitive `name_prefix` for organizations/companies/ledgers; `role` and `status` for administrator membership lists; `status` for invitations. Combine filters with AND. Unknown filters/sorts return 400. No arbitrary SQL sort fields. Authorize before pagination. Ordinary members can inspect their own membership only; complete member/invitation lists require administrator access.
+
+## 8. Endpoints and minimum payloads
+
+All paths below follow `/api/v1`. `{org}` means `org_id`; `{member}` means `membership_id`. Validate every path target's ownership first. Entity responses include `id`, relevant `org_id`, `version` and `created_at`. Do not expose provider subject IDs in user lists. Minimize displayed member emails. No authentication secrets in audit.
+
+| Method and path | Input | Access and success |
 | --- | --- | --- |
-| GET /me | 无 | 有效登录；本人 id、display_name、verified、status；不返回 tokens |
-| GET /me/organizations | 分页 | 当前 active memberships 范围；组织摘要及本人 role |
-| POST /organizations | name | verified user；201 organization + 首位 membership；无既有 org 要求 |
-| GET /organizations/{org} | 无 | active member；组织摘要与本人 role |
-| PATCH /organizations/{org} | name | admin；200 最新组织；If-Match |
-| GET /organizations/{org}/companies | name_prefix、分页 | admin 全部；member 仅具有有效 grant 的账套所对应公司 |
-| POST /organizations/{org}/companies | name, ledger_name | admin；201 company + 唯一 ledger；两名均必填 |
-| GET /organizations/{org}/companies/{company} | 无 | admin 或该公司账套获授权 member |
-| PATCH /organizations/{org}/companies/{company} | name | admin；200；公司身份资料不等于普通成员账务可编辑权限 |
-| GET /organizations/{org}/ledgers | name_prefix、分页 | 按当前角色/grants过滤，含effective_access及not_configured |
-| GET /organizations/{org}/ledgers/{ledger} | 无 | admin 或当前 grant；返回账套摘要和effective_access |
-| PATCH /organizations/{org}/ledgers/{ledger} | name | admin；基础配置管理；不允许编辑记账设置 |
-| GET /organizations/{org}/memberships | role,status、分页 | admin；列表 |
-| GET /organizations/{org}/memberships/me | 无 | active member；本人角色及当前 grants |
-| PUT /organizations/{org}/memberships/{member}/access | role, grants:[{ledger_id,access}] | admin；替换式完整权限集；角色admin时grants必须[]；member时grants必填，[]明确无账套 |
-| POST /organizations/{org}/memberships/{member}/remove | {} | admin；安全操作收据；不能移除最后admin |
-| POST /organizations/{org}/memberships/me/leave | {} | 本人；安全操作收据；最后admin409 |
-| GET /organizations/{org}/invitations | status、分页 | admin；列表，不含秘密 |
-| POST /organizations/{org}/invitations | email,role,grants | admin；201邀请摘要；目标已是active成员返回409；同内容有效pending返回200既有邀请、不延长有效期；不同内容409，需撤销再发 |
-| POST /organizations/{org}/invitations/{invite}/revoke | {} | admin；200收据；已accepted409 |
-| GET /me/invitations | 分页 | verified user；只匹配当前已验证邮箱的待接受邀请摘要，含org显示名及拟授范围 |
-| POST /me/invitations/{invite}/accept | {} | verified匹配本人主动操作；200 membership/grants；重复已消费由本人接受返回安全结果，不升级 |
-| GET /organizations/{org}/audit-events | 分页；固定允许过滤 | admin；只读审计 |
-| GET /me/delegations | 分页 | 本人直接登录客户端；委托摘要 |
-| POST /me/delegations | client_id,org_id,resource_mode,scopes,ledger_caps,expires_at | 本人直接登录客户端；201，范围不得超过本人现权；不是普通成员给别人授权 |
-| POST /me/delegations/{id}/revoke | {} | 本人；If-Match；200收据 |
+| GET /me | None | Valid login; own id, display_name, verified, status. No tokens. |
+| GET /me/organizations | Pagination | Current active memberships; organization summary and own role. Agent clients additionally require a valid delegation per returned organization. |
+| POST /organizations | name | Verified user; 201 organization + first membership. No existing organization required. |
+| GET /organizations/{org} | None | Active member; summary and own role. |
+| PATCH /organizations/{org} | name | Administrator; 200 current organization; If-Match. |
+| GET /organizations/{org}/companies | name_prefix, pagination | Administrator: all. Member: companies whose ledger has a current grant. |
+| POST /organizations/{org}/companies | name, ledger_name | Administrator; 201 company + only ledger. Both names required. |
+| GET /organizations/{org}/companies/{company} | None | Administrator or member with access to its ledger. |
+| PATCH /organizations/{org}/companies/{company} | name | Administrator; 200. Ledger edit does not grant company-identity management. |
+| GET /organizations/{org}/ledgers | name_prefix, pagination | Filter by current role/grants; include effective_access and accounting_setup_status=not_configured. |
+| GET /organizations/{org}/ledgers/{ledger} | None | Administrator or current grant; summary and effective_access. |
+| PATCH /organizations/{org}/ledgers/{ledger} | name | Administrator; foundation configuration only, no accounting settings. |
+| GET /organizations/{org}/memberships | role, status, pagination | Administrator; list. |
+| GET /organizations/{org}/memberships/me | None | Active member; own role and current grants. |
+| PUT /organizations/{org}/memberships/{member}/access | role, grants:[{ledger_id,access}] | Administrator; replace the full access set. For admin, grants must be []. For member, grants is required; [] explicitly means no ledgers. |
+| POST /organizations/{org}/memberships/{member}/remove | {} | Administrator; safe receipt. Cannot remove last administrator. |
+| POST /organizations/{org}/memberships/me/leave | {} | Self; safe receipt. Last administrator gets 409. |
+| GET /organizations/{org}/invitations | status, pagination | Administrator; list without secrets. |
+| POST /organizations/{org}/invitations | email, role, grants | Administrator; 201 summary. Active-member target: 409. Identical valid pending invitation: 200 existing invitation, no expiry extension. Different content: 409; revoke then reissue. |
+| POST /organizations/{org}/invitations/{invite}/revoke | {} | Administrator; 200 receipt. Already accepted: 409. |
+| GET /me/invitations | Pagination | Verified user; pending invitations matching their current verified email, with organization display name and proposed scope. |
+| POST /me/invitations/{invite}/accept | {} | Matching verified recipient actively accepts; 200 membership/grants. Same recipient repeating a consumed acceptance gets a safe result, never a role upgrade. |
+| GET /organizations/{org}/audit-events | Pagination; fixed allowed filters | Administrator; read-only audit. |
+| GET /me/delegations | Pagination | Self through a direct login client; delegation summaries. |
+| POST /me/delegations | client_id, org_id, resource_mode, scopes, ledger_caps, expires_at | Self through a direct login client; 201. Cannot exceed current user access. This is not a member granting access to another person. |
+| POST /me/delegations/{id}/revoke | {} | Self through an approved direct client; If-Match; 200 receipt. |
 
-邀请收件箱条目必须返回 invitation.version 与 ETag 对应值；accept 的 If-Match 使用该邀请版本，不是 membership 版本。
+Invitation inbox items must expose `invitation.version` and its corresponding ETag. Accept uses that invitation version in `If-Match`, not the membership version.
 
-没有独立 POST ledger，不能为公司创建第二账套；没有批量导入、删除组织、转移公司或任意 SQL 端点。每个变更均返回新版本或只含安全信息的操作收据。
+There is no separate POST ledger, second ledger per company, bulk import, organization delete, company transfer or arbitrary SQL endpoint. Every change returns its new version or a safe receipt.
 
-邀请首期建议走**已认证邀请收件箱**：邀请 id 不是 bearer 凭证，知道 id 不够，必须匹配已验证身份并明确 POST accept。无需发出可直接授权的秘密链接；这取代早稿中“如采用秘密链接则存摘要”的可选机制，不改变已确认业务。通知邮件不列入首期，API 不声称已送达。未来增加邮件需 outbox、可重试通知和送达状态，不在业务事务里直发。接受不是自动后台动作，也不以读取GET代替。
+### Invitation delivery
 
-示例（无真实数据）：创建公司请求 {"name":"示例公司","ledger_name":"示例账套"}；201返回 {"data":{"company":{"id":"<uuid>","org_id":"<uuid>","name":"示例公司","version":"1"},"ledger":{"id":"<uuid>","company_id":"<uuid>","accounting_setup_status":"not_configured","version":"1"}},"request_id":"<request-id>"}。尖括号只作字段示意，不是可发送的有效 UUID。
+Phase 1 proposes an authenticated invitation inbox. The invitation ID is not a bearer credential. Knowing it is insufficient: the recipient must match the verified identity and explicitly POST accept. GET is never acceptance, and no background process accepts on the user's behalf.
 
-管理员交接由两条独立、可审计命令完成：先把另一有效成员设为 admin（grants=[]），确认成功，再本人 leave/降级。无需引入 owner 角色或特殊绕权交接端点。
+This replaces the older optional secret-link idea, not the confirmed invitation policy. Notification email is out of phase-1 scope. Do not claim delivery. Future email needs an outbox, retries and delivery state; do not send it directly within a business transaction.
 
-## 9. MCP：范围受限的人类委托，而非超级账号
+Synthetic company request: `{"name":"Example Company","ledger_name":"Example Ledger"}`.
 
-MCP 按选定协议版本2025-11-25设计，实施时核验目标客户端支持；此处不是宣称它始终是最新协议。参见 [MCP 授权规范](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)。
+Illustrative 201 response: `{"data":{"company":{"id":"<uuid>","org_id":"<uuid>","name":"Example Company","version":"1"},"ledger":{"id":"<uuid>","company_id":"<uuid>","accounting_setup_status":"not_configured","version":"1"}},"request_id":"<request-id>"}`. This shortened example illustrates nesting, not the full schema. Angle-bracket placeholders are not valid UUIDs to submit; the complete response also follows the common entity fields above.
 
-1. /mcp 是受保护资源，发布 RFC9728 protected-resource metadata，并给401响应合法 WWW-Authenticate 的 resource_metadata 发现信息。授权服务器用 OIDC/OAuth 元数据发现。
-2. 客户端走标准 Authorization Code + PKCE；首期仅批准的预注册客户端，不开放无限动态注册。客户端必须请求 Books MCP resource/audience，后台验证精准受众；参考 [RFC8707](https://www.rfc-editor.org/rfc/rfc8707.html) 和 [RFC9728](https://www.rfc-editor.org/rfc/rfc9728.html)。具体 provider 如何正确支持由兼容验证确认，不能只配静态 aud 就假定符合所有 resource 请求语义。
-3. 每个请求识别真实 user_id 与受信任 client_id；MCP 参数不含 actor_user_id。客户端分类、scope与delegation判断属于公共Principal/应用服务授权，不按URL是否/mcp决定。即使MCP客户端取得有效API受众token并改调HTTP路径，也仍须同一委托交集校验；不能以换入口绕过。HTTP只接受API受众，MCP只接受MCP受众，错误受众在进入业务前拒绝；受众合法也不代表客户端属于直接人工客户端。不允许 client_credentials 代表人操作组织，不用统一管理员密钥，不允许 token passthrough 到其他受众服务。
-4. 请求包含 org_id 时，查该 user/client/org 的当前 active delegation。有效权限 = token scopes ∩ 当前用户组织/账套权限 ∩ delegation 范围。缺一项拒绝。授权记录不发 token，也不是自制 OAuth server。
-5. 委托由本人通过直接测试客户端明确建立，MCP 客户端不能调用建立/扩权委托端点；目标客户端须在批准名单，期限建议最多30天且要求明确 expires_at。续期是新的明确批准，不自动延长。测试客户端可以调用撤销；撤销后下一请求即失败，不等 token 到期。
-6. 委托 scopes 推荐 books:read、books:write、books:org-admin。books:org-admin 仅管理员可授予、只限指定组织；member只能读/编辑指定ledger_caps，不能授予org-admin。账套cap是只读或可编辑，全部范围不是默认值。必须显式指定 resource_mode：selected_ledgers 或 organization_admin。前者只允许 books:read/books:write 且 ledger_caps 必须非空；后者必须显式 books:org-admin、ledger_caps=[]、当前用户为admin，表示整个组织的管理委托（含今后新建账套），不得描述为账套限定。org-admin与非空账套caps的组合400拒绝，不能用caps假装限制可邀请管理员/授权其他账套的权力。MCP 首期不暴露注册、创建委托、接受邀请或创建组织，避免身份/授权建立由代理悄悄完成；这些能力保留直接API测试客户端。
-7. 角色降级、成员移除或相关授权减少时，保守撤销该用户该组织全部委托；重新加入/提升不恢复。账号disabled全部拒绝。本人可主动撤销，无需组织管理员配合。
+Administrator handover uses two separately audited commands: promote another active member with `grants=[]`, confirm success, then leave or downgrade yourself. No owner role or permission-bypassing handover endpoint is needed.
 
-委托操作范围矩阵：
+## 9. MCP: limited human delegation
 
-| 操作 | selected_ledgers | organization_admin |
+The design targets protocol version `2025-11-25`. Verify target-client support before implementation; this is not a claim that it is always the latest version. See [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization).
+
+### Authentication and identity binding
+
+- `/mcp` is a protected resource. Publish RFC 9728 protected-resource metadata. Its 401 response includes valid `WWW-Authenticate` discovery information with `resource_metadata`. Discover the authorization server through OIDC/OAuth metadata.
+- Use Authorization Code + PKCE. Phase 1 permits approved, preregistered clients only, not unrestricted dynamic registration.
+- The client requests the Books MCP resource/audience; the backend validates the exact audience. Test provider behavior for the `resource` parameter. Setting a static `aud` does not prove full compatibility. See [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html) and [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728.html).
+- Every request identifies the real `user_id` and trusted `client_id`. Tool arguments cannot set `actor_user_id`.
+- Client classification, scopes and delegation checks belong to shared Principal/application authorization, not a URL test for `/mcp`.
+- An MCP client that gets a valid API-audience token and calls HTTP still needs the same delegation intersection. Switching entry points cannot bypass it.
+- HTTP accepts only the API audience. MCP accepts only the MCP audience. Reject the wrong audience before business processing. A correct audience does not make an agent client a direct human client.
+- No `client_credentials` acting as a human, shared administrator key or token passthrough to services with other audiences.
+
+For each organization request, load the current active delegation bound to **user + client + organization**. Effective access is:
+
+`token scopes ∩ current user organization/ledger access ∩ delegation scope`
+
+All three must allow the action. Delegation records do not issue tokens and are not a custom OAuth server.
+
+### Establishing and ending delegation
+
+The person explicitly creates a delegation through an approved direct test client. Agent/MCP clients cannot create or expand delegations, including through HTTP. The target client must be approved. Require explicit `expires_at`; proposed maximum lifetime is 30 days. Renewal needs a new explicit approval, not automatic extension.
+
+The person can revoke through the direct client without administrator cooperation. The next request fails immediately; do not wait for token expiry. Downgrade, removal or a related grant reduction conservatively revokes every delegation for that user/organization. Rejoining or promotion does not restore them. A disabled account is denied everywhere.
+
+Proposed scopes: `books:read`, `books:write`, `books:org-admin`. Only administrators can delegate `books:org-admin`, and only for the named organization. Members can delegate read/edit within specified ledger caps, never organization administration.
+
+Require one explicit `resource_mode`:
+
+| Mode | Required limits |
+| --- | --- |
+| selected_ledgers | Only books:read/books:write; ledger_caps must be nonempty. Each cap is read/edit. No default all-ledger scope. |
+| organization_admin | Current user must be administrator; explicit books:org-admin; ledger_caps=[]. This covers the whole named organization, including future ledgers. It is not ledger-limited. |
+
+Reject `org-admin` plus nonempty ledger caps with 400. Caps cannot honestly restrict a power that can invite administrators or grant other ledgers. The person must explicitly accept whole-organization administration. This design is not a current grant of real AI access. Ordinary members can never create an `organization_admin` delegation.
+
+Phase-1 MCP does not expose registration, delegation creation, invitation acceptance or organization creation. Those identity/access-establishing actions remain in the direct API test client.
+
+| Operation | selected_ledgers | organization_admin |
 | --- | --- | --- |
-| 组织摘要 | 仅该组织名称/本人身份最小信息 | 该组织摘要 |
-| 公司/账套读取 | 只允许caps内且当前用户有权的账套及对应公司 | 本组织全部；仍需books:read |
-| 账套业务写入（后续） | caps=edit且用户当前edit且books:write | 本组织；仍需books:write与业务校验 |
-| 公司/账套创建或基础配置 | 拒绝，不属于账务edit | 明确org-admin；本组织 |
-| 成员、邀请、授权、审计 | 拒绝，即使数据涉及已选账套 | 明确org-admin；本组织全部 |
-| 委托建立/扩大 | 两种都拒绝经代理客户端调用 | 两种都拒绝经代理客户端调用 |
+| Organization summary | Minimal organization name and own membership information only. | Named organization summary. |
+| Company/ledger read | Only capped ledgers and their companies, intersected with current user access. | Whole named organization; still requires books:read. |
+| Ledger business write, later phase | edit cap + current user edit + books:write. | Named organization; still requires books:write and business checks. |
+| Company/ledger creation or foundation configuration | Denied; not ledger business edit. | Explicit org-admin; named organization only. |
+| Members, invitations, grants, audit | Denied, even for data related to a selected ledger. | Explicit org-admin; whole named organization. |
+| Create/expand delegation | Denied through agent clients. | Denied through agent clients. |
 
-组织级管理能力不可能同时保证只触及少数账套，因此必须由本人明确接受全组织管理范围；这是技术提案，不是用户现在授予真实AI访问权。普通成员永远不能创建organization_admin委托。
+### Adapter and tool contract
 
-在同一进程中，MCP adapter 将已验证 Principal、参数、幂等键及预期版本传到公共应用服务，不做环回HTTP，不传特殊高权token；HTTP和MCP共用同一后端API能力而不是复制规则。若未来拆进程，必须重新设计受众绑定的委托/令牌交换，不直接复用错误受众token。
+In the shared process, the MCP adapter passes the verified Principal, arguments, idempotency key and expected version to common application services. No loopback HTTP or special high-privilege token. HTTP and MCP reuse the same backend capabilities, not copies of their rules. If split into processes later, redesign audience-bound delegation/token exchange; do not reuse wrong-audience tokens.
 
-建议工具名映射：books_list_organizations、books_get_organization、books_list_companies、books_create_company、books_list_ledgers、books_get_ledger、books_list_memberships、books_set_member_access、books_remove_member、books_list_invitations、books_create_invitation、books_revoke_invitation、books_list_audit_events。变更工具必有 idempotency_key 和 expected_version（创建无需后者）；不提供通用“任意请求”工具。组织列表仅返回有有效委托的组织，不暴露用户其余组织。
+Proposed tool names:
 
-每工具给严格 input/output schema；成功结果structuredContent复用HTTP DTO；业务失败isError=true并给稳定code/request_id，不能假成功。无效/过期token为传输层401；scope不够按协议403 challenge；业务对象拒绝按结构化错误，不通过工具描述提升权限。annotations仅辅助客户端，不是权限控制。除当前有限查询，不做后台持续会话权限快照。
+- books_list_organizations
+- books_get_organization
+- books_list_companies
+- books_create_company
+- books_list_ledgers
+- books_get_ledger
+- books_list_memberships
+- books_set_member_access
+- books_remove_member
+- books_list_invitations
+- books_create_invitation
+- books_revoke_invitation
+- books_list_audit_events
 
-**兼容性验证必须证明**：元数据发现→指定resource→用户登录与PKCE→签发正确aud/client身份→工具成功→错误aud被拒绝→撤销委托立即失败→refresh不能扩大scope→未知客户端被拒绝。没有结果前不得宣布MCP可接入。
+Write tools require `idempotency_key` and `expected_version`; creation does not need the latter. No generic arbitrary-request tool. Organization lists show only organizations with a valid delegation, not the person's other memberships.
 
-## 10. 安全、审计与运维边界
+Every tool needs strict input/output schemas. Successful `structuredContent` reuses HTTP DTOs. Business failures use `isError=true` and stable `code`/`request_id`, never false success. Invalid/expired tokens produce transport 401. Insufficient scope uses the protocol's 403 challenge. Business-resource denial uses structured errors. Tool descriptions and annotations do not confer permission. Do not keep long-lived background permission snapshots.
 
-审计成功变更至少含人类操作者、客户端、委托（如有）、组织、动作、资源ID、字段白名单前后值、UTC时间、request_id。成员邮箱仅在业务需要的受限数据中，审计尽量记录内部ID。auth token、密码、验证码和完整邀请凭证不落日志。失败访问进安全日志而非成功业务审计；限制异常请求大小和频率。
+Compatibility testing must prove: metadata discovery; requested resource; login with PKCE; correct audience and client identity; successful tool call; wrong-audience rejection; immediate failure after delegation revocation; refresh cannot expand scopes; unknown-client rejection. Until this evidence exists, do not claim MCP connectivity works.
 
-租户隔离第一版由显式 org_id 查询条件、服务授权、复合外键及测试保障；数据库运行账号无DDL/超级权限，迁移账号独立。**不宣称已经启用RLS**；若以后增加RLS，需额外验证连接池上下文隔离与绕过权限，不能把尚未实现的防线当交付。runtime禁止更新/删除audit表；管理员也没有修改审计API。
+## 10. Audit, security and operations
 
-运行环境建议开发/测试/生产分离；这里只提出，不创建环境。上线前必须指定备份保留、恢复时间目标、数据库与身份平台恢复演练、TLS/域名、密钥保管与轮换、告警和日志保留策略。密钥仅用批准的机密管理设施，不能进Git；本文无凭据模板。数据库迁移由单独发布步骤执行；备份不是应用回滚保证，破坏性变更不在首期。
+Successful-change audit records include human actor, client, delegation if any, organization, action, resource IDs, allowlisted before/after values, UTC time and request ID. Keep member emails only where restricted business data needs them; prefer internal IDs in audit. Never log tokens, passwords, one-time codes or full invitation credentials. Failed access goes into security logs, not successful business audit. Limit abnormal request sizes and rates.
 
-## 11. 实施里程碑与可验收证据（等待编码批准）
+Initial tenant isolation relies on explicit `org_id` conditions, service checks, composite FKs and tests. The runtime database account has no DDL or superuser rights. Use a separate migration account. Runtime cannot update/delete audit tables; no administrator audit-edit API exists.
 
-| 阶段 | 内容 | 完成判据 |
+Do not claim RLS is enabled. A later RLS design must test pooled-connection context isolation and bypass rights. An unimplemented guard is not delivered protection.
+
+Separate development, test and production is proposed; no environments are created now. Before launch, specify backup retention, recovery-time objectives, database/identity-provider restore drills, TLS/domain, secret storage/rotation, alerts and log retention. Use approved secret storage only, never Git. No credential templates are included. Migrations are a separate release step. A backup does not guarantee application rollback. Destructive changes are outside phase 1.
+
+## 11. Implementation milestones, after coding approval
+
+| Stage | Work | Required evidence |
 | --- | --- | --- |
-| M0 认证与契约验证 | 锁定 .NET/EF Core/Npgsql/MCP C# SDK 兼容版本；Keycloak/目标客户端兼容小验证；OpenAPI与MCP schema；不接真实业务数据 | 上述完整认证路径及反例通过；失败则先修订设计，不继续假设 |
-| M1 数据与授权底座 | EF Core 模型与审阅后的版本化迁移；一对一约束；应用服务授权；组织锁；审计与幂等 | 空库迁移通过；直接SQL无法插跨组织关联/孤公司；并发最后管理员保护通过 |
-| M2 组织与公司账套 | ASP.NET Core API 的 me、组织、公司/账套记录CRUD限定集；过滤分页 | 创建原子；org切换隔离；member仅获授权公司；无会计字段默认值 |
-| M3 邀请成员授权 | 收件箱邀请、接受、撤销、移除、角色/grants替换 | 7天边界、身份不匹配、邀请人降权、重入、重复与竞争全通过 |
-| M4 MCP委托接入 | 官方 MCP C# SDK 适配、限定工具、scopes、委托创建/撤销、错误映射 | HTTP/MCP同矩阵；无高权凭证；token与业务撤权测试通过 |
-| M5 集成验收与发布提案 | 安全测试、负载基线、依赖扫描、恢复演练计划、运行手册 | 验收报告列出通过/失败/未跑；用户另行审阅发布，不自动部署 |
+| M0 Authentication and contracts | Lock compatible .NET/EF/Npgsql/MCP SDK versions; isolated provider/client test; OpenAPI and MCP schemas; no real business data. | Full authentication path and negative cases pass. Revise failed assumptions before proceeding. |
+| M1 Data and access foundation | EF models, reviewed versioned migrations, exact one-to-one company/ledger, service authorization, organization locks, audit, idempotency. | Empty-database migration; direct SQL cannot create cross-organization references or an orphan company; concurrent last-admin protection. |
+| M2 Organizations and companies | Limited me/organization/company/ledger ASP.NET Core endpoints; filtered pagination. | Atomic creation, organization isolation, authorized companies only, no accounting defaults. |
+| M3 Invitations and members | Inbox, acceptance, revocation, removal, full role/grant replacement. | Seven-day boundaries, mismatched identity, inviter downgrade, rejoin, duplicates and races. |
+| M4 MCP delegation | Official C# SDK adapter, limited tools, scopes, direct-client delegation create/revoke, errors. | Same HTTP/MCP authorization matrix; no privileged credential; token and business revocation tests. |
+| M5 Acceptance and release proposal | Security tests, load baseline, dependency scan, restore-drill plan, runbook. | Report passed/failed/not-run results. User reviews release separately; no automatic deployment. |
 
-最低自动化测试清单：
-- A/B两组织交叉替换每条路径/引用/游标；404不泄漏，数据库复合FK拒绝跨组织grant。
-- 同一用户A管理员B只读；只读不得写；edit不得管理成员、授权、组织/公司配置。
-- 无现有组织用户可以创建；未验证用户不可；创建者和组织原子成功，故障注入无孤对象。
-- 公司/账套任一插入故障回滚；直接提交公司无账套失败；第二账套失败。
-- 两管理员同步退出/相互移除/降级，以真实独立DB连接和屏障制造竞争，提交后至少一名。
-- 请求授权后暂停，另一事务撤权，再恢复；按锁获得/提交顺序断言，不用sleep碰运气。
-- 邀请在到期前、恰好到期和之后；接受/撤销竞争；邀请人失权后再提升仍不能复活旧邀请。
-- 已成员接受不升权；移除后旧邀请无效；新邀请重新加入只获得新grant；降级grants=[]则无账套。
-- 同幂等键同体并发一次写入一次审计；不同体409；成功后连接断开重试；撤权后重放不泄漏；过期键边界。
-- 两客户端同version修改仅一个成功；428/412含稳定code；审计失败业务回滚。
-- 列表先授权后分页；同时间次级键；游标改过滤/组织/主体拒绝；撤权后下页拒绝。
-- JWT错误iss/aud/算法/过期/未来nbf；ID token冒充；未知kid刷新限流；无邮箱自动账号合并。
-- MCP委托跨org/ledger/scope失败；MCP客户端改调HTTP、取得API受众token、调用委托创建/扩权端点仍失败；普通成员永不获org-admin；org-admin+受限caps组合拒绝；selected_ledgers不能读完整成员/审计、邀请admin或为其他账套授权；organization_admin明确全组织范围且不能跨组织；client_id伪造失败；本人撤销/成员移除立即失效。
-- 安全停用最后可用管理员不被人数检查阻止，组织进入待审阅的恢复锁定状态；无自动提升；身份平台停用事件丢失/延迟和平台不可用行为明确记录，恢复方案未批准则不得上线。
-- 错误响应与日志不含认证秘密、SQL、跨租户名称；审计不可由runtime修改/删除。
+### Minimum automated tests
 
-提交实施验收时附：最终commit、依赖锁定记录、迁移结果、OpenAPI/schema验证、单元/真实DB并发/HTTP/MCP集成测试结果、未测试清单。当前这些测试**均未执行**；本文只完成设计，不能写成“已通过”。
+1. Replace every path/reference/cursor across organizations A/B. Invisible targets return 404 without leaks. Composite FKs reject cross-organization grants.
+2. Same user is administrator in A and read-only in B. Read-only cannot write; edit cannot manage members, grants or organization/company configuration.
+3. A verified user with no organization can create one; an unverified user cannot. Failure injection leaves no orphan creator/organization records.
+4. Either company or ledger insert failing rolls back both. Direct company-only commit and a second ledger fail.
+5. Use separate real database connections and barriers for two administrators leaving/removing/downgrading concurrently. At least one remains after normal changes.
+6. Pause a request after access evaluation, revoke in another transaction, then resume. Assert outcomes from lock/commit order, not sleep-based timing guesses.
+7. Test invitation immediately before, exactly at and after expiry; accept/revoke races; inviter losing and regaining administrator access must not revive old invitations.
+8. Existing-member acceptance cannot upgrade. Removed members cannot use old invitations. New invitation grants are the only rejoin access. Downgrade with grants=[] gives no ledger access.
+9. Concurrent same-key/same-body writes create one change and audit event. Different body gives 409. Cover lost connection after commit, safe retry after revocation and expired-key boundaries.
+10. Two clients writing the same version: only one succeeds. 428/412 have stable codes. Audit failure rolls back business state.
+11. Authorization precedes pagination. Test equal timestamps, secondary keys and changed filter/organization/actor cursors. Revocation blocks the next page.
+12. JWT wrong issuer/audience/algorithm, expired/future nbf, ID-token substitution, unknown-kid refresh limits and no automatic email-based identity merge.
+13. MCP cross-organization/ledger/scope requests fail. Agent clients cannot bypass delegation through HTTP or API-audience tokens, or create/expand delegation. Members never get org-admin. Reject org-admin with nonempty caps. Selected-ledger delegation cannot read full member/audit lists, invite administrators or grant other ledgers. Organization-admin delegation is explicitly organization-wide, never cross-organization. Forged client_id fails. Self-revocation and removal take effect immediately.
+14. Emergency disable of the last usable administrator is not blocked by the count guard. Proposed recovery lock prevents normal access; no automatic promotion. Document missing/delayed provider-disable events and provider outages. No launch without an approved recovery design.
+15. Errors/logs contain no authentication secrets, SQL or cross-tenant names. Runtime cannot update/delete audit.
 
-## 12. 审阅重点与下一步
+Acceptance evidence must include final commit, dependency locks, migration results, OpenAPI/schema validation, unit tests, real-PostgreSQL concurrency tests, HTTP/MCP integration results and the untested list.
 
-建议审阅重点为：C# 路线下的精确版本组合及身份服务运维代价；首期只建组织权限底座；已认证邀请收件箱暂不发通知邮件；保守组织级锁；HTTP字段和错误；MCP显式委托的用户边界。其余技术细节可由实现阶段在不改变契约/风险的前提下完善。
+**None of these implementation tests has run. This is a design, not a passing test report.**
 
-审阅后更新决策记录，再取得明确编码指令。会计基础设置、科目与过账继续作为后续独立设计，不阻塞本阶段组织权限文档完成，也不能被此文档默认为批准。未创建账号、凭据、邀请、部署或运行迁移；未修改任何实际系统权限。
+## 12. Review and next step
+
+Review the exact C# dependency combination and identity-service operating cost; the foundation-only scope; authenticated inbox without email; conservative organization locks; HTTP fields/errors; and the explicit human delegation boundary.
+
+After review, update the decision record and obtain a clear instruction to code. Accounting setup, accounts and posting remain separate later designs. This document does not approve them. No accounts, credentials, real invitations, migrations or deployments were created, and no real system permissions were changed.
+
+[Back to documentation](../README.md)

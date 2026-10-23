@@ -1,59 +1,91 @@
-# 接口约定
+# API conventions
 
-状态：以下五项接口原则及 MCP 调用入口已于 2026-10-23 确认。具体接口契约和技术实现留到技术设计；本次仅更新文档，不开始实现或部署。
+Status: The five principles below and MCP as a backend entry point were confirmed on 2026-10-23. Exact contracts and implementation choices are still open. This is documentation work, not approval to build or deploy the API.
 
-## 目的
+## Purpose
 
-让不同客户端调用同一套后端能力，保持一致的权限、业务校验和数据含义，不因调用入口不同产生两套规则。
+All clients should use the same business rules, permissions, and data meanings.
 
-## 1. 共用后端 API，包括 MCP
+## Confirmed
 
-所有客户端共用同一套后端 API。Web 当前暂不开发，测试工具可以先调用；MCP 也是后端的调用入口，用于把已定义的业务能力提供给 AI 使用。
+### 1. Use one backend for all clients
 
-业务逻辑和校验由后端 API 统一负责。MCP 调用这些能力，不直接绕过 API 修改数据库，不另建一套权限或记账规则，也不会因为调用方是 AI 就获得更高权限。
+All clients use the same backend API. Web development is deferred for now. Test tools can call the backend first.
 
-MCP 工具应遵守与其他客户端一致的组织、账套授权和会计校验。具体提供哪些工具、工具名称及参数，按业务模块在技术设计阶段确定。本章不创建 MCP 服务、连接、凭据或实际授权。
+MCP is another way to call the backend. It exposes defined business operations to AI. It must not write directly to the database, bypass the API, or create a separate set of accounting and permission rules.
 
-## 2. 身份与组织、账套上下文
+An AI caller does not get extra permissions. MCP uses the same organization access, ledger access, and accounting checks as other clients.
 
-后端根据操作范围识别并验证调用身份、组织及目标账套，不能只相信客户端传来的编号。涉及账务的操作必须明确目标账套，并验证账套归属、成员关系及操作权限；组织级操作按组织范围校验。
+Example: If a member cannot edit Ledger A through the API, the same member cannot edit it through MCP.
 
-并非每条接口都要求同时传入用户、组织和账套编号。注册、创建组织等尚无既有组织或账套的操作，应按自身流程验证身份与授权条件，不能要求一个尚不存在的账套。具体哪些上下文由认证信息取得、哪些由请求表达，在技术设计中规定。
+### 2. Verify identity and operation scope
 
-客户端提交的组织、账套或资源编号只是操作目标，不是授权证明。MCP 与测试工具同样需要服务端校验，不能通过切换编号或调用入口绕过隔离规则。
+The backend must identify the caller and check the organization and ledger needed for the operation. Client-supplied IDs identify targets; they do not prove permission.
 
-## 3. 请求、响应和错误格式
+Accounting operations need a clear target ledger. The backend checks its organization, the caller's current membership, and the permission for the action. Organization-level operations check organization access.
 
-请求格式、成功返回和错误表达采用统一约定。调用方应能够区分操作成功、业务校验失败、无权限和系统异常，而不是把失败当作空结果或零余额。
+Not every request needs an existing organization and ledger. Registration and organization creation must follow their own identity checks. They cannot require a ledger that does not exist yet.
 
-金额、日期和空值的含义必须在接口契约中写清楚：
+Example: Replacing a ledger ID in a request must not expose another organization's records.
 
-- 金额需要明确币种、十进制精度、舍入规则及传输表示，避免调用方产生精度歧义。
-- 日期需要区分会计日期和具体时间点，并明确适用时区。
-- 空值、未提供字段、空列表和数值零应分别说明，不能混为一谈。
+The API contract will specify which context comes from authentication and which comes from request fields.
 
-这些是必须明确的语义要求，尚未指定小数位数、JSON 字段类型、日期格式或空值默认行为。接口路径、字段及错误码等细节留待技术设计，不在需求阶段任意设定默认值。
+### 3. Use consistent requests, responses, and errors
 
-## 4. 搜索、筛选、排序和分页
+Use a common approach to input, successful results, and errors. Callers must be able to distinguish success, invalid business data, denied access, and system failure. A failed query must not look like an empty result or a zero balance.
 
-同类查询使用一致的搜索、筛选、排序和分页规则，避免每个模块各自采用不同含义。
+The contract must explain:
 
-接口契约需说明支持的筛选条件、组合方式、默认排序及分页行为。分页后的结果应有可解释的顺序，不能因不同客户端而改变查询口径。
+- Money: Currency, decimal precision, rounding, and how amounts are sent.
+- Dates: Accounting dates versus exact timestamps, and the applicable time zone.
+- Missing values: The difference between an omitted field, null, an empty list, and zero.
 
-涉及余额或流水时，分页只改变返回的数据片段，不应改变同一查询范围内的业务总额口径。分页类型、每页数量及具体参数在技术设计阶段确定。
+Example: A balance of zero is a valid result. A permission error is not a balance of zero.
 
-## 5. 重复提交、并发修改和兼容性
+No specific decimal scale, JSON field type, date format, or default value is approved by this principle.
 
-同一次业务操作被重复提交时，不应意外创建多份记录。超时或重试也不能被简单理解成必须再次新增；具体识别重复请求和返回结果的机制留到技术设计。
+### 4. Make query behavior consistent
 
-多人同时修改同一记录时，后提交者不能无提示覆盖先提交者的变更。接口应能说明发生冲突，供调用方刷新或重新处理，不能静默丢失他人的修改。
+Similar queries use consistent search, filter, sort, and pagination rules. The contract must describe available filters, how filters combine, the default order, and how pages work.
 
-接口升级不能随意破坏现有调用。改变字段含义、必填条件或返回格式时，需要明确兼容与迁移办法；具体版本规则在技术设计阶段确定。MCP 工具的变化也应遵循同样的业务兼容要求。
+Results must have an explainable order. Different clients must not change the meaning of the same query.
 
-## 下一步
+For balances and transactions, pagination changes the rows returned, not the definition of the total for the full query.
 
-五项原则及 MCP 入口已经确认，无需重复确认相同原则。后续按模块补充接口契约、MCP 工具清单和验收案例；登录方案、认证服务商、接口路径、字段、数据库及部署方式仍未确定。
+Example: A query matches 100 transactions. Showing 20 per page must not make the full-query total equal only the first 20 transactions.
 
-本章不代表所有技术细节已获批准，也不授权生成凭据、修改实际访问权限、实施代码或部署。
+The pagination method, page size, and parameter names remain open.
 
-[返回文档目录](README.md)
+### 5. Handle retries, concurrent edits, and changes safely
+
+Repeating the same business operation must not accidentally create duplicate records. A timeout does not prove that the original request failed. The retry mechanism must handle that uncertainty.
+
+If two people edit the same record, the later update must not silently overwrite the earlier change. Return a clear conflict so the caller can refresh or resolve it.
+
+API changes need a compatibility and migration plan when they change field meanings, required input, or response formats. MCP tool changes follow the same business compatibility requirements.
+
+Example: Retrying a successful create request after a lost response must not create a second copy of the same business operation.
+
+## Proposed
+
+The [Phase 1 technical contract](design/phase-1-technical-contract.md) already proposes paths, fields, schemas, and mechanisms for the initial backend. Those details remain proposals. Review each module contract for inputs, outputs, permissions, validation, errors, retry behavior, and examples.
+
+The MCP tool list should map each tool to an approved backend operation. Tool names and parameters should follow those contracts rather than define new business rules.
+
+Idempotency keys and record versions are possible ways to handle retries and conflicting edits. They are proposals, not selected mechanisms. An idempotency key identifies a retry of one operation. A record version helps detect an edit based on an old copy.
+
+## Open Questions
+
+- Which authentication service and login flow will be used?
+- What are the API paths, field names, error codes, and response shapes?
+- How will money, dates, time zones, and missing fields be represented?
+- How will pagination behave when records change between page requests?
+- How will duplicate operations and conflicting edits be detected?
+- How will API and MCP versions remain compatible?
+- Which MCP tools will be available first?
+
+The five principles and shared backend are already confirmed. C#, Entity Framework Core, and PostgreSQL are the confirmed technical direction. These questions concern the proposed contracts and implementation, not whether to adopt that direction. Technical reviewers should resolve the detailed choices; the business owner does not need to answer each one individually.
+
+No MCP service, connection, credential, or actual permission is created by this document. Exact database schemas, provider choices, and deployment details remain proposed or open.
+
+[Testing and acceptance](08-testing-acceptance.md) · [Back to documentation](README.md)

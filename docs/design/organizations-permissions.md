@@ -1,125 +1,146 @@
-# 多组织与权限技术设计
+# Organizations and permissions
 
-版本：0.2；日期：2026-10-23；状态：技术提案，待审阅，未实施。
+Version: 0.3 | Date: 2026-10-23 | Status: design proposal, not implemented
 
-## 1. 设计依据与边界
+## Read this first
 
-已确认：组织管理团队，一个组织可以有多个公司，首期每家公司一个独立账套。组织管理员管理本组织全部账套、成员和授权；普通成员仅访问被分配账套，权限为只读或可编辑，不可转授权。最后一位管理员退出前先交接。所有入口包括 MCP 共用后端权限和业务校验。
+This document explains who can access each organization and ledger. The [technical contract](phase-1-technical-contract.md) gives the proposed database, API, authentication and MCP details.
 
-补充已确认业务政策：注册并验证身份的用户都可以创建组织并自动成为首位管理员；一个账号可加入多个组织且权限独立；管理员邀请并由用户接受，邀请 7 天有效、可撤销、过期后重邀，邀请人失去管理员权限时待接受邀请失效；重新加入或管理员降级为普通成员时重新明确授权，不自动恢复旧权限。
+**Confirmed** means the user has decided the business rule or technology direction. **Proposed** means the implementation detail still needs review. Neither label gives permission to start coding or deploy.
 
-本稿把这些规则转换为数据约束、事务、接口行为和测试方案。下文“建议”均是技术提案，不是已选定的实现。后端路线已改为 C# + ASP.NET Core + EF Core + PostgreSQL，首期不引入 ABP；会计引擎、精确版本、认证供应商和部署方式仍未确定。只编写文档，不生成凭据、邀请真实成员、修改系统权限或部署。
+## Confirmed rules
 
-## 2. 逻辑实体与约束
+- Any registered user with a verified identity can create an organization. The creator becomes its first administrator. Anonymous users cannot create one.
+- One account can join several organizations. Permissions are separate in each organization.
+- An organization manages a team and can contain several companies. Each company has exactly one separate ledger in phase 1.
+- Administrators manage all ledgers, members and permissions in their own organization.
+- Ordinary members can access only assigned ledgers, with `read` or `edit` access. They cannot give access to anyone else.
+- The last administrator must hand over responsibility before leaving, being removed or becoming an ordinary member.
+- An administrator invites a user. The user must actively accept. An invitation lasts seven days, can be revoked, and must be replaced after expiry.
+- When an inviter loses administrator access, their pending invitations become invalid.
+- Rejoining members and administrators changing to ordinary members need new, explicit ledger grants. Old permissions do not come back automatically.
+- HTTP and MCP use the same backend authorization and business rules.
 
-以下为逻辑模型，不是最终数据库字段或迁移脚本。
+For example, a user can be an administrator in Organization A and a read-only member in Organization B. Their administrator role in A gives them no extra access in B.
 
-| 实体 | 关键含义与约束 |
+The backend direction is **C# + ASP.NET Core + EF Core + PostgreSQL, without ABP in phase 1**. Exact versions, the identity provider, deployment and accounting engine remain open. This work changes documentation only. It creates no credentials, real invitations, permissions or deployment.
+
+## Proposed data model
+
+| Record | Meaning and rule |
 | --- | --- |
-| User | 稳定的登录主体；外部认证身份映射到内部用户。不能仅凭客户端提交的用户编号认定身份。 |
-| Organization | 团队管理空间。正常可用组织始终至少有一位有效管理员。 |
-| Company | 归属一个组织。所属组织不能通过普通更新被静默迁移。 |
-| Ledger | 归属一个公司及其组织；首期公司与账套一对一。公司创建完成时应有一个账套，不只是“最多一个”。 |
-| Membership | 用户在组织内的有效/已移除身份及管理员/普通成员角色；同一用户与组织组合唯一，保留稳定身份及历史。 |
-| LedgerGrant | 普通成员在账套中的只读/可编辑授权；成员与账套组合唯一，双方必须属于同一组织。 |
-| Invitation | 指定组织、目标已验证身份标识、邀请人、拟授角色/账套范围、有效期和状态；不等同于已经生效的成员身份。 |
-| AuditEvent | 操作者、组织、目标、动作、前后差异、时间和请求关联；不存密码、邀请明文凭证或访问令牌。 |
+| User | A stable internal identity mapped from a verified login. A user ID supplied by a client is not proof of identity. |
+| Organization | The team workspace. An organization open for normal use must have an effective administrator. |
+| Company | Belongs to one organization. A normal update cannot move it to another organization. |
+| Ledger | Belongs to that company and organization. Phase 1 requires exactly one ledger per company, not merely at most one. |
+| Membership | The user's role and active/removed status in one organization. The user/organization pair is unique. Its stable ID preserves history. |
+| LedgerGrant | A member's read/edit access to a ledger. The member/ledger pair is unique and both must belong to the same organization. |
+| Invitation | A proposed membership for a specific verified identity, with inviter, role, ledger scope, expiry and state. It is not an active membership. |
+| AuditEvent | Who changed what, in which organization, when, and under which request. It never stores passwords, access tokens or secret invitation credentials. |
 
-建议以存储约束和服务校验双重防护：用户组织唯一约束，公司账套唯一约束，以及携带组织维度的关联约束，防止把 A 组织成员的授权连到 B 组织账套。即使数据库选型不支持复合外键，也须有等价的原子约束及测试，不只靠界面过滤。
+Use service checks and database constraints together. Composite foreign keys include `org_id` so a grant cannot connect an Organization A member to an Organization B ledger. An alternative database would need equivalent atomic constraints and tests, not just UI filtering.
 
-若存储支持事务，公司与首期账套原子创建；失败时两者都不成为可用对象。不允许只创建公司后假定账套已经存在。成员移除保留历史审计关联，旧授权失效；重新加入不自动复活旧授权。
+Create a company and its ledger in one transaction. If either fails, neither becomes usable. Keep removed memberships for historical references, but invalidate their grants. Rejoining does not revive those grants.
 
-## 3. 请求处理与授权
+## Check access on every operation
 
-建议统一处理链：验证认证材料 → 解析当前用户 → 确定操作目标 → 从可信服务端状态读取组织成员关系与资源归属 → 检查角色/账套授权 → 执行业务校验 → 原子写入与审计 → 返回结果。
+The shared request flow is:
 
-- 组织管理员在自己的组织内可以操作全部账套，但仍须遵守会计校验、历史保护等规则。
-- 普通成员必须有目标账套的有效授权；只读拒绝写操作，可编辑不允许成员/授权管理。
-- 组织切换只改变操作上下文，不产生授权。不同组织的同一用户独立计算权限。
-- 组织级操作不要求账套；组织创建不要求既有组织。每个操作明确自己的授权前置条件。
-- 访问被拒绝时不泄露其他组织的资源存在性、名称或账务内容。
+1. Verify authentication and identify the user and client.
+2. Identify the requested operation and resource.
+3. Read current memberships and resource ownership from trusted server state.
+4. Check the current role, ledger grants and any required client delegation.
+5. Apply business rules.
+6. Commit the change and its audit record together.
+7. Return only authorized data.
 
-认证会话只证明身份，不应成为永久有效的权限快照。建议每次受保护操作读取当前成员状态和权限，或使用具有等价强一致失效保证的机制。成员移除、降权或账套授权撤销提交后，后续请求即按新状态处理，不等待旧登录会话自然过期。
+Administrators still follow accounting validation and history-protection rules. `edit` allows ledger business changes, not member or permission management. Switching the selected organization changes context, not permissions. Organization-level operations do not need a ledger; creating an organization does not need an existing organization.
 
-对并发写入，最终授权检查与业务提交置于同一可排序事务边界：撤权先提交则后续写入失败；写入先提交则属于撤权前已完成操作，保留审计。对于在途导出、长任务及流式响应，应在输出和副作用阶段再检查授权并停止撤权后的继续处理；已经合法返回的数据不能远程收回。具体中断粒度需在实现前测试明确。
+Do not reveal another organization's resource names, existence or accounting data in errors. A login session proves identity, not permanent permission. Read current permissions for each protected operation, or use a mechanism with equivalent strongly consistent revocation. After removal, downgrade or grant revocation commits, later requests use the new state.
 
-## 4. 创建组织和首位管理员
+For writes, the final access check and commit must share one ordered transaction boundary. If revocation commits first, the later write fails. If the write commits first, it is a completed pre-revocation action and remains in the audit trail.
 
-已确认业务策略：注册并验证身份的用户都可以创建组织，创建者自动成为首位管理员。不开放匿名创建。本稿不新增其他准入审批、配额或商业条件。
+Phase 1 has no exports, long-running jobs or continuous streams. Before adding them, define reauthorization before output and side effects, cancellation, and tested interruption boundaries. Already returned data cannot be recalled.
 
-组织创建与首位管理员成员记录须原子完成，失败不留下无管理员的可用组织。重试使用幂等机制返回同一创建结果，不产生多个组织。创建公司和账套的具体操作范围沿用组织管理员能力，最终操作清单在接口契约中细化。
+## Create an organization
 
-## 5. 邀请生命周期与异常
+Create the organization and its first administrator membership atomically. Failure must not leave a usable organization without an administrator. An idempotent retry returns the same creation result rather than creating another organization.
 
-建议状态：待接受、已接受、已撤销、已过期；过期可由当前时间判断，不依赖定时任务及时执行。
+No extra admission approval, quota or commercial condition is added by this design. Company and ledger creation remains an administrator operation.
 
-已确认邀请有效期为 7 天，可撤销，过期后重新邀请。邀请仅由当前组织管理员发起；目标必须明确，接受者须登录并证明其已验证身份与目标匹配。看到邀请链接、知道邮箱或 AI 调用工具都不等于已经接受，禁止自动加入。
+## Invite and accept
 
-建议每个组织及目标身份最多一份有效待接受邀请。重复发送同一内容返回已有邀请；变更角色、权限或重新邀请应撤销旧邀请并产生新版本，旧链接不能继续生效。拟授账套必须在本组织内。
+Proposed states are `pending`, `accepted`, `revoked`, `expired` and `invalidated`. Expiry follows the current time; it does not depend on a scheduled cleanup job running promptly.
 
-接受邀请时，在一个原子操作中检查当前状态、有效期、目标身份、邀请人当前授权、角色及账套范围，然后创建或恢复成员身份并消费邀请。若邀请人已失去管理员身份，其待接受邀请失效，由当前管理员重新发出；不静默沿用旧授权。
+The [technical contract](phase-1-technical-contract.md) proposes an authenticated invitation inbox for phase 1. An invitation ID is not a secret that grants access. The recipient must log in, match the invitation's verified identity and explicitly accept it. Reading an invitation, knowing an email address, opening a link or making an AI tool call does not join the organization.
 
-若目标已是有效成员，重复接受不升级角色、不覆盖现有账套授权；建议返回“已是成员”，后续权限变更走管理员操作。对于已移除用户，重新加入须使用移除后新发的邀请，不复用旧邀请或旧授权。成员移除应同时使该目标的相关待接受邀请失效，防止旧链接重新授予已撤销权限。
+Only a current administrator can invite. Every proposed ledger must belong to the same organization. Allow at most one valid pending invitation per organization and target identity:
 
-接受、撤销、过期和重复接受并发时，仅一个合法状态转换成功：撤销或过期先成立则拒绝接受；接受先提交则邀请已被消费，随后撤销邀请不能被解释为已经移除成员，应明确返回状态并走成员管理流程。
+- The same request returns the existing invitation without extending expiry.
+- To change the role or grants, revoke the old invitation and issue a new one. The old invitation stays invalid.
+- An expired invitation needs a new invitation.
 
-邀请凭证应不可猜测、单次使用、受有效期限制；建议仅存摘要，避免出现在日志、审计和错误消息中。真实凭证生成与认证方案不在本次文档工作中执行。
+Acceptance is one atomic operation. Check the current state, exact expiry, recipient identity, inviter's current administrator access, proposed role and ledger scope. Then create or restore the membership, apply only the new grants, and consume the invitation.
 
-## 6. 成员调整、移除和交接
+If the inviter lost administrator access, the invitation remains invalid even if they later become an administrator again. A current administrator must issue a new invitation.
 
-成员修改仅允许管理员。普通成员即使可编辑账套也不能调用这些操作。
+If the target is already an active member, acceptance must not upgrade their role or replace their grants. Return the appropriate safe result or `ALREADY_MEMBER`; changes use member-management commands. A removed member needs an invitation issued after removal. Removal also invalidates that target's old pending invitations.
 
-管理员交接建议流程：选择本组织另一位有效成员 → 授予管理员角色 → 确认新管理员已生效 → 原管理员退出或降为普通成员。最后一位管理员不得直接退出、被移除或被降级为普通成员。
+Concurrent acceptance and revocation must produce one valid outcome. Revocation or expiry first means acceptance fails. Acceptance first means the invitation is consumed; revoking it is not a way to remove the new member.
 
-计数检查与变更须在同一事务中对组织管理员集合串行化，或采用等价约束；不能先查询人数再无保护更新。两个管理员同时相互移除或同时降级时，最终至少保留一位，不能各自看到“两人”后一起通过。
+No notification email is included in the phase-1 proposal, and the API must not claim delivery. If a future design adds secret invitation links, credentials must be unguessable, single-use and time-limited, with only a digest stored and no secret in logs, audit or errors. That is a future option, not the current inbox mechanism.
 
-已确认角色切换与账套授权显式处理：管理员降为普通成员时，不自动获得所有账套权限，需管理员明确指定所需授权；提升管理员后不能留下以后降级时会悄悄恢复的旧授权。具体清理或保留但永久失效的存储方式待设计，业务结果必须一致。
+## Change, remove or hand over access
 
-移除成员时，成员状态、有效账套授权、相关邀请失效和审计写入原子完成；不删除其他组织的成员关系，不改写历史凭证的操作者。重新加入重新授权。
+Only administrators manage members. Ledger editors cannot call these commands.
 
-## 7. 接口与 MCP 边界
+To hand over administration:
 
-以下为操作示例，不是已确定的 HTTP 路径、字段或 MCP 工具名：
+1. Promote another active member of the same organization.
+2. Confirm the promotion succeeded.
+3. The original administrator may then leave or become an ordinary member.
 
-| 操作 | 上下文及校验 |
+Count administrators and apply the change in the same serialized transaction. Two administrators concurrently removing or downgrading each other must not both pass based on an earlier count of two.
+
+When promoting a member, clear grants that might otherwise reappear on a later downgrade. A downgrade requires an explicit new grant list; an empty list means no ledger access. Remove membership access, grants and related pending invitations atomically with the audit record. Preserve memberships in other organizations and the original actor on historical records.
+
+Security emergency exception: never keep a compromised account active merely to retain the last administrator. The detailed contract proposes `locked_recovery` when disabling the last usable administrator: block normal business access, do not automatically promote anyone, and require an audited recovery process. This recovery design and identity-provider disable synchronization must be reviewed and verified before launch.
+
+## API and MCP boundary
+
+| Operation | Required context |
 | --- | --- |
-| 创建组织 | 已注册且身份已验证的用户；按已确认组织创建政策；无既有组织/账套要求。 |
-| 列出我的组织 | 当前身份，仅返回有效成员范围。 |
-| 邀请/撤销邀请、调整成员和授权 | 当前组织管理员；目标归属一致；处理并发版本。 |
-| 接受邀请 | 当前已验证身份与邀请目标一致；检查最新邀请及成员状态。 |
-| 查询/编辑账套资源 | 当前组织、目标账套、资源归属及对应权限。 |
-| 退出组织 | 当前成员本人；最后管理员事务保护。 |
+| Create organization | Registered, verified user; no existing organization or ledger required. |
+| List my organizations | Current identity; only currently authorized memberships, and only delegated organizations for an agent client. |
+| Invite, revoke, manage members or grants | Current administrator; same-organization targets; expected version checks. |
+| Accept invitation | Verified recipient actively accepting; current invitation and membership state. |
+| Read or edit ledger resources | Current organization, ledger ownership and required access. |
+| Leave organization | The member acting for themselves; last-administrator transaction protection. |
 
-MCP 是适配入口，调用同一后端能力并传递可验证的调用身份，不使用绕过权限的通用超级管理员身份。不把 AI 的自然语言声明当作用户身份或权限依据。凭据如何承载和委托待认证设计，本稿不创建任何持久访问。
+MCP is another adapter to the same application services. It must carry a verifiable human identity and approved client identity. It cannot use a shared administrator account or treat an AI's natural-language claim as authority.
 
-登录方案可比较应用管理会话与外部身份服务接入：前者需承担登录安全和恢复维护，后者需验证外部身份并处理服务依赖；无论采用哪种，Books 的成员/账套授权仍由自身后端判定。当前不选择供应商、协议细节或认证库。
+The detailed contract requires a current delegation bound to user, client and organization. Effective access is the intersection of token scopes, current user access and the delegation's resource limits. Changing from an MCP URL to an HTTP URL cannot bypass this rule. API and MCP audiences are distinct; neither an ID token nor a token for the wrong resource is acceptable.
 
-## 8. 一致性、错误与查询契约
+The identity provider is not yet selected. Managed application sessions and external identity services have different maintenance costs, but neither replaces Books' own membership and ledger checks. Keycloak is a candidate, not a confirmed provider. This document creates no persistent access.
 
-建议幂等范围至少包含调用主体、操作类型、组织及请求键；保存请求指纹及结果。相同键不同内容返回冲突，不能复用旧结果。查询幂等结果时仍做当前权限检查，撤权后不能通过重试读取旧敏感响应。保留期与请求键格式待契约设计。
+## Retries, versions, queries and errors
 
-成员、授权、邀请等可变对象建议带版本；更新携带预期版本，过时更新明确冲突，不静默覆盖。数据库唯一约束是重复请求防线，但不能替代完整幂等行为。
+A proposed idempotency scope includes the user, client, operation, organization or global scope, and request key. Store a request fingerprint and committed result. The same key with different content is a conflict. Replaying a result still requires current authorization; a cache must not disclose old sensitive content after revocation. The detailed contract defines retention and safe receipt exceptions.
 
-错误应区分认证失败、权限不足/目标不可见、无效输入、已过期/撤销、版本冲突及最后管理员保护；稳定的机器语义配合可读说明，不包含机密或跨组织细节。具体错误码和 HTTP 映射待接口契约确定。
+Mutable objects have versions. A write supplies its expected version; stale writes fail rather than overwrite newer changes. Unique constraints help prevent duplicates but do not replace idempotency.
 
-成员和邀请查询先按权限过滤，再排序和分页。排序需确定唯一的次级键，避免同名/同时间结果顺序不稳定；并发变化下的快照或游标语义需明确，不承诺未定义的“永不重漏”。总数、搜索提示和导出也须使用同一授权范围。
+Use stable error codes for authentication, access, invalid input, expired/revoked invitations, version conflicts and last-administrator protection. Do not expose secrets or cross-organization details.
 
-## 9. 审计与失败处理
+Filter lists by authorization before sorting or pagination. Use a unique secondary sort key. Counts, search suggestions and exports must obey the same access scope. Define cursor and concurrent-change behavior explicitly; do not promise a perfect snapshot unless it is implemented.
 
-重要组织、成员、权限和邀请状态变更与审计记录原子持久化；不能状态已变而无记录，也不能失败后记录成成功。保留请求标识、操作者、目标、时间、前后差异和结果。安全拒绝事件可单独记录，不冒充已完成业务变更。
+## Audit and verification
 
-审计仅向有权限的查看者提供；不允许普通编辑修改历史审计。本稿不预设审计保留年限或合规制度。通知发送失败不得伪造“邀请已送达”，也不能重复建立成员；重发和通知机制待实现方案确定。
+Commit each important organization, membership, grant or invitation change with its audit event. A failed change cannot have a successful audit event, and a successful change cannot lack one. Record actor, target, time, safe before/after values, request ID and outcome. Rejected access may have a separate security log, not a successful business event.
 
-## 10. 验证与审阅关口
+Only authorized viewers can read audit events. Ordinary editors cannot change audit history. Retention periods and compliance rules are not decided here. Notification failures must never be reported as successful delivery or create duplicate memberships.
 
-[验收矩阵](../08-testing-acceptance.md)覆盖跨组织引用、只读写入、MCP 越权、撤权后旧会话、邀请异常和管理员并发交接。实现后需同时覆盖服务层、持久化约束和 API/MCP 集成测试，不能只用界面验证。
+The [acceptance matrix](../08-testing-acceptance.md) covers cross-organization references, read-only writes, MCP privilege escalation, old sessions after revocation, invitation failures and concurrent administrator handover. Test service rules, database constraints and HTTP/MCP integration, not just the UI.
 
-已确认的四项业务政策不再待审阅；具体重复邀请处理、状态转换、失效实现和存储策略仍是技术提案。技术选型后再决定事务隔离、认证、接口字段、错误码、分页和幂等保留期；不重复询问已经确认的组织与角色规则。业务确认不等于技术方案全部批准，也不表示验收测试已通过。
+**No implementation or acceptance tests have run.** Business decisions are confirmed; implementation details remain proposals. Review the [detailed technical contract](phase-1-technical-contract.md), then obtain separate approval to code. Do not run migrations or deploy as part of this documentation task.
 
-本稿审阅通过后才进入实现计划；当前不执行代码、迁移或部署。
-
-## 后续详细提案
-
-[首期多组织基础：详细技术设计与接口契约](phase-1-technical-contract.md)进一步提出技术栈、数据约束、HTTP/MCP 契约及实施任务。C# 路线已确认，其他技术细节仍为待审阅提案；该文档不替代已确认的四项业务政策，也不表示已经获准实施。
-
-[返回文档目录](../README.md)
+[Back to documentation](../README.md)

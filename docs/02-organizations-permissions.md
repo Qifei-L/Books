@@ -1,120 +1,137 @@
-# 组织 成员与权限
+# Organizations and permissions
 
-状态：需求说明草案，部分规则已确认。多组织优先及组织、公司与账套关系、第 3 节的首期权限规则及最后一位管理员退出前交接规则已于 2026-10-23 确认。创建组织、多组织成员身份、邀请与重新授权四项业务规则也已于 2026-10-23 确认。其余技术提案仍待审阅；本次确认不授权开始实现。
+Status: Requirements draft. The business rules marked Confirmed were agreed on 2026-10-23. Proposed details still need review. This document does not authorize implementation or deployment.
 
-## 目的
+## Purpose
 
-先讲清楚组织是什么、谁属于它、谁能做什么、数据如何隔离，以及人员变动后如何处理，再展开公司账套和记账模块。
+Explain who can join an organization, which ledgers they can use, and what happens when their access changes.
 
-## 1. 组织的业务含义
+## Confirmed
 
-已确认：组织是团队的管理空间，用来管理成员、权限及旗下公司；一个组织可以有多个公司，首期每家公司对应一个独立账套。账套是记账单位，科目、凭证和余额归属于明确的账套。
+### Organizations, companies, and ledgers
 
-组织本身不直接记账，也不自动汇总旗下账套。需要跨账套查询或汇总时，应另行定义业务口径和访问权限，不能因为账套位于同一组织就默认允许合并数据。
+An organization is a team's management space. It contains members, permissions, and companies.
 
-例如，组织 A 和组织 B 是两个独立管理空间。用户进入组织 A 后，只能按自己在 A 中获得的权限操作；A 中的管理身份不会自动带到 B。
+For the first release:
 
-首期关系为“一个组织 → 多个公司 → 每家公司一个账套”。该关系已确认，不再作为待决问题；本章不预设组织归属、付费关系或额外组织层级。公司与账套的进一步说明见[公司与账套](03-companies-ledgers.md)。
+- One organization can contain several companies.
+- Each company has one independent ledger.
+- Accounts, journal entries, and balances belong to a specific ledger.
 
-## 2. 成员与组织关系
+The organization itself does not keep accounting records or automatically combine its ledgers. Cross-ledger queries or combined reports need separate rules and access checks.
 
-用户是登录账号，成员是该用户在某个组织中的身份。已确认一个账号可以加入多个组织，不必为加入另一个组织重复注册。
+Example: An administrator of Organization A has no access to Organization B unless B separately grants access.
 
-成员关系按组织分别管理。同一个用户在组织 A 可以是管理员，在组织 B 可以是普通成员；角色、可访问账套和可执行操作分别计算。
+See [Companies and ledgers](03-companies-ledgers.md).
 
-已确认采用邀请并接受的加入方式：
+### Creating an organization
 
-1. 组织管理员发出组织邀请。
-2. 被邀请用户接受邀请后，建立该组织的成员关系。
-3. 根据明确授权分配组织能力和账套访问范围。
+Any registered user with a verified identity can create an organization. The creator becomes its first administrator. Creation must not leave a usable organization without an administrator. The technical method for creating both together is still proposed.
 
-普通成员加入组织不等于自动获得全部账套权限，只能访问被分配的账套，并按账套授予只读或可编辑权限。组织管理员拥有本组织全部账套的管理权限，具体规则见第 3 节。邀请有效期为 7 天，可撤销，过期后重新邀请；邀请人失去管理员权限时，未接受的邀请失效。具体认证服务商和实现机制不在本章确定。
+### Membership in several organizations
 
-## 3. 角色与授权范围
+A user is a login account. A membership is that user's relationship with one organization.
 
-以下首期权限规则已于 2026-10-23 确认，采用“组织管理员”和“普通成员”两类角色。组织角色与账套授权按组织分别计算，不跨组织继承。
+One account can join several organizations without registering again. Each organization has its own role and ledger permissions for that account.
 
-### 组织管理员
+Example: The same person can be an administrator in A and a read-only member of one ledger in B. A's permissions do not apply in B.
 
-组织管理员能够管理本组织的全部账套、成员和授权，无须为其逐个分配本组织账套的访问权限。管理员身份不授予访问其他组织的权利；如同一用户也是其他组织的成员，须另按那个组织的角色和授权判断。
+### The two roles
 
-只有组织管理员可以邀请和管理成员、授予或收回权限。成员与授权管理属于组织层能力；全部账套管理权限限于本组织，不形成跨组织管理能力。
+The first release has two organization roles: administrator and ordinary member.
 
-管理员的管理权限不绕过后续确定的会计校验、历史保护和审计要求。具体业务操作仍应满足各模块的规则，不能以管理员身份将不合法的记账操作视为有效。
+An administrator can manage all ledgers, members, and permissions in their organization. Administrators do not need separate access grants for each ledger in that organization. Only administrators can invite members, manage members, grant access, or remove access.
 
-### 普通成员
+An ordinary member can access only the ledgers assigned to them. Each assignment is either:
 
-普通成员只能进入被分配的账套，每个账套分别设为“只读”或“可编辑”：
+- Read-only: View accounting information in that ledger. Do not add or change accounting data.
+- Editable: Enter or change data in that ledger, subject to its business rules.
 
-- 只读：可以查看授权范围内的账务信息，不能写入或修改账务数据。
-- 可编辑：可以在该账套内执行符合业务规则的录入和修改；不因此获得组织管理权或其他账套的访问权。
+Editable access does not allow a member to invite people, change roles, share ledger access, or grant permissions to someone else.
 
-普通成员不能授予、收回或转授权限。“可编辑”不包含邀请授权、修改成员权限或向其他用户开放账套的能力。
+Example: A member can have read-only access to Ledger 1 and editable access to Ledger 2. They cannot edit Ledger 1 or grant another person access to Ledger 2.
 
-例如，普通成员在一个账套中只读，在另一个账套中可编辑，只能按这两份授权分别操作；不能因为对第二个账套可编辑，就修改第一个账套或把权限转给别人。
+Administrator access does not override accounting checks, history protection, or audit requirements. The detailed accounting rules will be defined in the relevant modules.
 
-### 后续细化
+### Joining by invitation
 
-以上角色、成员管理与授权规则不再作为待决选项。具体单据的操作清单和界面流程在后续设计时补充，不要求为同一条权限原则重复确认，也不把尚未讨论的实现细节视为已批准。
+1. An organization administrator invites a specific person.
+2. That person signs in, verifies their identity, and actively accepts the invitation.
+3. The system creates their membership and applies explicit permissions.
 
-## 4. 组织切换与访问边界
+An invitation does not automatically add someone. Ordinary membership does not grant access to every ledger.
 
-每次操作都应明确当前组织；涉及账务时，还应明确当前账套。建议切换组织后重新按目标组织的成员关系和授权判断访问范围，不能沿用上一组织的权限。
+An invitation is valid for 7 days. It can be revoked before acceptance. An expired invitation requires a new invitation. An expired or revoked invitation cannot be accepted. A person whose identity does not match the invitation cannot accept it.
 
-界面上隐藏入口不足以实现隔离。后端对每次查询、修改、搜索和导出都需要校验：
+If the inviter loses administrator access, their unaccepted invitations become invalid. A current administrator must send new invitations.
 
-- 用户是否仍属于当前组织。
-- 目标账套是否属于本次操作的组织范围。
-- 用户是否具有访问该账套和执行本次操作的权限。
+### Leaving and returning
 
-即使用户知道另一个组织或账套的编号，也不能绕过授权读取或修改数据。将请求中的组织、账套编号换成其他对象时，同样应拒绝越权操作。
+Removing someone from one organization does not remove their account or their access to other organizations.
 
-例如，用户在组织 A 具有管理权限，切换到组织 B 后只有查看权限，则不能在 B 中继续执行管理操作。具体上下文传递和会话实现方式属于后续技术设计，不在本章预先指定。
+A removed member needs a new invitation and new permissions to return. Old invitations and old ledger permissions must not restore access automatically.
 
-## 5. 成员变更与操作追踪
+When an administrator becomes an ordinary member, their ledger permissions must be assigned explicitly. They do not keep access to every ledger by default.
 
-成员管理应涵盖加入组织、调整角色或账套权限、移除成员，以及必要的管理员交接。
+### Keeping an administrator
 
-建议成员被移除后，已存在的登录会话也不能继续访问该组织；后续访问必须按当前成员关系和权限判断，不能只依赖登录时保存的旧授权。调整权限后，同样应按新的授权范围处理后续操作。
+The last administrator must make another member an administrator before leaving. Removal or demotion must not leave the organization with no administrator either. This rule must also hold when requests happen at the same time.
 
-移除成员只撤销其在该组织中的访问，不删除其账号在其他组织的成员关系，也不影响其他组织中独立授予的权限。
+This protection applies to normal membership and role changes. It must not block security suspension of a compromised account, even if that account is the last usable administrator. A locked organization and recovery process need a separate proposed workflow and release gate.
 
-历史凭证和操作记录应保留原有归属与操作者信息，不能因为人员离开就删除记录或把历史操作改写为其他人所做。权限变更应能够追踪谁在何时对哪个成员、哪个组织或账套做了什么调整，并记录变更前后内容。
+There is no separate owner role in this requirement. The responsible person is an organization administrator.
 
-最后一位组织管理员退出前必须先交接：先将另一位成员设为组织管理员，再办理自己的退出，不能留下没有管理员的组织。本章中的负责人就是组织管理员，不新增独立的“组织负责人”角色。移除管理员时也应保留至少一位组织管理员，避免绕过交接保护。具体界面和操作流程在后续设计中补充。
+## Required access checks
 
-## 6. 流程与异常处理
+The backend must check access for every query, change, search, and export. Hiding a button is not enough.
 
-创建组织、多组织成员身份、邀请及重新授权的业务规则已确认。下文仍标注为建议的重复请求和并发处理机制属于技术提案，不改变管理员与普通成员权限边界。
+For an operation on a ledger, check:
 
-### 创建组织与首位管理员
+1. The caller is still a member of the organization.
+2. The target ledger belongs to that organization.
+3. The caller can access that ledger and perform the requested action.
 
-已确认注册并验证身份的用户都可以创建组织，创建者自动成为首位管理员。组织和首位管理员一起创建成功或一起失败，不能留下无人管理的可用组织。
+For an organization-level operation, check the relevant organization role. Knowing another organization's ID or ledger ID does not grant access. Changing an ID in a request must not bypass these checks.
 
-### 邀请、接受和重复加入
+When switching organizations, use the target organization's membership and permissions. Do not carry over the previous organization's role. API and MCP calls use the same checks.
 
-管理员发出指定对象的邀请，目标用户登录并验证身份后主动接受，不自动加入。邀请 7 天有效，可在接受前撤销，过期后由管理员重新邀请。
+The business boundary is established. How requests carry this context, and how sessions and caches enforce current permissions, remains technical design work.
 
-过期或已撤销邀请不能接受；目标身份不匹配应拒绝。重复邀请建议复用仍有效且内容相同的邀请，改变授权则撤销旧邀请重新发出。已经是成员时，不通过再次接受邀请升级角色或覆盖权限，权限调整走管理员操作。
+## Proposed
 
-移除成员后，旧邀请和旧授权不能让其悄悄重新加入；重新加入需要新邀请及新授权。邀请人已失去管理员权限时，其尚未接受的邀请失效，由当前管理员重新发出。
+These details describe how to make the rules reliable. They are not approval of a technical implementation.
 
-### 交接、撤权和竞争操作
+### Duplicate requests and invitations
 
-先将另一位有效成员设为管理员，再由原管理员退出。并发退出、移除或降级也不能让管理员人数变成零。管理员降为普通成员时，应明确分配其账套权限，不自动保留全部账套访问。
+- Create the organization and its first administrator together. If either step fails, neither becomes usable. A retry should not create a second organization.
+- Reuse an active invitation when the target and permissions are unchanged. If permissions change, revoke the old invitation and issue a replacement.
+- Accept an invitation only once. Repeated acceptance must not create another membership.
+- If the person is already a member, accepting an invitation must not upgrade their role or replace their current permissions. An administrator should make that change through member management.
+- If acceptance and revocation happen together, return one clear outcome. Revoking an already accepted invitation does not remove the member. Use member management for removal.
 
-移除或撤权成功后，旧登录会话和 MCP 调用都不能继续按旧权限访问；其他组织权限不受影响。已经完成的合法操作保留历史，在途写入与撤权必须有明确先后，不能出现撤权已完成后又依旧权限提交。
+### Current permissions and concurrent changes
 
-邀请接受与撤销并发时，只能出现一种明确结果。若已经接受成功，再撤销邀请不能假装完成成员移除，应说明当前状态并通过成员管理操作处理。
+After removal or revocation succeeds, existing sessions, retries, exports, and MCP calls should use current permissions. Old sessions or cached permissions should not keep access alive.
 
-上述规则与建议机制的验收场景见[测试与验收](08-testing-acceptance.md)，实现提案单独放在[多组织与权限技术设计](design/organizations-permissions.md)，不把技术机制混作已批准业务规则。
+A write and a permission revocation need a clear order. If revocation completes first, a later write cannot use the old permission. If the write completes first, its history should show that it happened before revocation. Neither operation should leave a partial change.
 
-## 当前确认范围与下一步
+### History and audit
 
-组织、公司与账套的对应关系，以及本章的首期角色和授权规则均已确认，无需再次回答相同问题。下一步在[公司与账套](03-companies-ledgers.md)中明确本位币、外币需求、会计年度和业务时区；具体实现与验收细节另行补充。
+Keep historical journal entries and their original operator information when someone leaves. Do not delete history or assign the person's earlier actions to someone else.
 
-首期角色、管理员管理本组织全部账套、普通成员按账套只读或可编辑、仅管理员授权及最后一位管理员退出前交接，已记录于[决策与待办](10-decisions.md)，不再列为未决规则。
+Record who changed access, when they changed it, the affected organization or ledger, and the permissions before and after the change. A failed change must not appear as a successful one.
 
-本章用于需求审阅，已补充[测试与验收](08-testing-acceptance.md)中的组织权限案例；建议流程的预期结果仍需审阅，尚未执行测试。当前不开始代码实施、数据迁移或部署。
+## Open Questions
 
-[返回文档目录](README.md)
+- What are the exact screens and API operations for these workflows?
+- How will identity verification, sessions, and current-permission checks work?
+- Which exact schema, constraints, and transaction details will enforce these rules? The confirmed direction is C#, Entity Framework Core, and PostgreSQL. Hosting providers and deployment details remain open.
+- Which duplicate-request and invitation-handling proposals will be adopted?
+
+The confirmed roles, invitation rules, 7-day lifetime, explicit reauthorization, and administrator handover do not need to be decided again.
+
+The [Phase 1 technical contract](design/phase-1-technical-contract.md) already proposes detailed schemas and mechanisms. These technical questions are for design review; the business owner does not need to answer each one individually.
+
+See [Testing and acceptance](08-testing-acceptance.md) for cases, [Organization and permission design](design/organizations-permissions.md) for technical proposals, and [Decisions](10-decisions.md) for the decision record. No tests have been run for this draft.
+
+[Back to documentation](README.md)
