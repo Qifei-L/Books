@@ -120,6 +120,14 @@ Document Provider, stable Attachment IDs, location mappings, copy/checksum/read 
 
 People choose the tax settings. The system validates and processes those settings rather than selecting taxes on its own. The number of taxes per line, calculation rules and accounting versus reporting-only treatment are not yet settled; no particular tax implementation is approved.
 
+### Reports
+
+Confirm four reports: Trial Balance (TB), General Ledger Detail, Balance Sheet and Profit & Loss. TB replaces a separate GL Summary. TB shows account Code/Name, opening debit/credit balances, period debits/credits and closing debit/credit balances, with full-ledger totals and a balance check. Accounts drill down to GL Detail.
+
+GL Detail shows accounting date, Journal No., Reference, Description, debit, credit and running balance, with opening balance and period totals. Balance Sheet uses an As of Date and the Assets / Liabilities / Equity layout in [Reports](06-reports.md), with Assets = Liabilities + Equity. Current Year Profit / Loss is calculated and must not duplicate Retained Earnings. P&L uses a date range and Income minus Cost & Expense. Totals use base currency and the currently effective posted accounting source.
+
+This confirms the report discussion, not all earlier technical drafts. Detailed year-end calculations, export choices and drilldown implementation remain proposals or open decisions. Posted Suspense affects totals; failed Error attempts do not. Failed edits retain the prior valid posting. Pending outcomes require reconciliation.
+
 ### Technology direction
 
 Use C#, ASP.NET Core, EF Core and PostgreSQL. API and MCP come first. Do not add ABP in phase one. A modular monolith is the proposed application structure, not an instruction to implement it.
@@ -128,7 +136,7 @@ This replaces the earlier Go proposal. It does not select exact package versions
 
 ## Proposed, not approved
 
-The accounting chapters now contain a complete starting proposal. Except for the specifically confirmed labels, P&L grouping, account tree and initial System Account purposes above, they are not a statement of approved accounting policy.
+The accounting chapters now contain a complete starting proposal. Only the policies explicitly listed under Confirmed above are approved; other proposals are not approved merely because they appear in a complete draft.
 
 Default Accounts as optional starter templates remain proposed. Current Year Profit's non-posting place in the tree is accepted; calculation and closing details remain open. The posted-account versus unposted-review distinction is accepted. A shared or separate page layout remains proposed. Suspense, Error and Pending remain distinct categories, not interchangeable accounting balances. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. FX and AR/AP/Inventory placeholders are accepted in the planning tree, but their module activation and behavior are not approved. A tax-control mapping remains a further proposal. No account or mapping has been created.
 
@@ -146,8 +154,8 @@ The recommended defaults are proposals. Answer by topic; do not repeat the confi
 | --- | --- |
 | 1. Ledger setup | Base currency for each company, whether foreign-currency transactions are needed in the first accounting release, fiscal year and business time zone. |
 | 2. Accounts | The tree is accepted. Code format and comparison rules; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and optional starter templates. |
-| 3. Posting and corrections | Opening balances, who can post, period closing/reopening and the correction process for posted entries. |
-| 4. First reports | Which reports are required, date and balance presentation, and whether export is needed initially. |
+| 3. Posting and corrections | Opening balances, who can post and who can reopen. The confirmed administrator Close cutoff and open-journal correction rules do not need reconfirmation. |
+| 4. Reports | The four reports and core layout are confirmed. Agree fiscal-year/profit-transfer details, export needs and optional presentation choices. |
 
 Read the corresponding chapter for the proposed behavior and a concrete example. Once a choice is accepted, update that chapter and this record together.
 
@@ -195,6 +203,8 @@ All decisions above were recorded on 2026-10-23.
 15. Renamed Suspense Review to Error; retained posted Suspense Account and separate Pending outcomes. This changes labels, not accounting effects or permissions.
 
 16. Confirmed human-configured taxes, administrator Close, one shared journal exchange rate with backend source and Manual labelling, and optional attachments. Close now uses an inclusive accounting cutoff; reopening rights and detailed tax behavior remain open.
+
+17. Confirmed TB (no separate GL Summary), GL Detail, Balance Sheet and P&L with core fields, date scope, drilldown navigation and base-currency totals. Exact drilldown mechanisms and year-end calculations remain to be designed and validated.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

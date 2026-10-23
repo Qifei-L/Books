@@ -10,7 +10,7 @@ Turn the requirements into cases that can be checked and recorded. Preserve the 
 
 The organization roles, one-ledger-per-company relationship, administrator handover, creation policy, multiple memberships, invitation policy, and explicit reauthorization rules are confirmed. The five API principles and MCP's use of the same backend are also confirmed.
 
-The accounting policies used in the proposed cases below are not yet confirmed. Adding a test case does not approve its policy or prove that the product supports it.
+Some accounting policies are confirmed, including the four-report scope. The cases below distinguish confirmed rules from proposed mechanics. Adding a test case does not approve its policy or prove that the product supports it.
 
 ## Proposed test setup
 
@@ -108,10 +108,18 @@ All cases below are Not run. Cases explicitly labelled Confirmed rule test an ac
 
 ### Reports and ledger isolation
 
-- ACC-14: Build a small known set of posted entries. Proposed result: ledger movements, account balances, trial balance, and report totals reconcile using the same scope and cutoff. The report set and calculation policies remain open.
+- ACC-14: Build a small known set of posted entries. Proposed result: ledger movements, account balances, trial balance, and report totals reconcile using the same scope and cutoff. The four-report set and core fields are confirmed; detailed year-end calculations and drilldown mechanisms still need design.
 - ACC-15: Add a draft and a reversal to the fixture. Proposed result: each report includes them only as the approved status and reversal policies require. State those policies in the test before running it.
 - ACC-16: Query the same report with different page sizes and filters. Proposed result: pagination does not change the full-query total; a filter changes the total only by changing the query scope. Distinguish a page subtotal from a full-query total. The pagination principle is confirmed; report formulas remain proposed.
 - ACC-17: Use identical account codes in two companies and query as a user with access to only one ledger. Proposed result: no mixed balances, unauthorized rows, counts, or totals. Ledger isolation is confirmed; report implementation remains to be designed.
+
+Additional report checks, all **Not run**:
+
+- REP-01 (Confirmed): TB is the only account summary entry point. Show opening debit/credit balances, period debits/credits and closing debit/credit balances. Full-ledger totals balance; selected-account subtotals are labelled.
+- REP-02 (Confirmed navigation; proposed filter mechanics): Open GL Detail from TB or a statement account. Preserve ledger and date scope; show opening balance, individual movements, period totals and running balance. Debit/credit drilldowns match the selected measure; closing detail reconciles opening plus movement.
+- REP-03 (Confirmed): Balance Sheet follows the accepted As of Date layout and checks Assets = Liabilities + Equity. Calculated Current Year Profit / Loss is not counted again in Retained Earnings. Validate the detailed fiscal-year policy before implementing this calculation.
+- REP-04 (Confirmed): P&L uses the selected range and signed Income less signed Cost & Expense, in base currency. Include effective posted Suspense; exclude unposted Error attempts. A failed edit retains its old posted effect.
+- REP-05 (Proposed consistency mechanism): Change a posted journal between report and drilldown requests. Use the same data revision or clearly refresh, rather than silently presenting mismatched totals. Recheck current permissions for every detail and export.
 
 ## Suspense, Error and Pending checks
 

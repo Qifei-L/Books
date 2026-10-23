@@ -1,8 +1,8 @@
 # Balances and Reports
 
-Status: Review draft. Ledger access, separation, the Cost & Expense label and the two P&L groups are confirmed. Report scope, calculations and presentation below are proposed and need approval. No statutory reporting compliance is claimed.
+Status: Requirements review draft. The four reports, their core fields and statement layout below are confirmed. Technical mechanisms and explicitly marked proposals still need design and validation. No statutory reporting compliance is claimed.
 
-These reports are proposed for a later accounting stage. They do not expand the organization foundation's phase-one API contract.
+These reports belong to a later accounting stage. They do not expand the organization foundation's phase-one API contract.
 
 ## Confirmed
 
@@ -12,15 +12,36 @@ There is no automatic consolidated report for all companies in an organization.
 
 The P&L uses two top-level groups: **Income (add)** and **Cost & Expense (subtract)**. There is no separate top-level Cost group. This confirms the grouping, not every calculation, closing rule or report feature below.
 
-## Proposed: First-release reports
+## Confirmed: First-release reports
 
-- Journal list and journal detail, with status, accounting date and posting reference.
-- Account transaction detail: opening balance, individual movements and closing balance.
-- Trial balance: opening balances, period debits and credits, and closing balances by account.
-- Balance sheet: assets, liabilities and equity at a selected date.
-- Income statement: Income and Cost & Expense for a selected date range.
+Use four reports. **Trial Balance (TB)** is the account summary; do not create a separate GL Summary.
 
-Cash-flow statements, budgets, tax returns, comparative periods, segment reporting and consolidated accounts are outside this proposed first release. The proposed balance sheet and income statement need an approved classification and year-end policy before they can be accepted as complete features.
+### Trial Balance (TB)
+
+One row per account, with Code, Name, Opening Debit/Credit, Period Debit/Credit and Closing Debit/Credit. Show debit/credit totals and a balance check for the full ledger. A selected-account subtotal is not a full-ledger balance check. Click an account to open GL Detail.
+
+### General Ledger Detail (GL Detail)
+
+Show Accounting Date, Journal No., Reference, Description, Debit, Credit and Running Balance. Include the opening balance and period totals. Each movement links to its journal.
+
+### Balance Sheet
+
+Use an **As of Date**. Show:
+
+- Assets: Current Assets, Non-current Assets and Total Assets.
+- Liabilities: Current Liabilities, Non-current Liabilities and Total Liabilities.
+- Equity: Share Capital, Retained Earnings, Current Year Profit / Loss and Total Equity.
+- Check: Total Assets = Total Liabilities + Total Equity.
+
+Expand a group to its accounts, then open GL Detail. Current Year Profit / Loss is calculated, not an ordinary posting account, and must not duplicate amounts already included in Retained Earnings. Detailed fiscal-year and closing calculations still need design.
+
+### Profit & Loss (P&L)
+
+Use a From/To date range. Show **Income (add)** minus **Cost & Expense (subtract)** to calculate profit or loss. Groups can be expanded to accounts and their GL Detail. Preserve signed reductions and contra balances.
+
+Report totals use the ledger's base currency. Journal list and journal detail remain supporting views, not a fifth summary report.
+
+Cash-flow statements, budgets, tax returns, comparative periods, segment reporting and consolidated accounts remain outside the proposed first release. Approval of these four reports does not approve a year-end processing implementation or every export and presentation option below.
 
 ## Proposed: One consistent accounting source
 
@@ -50,7 +71,7 @@ Opening-balance journals enter the same calculations as other posted entries. Do
 
 The trial balance must reconcile total debits and credits for movements and for closing balances. Its amounts must agree with account detail for the same ledger, dates and reporting snapshot.
 
-For the proposed five account types:
+For the five accepted account types, the proposed display convention is:
 
 - Assets and Cost & Expense normally display debit-minus-credit amounts.
 - Liabilities, equity and income normally display credit-minus-debit amounts.
@@ -59,11 +80,24 @@ For the proposed five account types:
 
 The add/subtract groups are not debit/credit labels. Preserve contra movements and opposite balances. For example, Income of 100 with an income reduction of 10 gives net Income of 90. Cost & Expense of 40 with a refund of 5 gives net Cost & Expense of 35. Proposed presentation: profit is 90 minus 35, or 55. Do not take absolute values and turn reductions into extra income or expense.
 
-Current Year Profit is proposed as a calculated report value, not an ordinary posting account. The accepted Retained Earnings purpose and other system-function mappings are described in [Chart of Accounts](04-chart-of-accounts.md#system-accounts-and-default-accounts). Acceptance of a purpose does not settle year-end calculations or create accounts.
+Current Year Profit / Loss is confirmed as a calculated report value, not an ordinary posting account. The accepted Retained Earnings purpose and other system-function mappings are described in [Chart of Accounts](04-chart-of-accounts.md#system-accounts-and-default-accounts). Acceptance of a purpose does not settle year-end calculations or create accounts.
 
-A balance sheet also needs a defined treatment of current-year profit, previous-year results and closing entries. Those rules are not yet approved. Do not add an unexplained “balancing figure,” double-count transferred profit, or label an unbalanced result as final. Until the year-end and equity presentation rules are agreed, treat statement layouts as review drafts; trial balance and detail remain the reconciliation references.
+A balance sheet also needs a defined treatment of current-year profit, previous-year results and closing entries. The detailed calculation and year-end transfer rules are not yet approved. Do not add an unexplained “balancing figure,” double-count transferred profit, or label an unbalanced result as final. The layout above is confirmed, but calculation and year-end transfer details must be validated before claiming a complete implementation; TB and GL Detail remain reconciliation references.
 
 Report classification follows the account type and hierarchy. Fixing the type and parent of used accounts is proposed in [Chart of Accounts](04-chart-of-accounts.md) to avoid silent changes to earlier classifications.
+
+## Proposed: Drilldown behavior
+
+Engineering should carry the selected organization, ledger, account or group, dates and measure into each drilldown. These are business meanings, not approved API paths or payload fields.
+
+- A period Debit value opens the matching debit movements, not all movements.
+- A period Credit value opens the matching credit movements.
+- A closing balance opens a reconciliation of opening balance plus period movements, not just the period's lines.
+- A statement group expands to its accounts without counting descendants twice.
+- The server rechecks access. A link or client-supplied filter never grants permission.
+- Keep the report and its detail on the same data revision where supported. Otherwise explain that data changed and refresh the related results; do not silently display nonmatching totals.
+
+The exact filter contract, snapshots and navigation remain engineering proposals. No Frontend or API implementation is approved.
 
 ## Proposed: Filters, pagination and exports
 
@@ -100,15 +134,14 @@ Unposted invalid records have no balance effect. For Pending / Unknown processin
 - Inactive accounts remain included; parent and child totals are not double-counted.
 - Full-result totals and exports match across pagination and concurrent posting.
 - Cross-ledger identifiers and revoked permissions cannot expose report or export data.
-- Current-year profit and closing entries do not enter equity twice once that policy is approved.
+- Current-year profit and closing entries do not enter equity twice; validate the detailed calculation against the confirmed layout.
 
 These checks have not been executed. Proposed accounting behavior must be reviewed before implementation.
 
 ## Open Questions
 
-1. Which of the proposed reports are required for the first release?
-2. What year-end, retained-earnings and current-year-profit rules should the statements use?
-3. Are CSV exports enough, or are Excel and PDF required?
-4. Should zero-balance accounts appear by default? Are comparative periods or saved historical report snapshots needed?
+1. Which fiscal-year and profit-transfer policy should detailed year-end processing support?
+2. Are CSV exports enough, or are Excel and PDF required?
+3. Should zero-balance accounts appear by default? Are comparative periods or saved historical report snapshots needed?
 
 [Document index](README.md)
