@@ -36,3 +36,21 @@ internal sealed class LedgerConfiguration : IEntityTypeConfiguration<Ledger>
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class LedgerGrantConfiguration : IEntityTypeConfiguration<LedgerGrant>
+{
+    public void Configure(EntityTypeBuilder<LedgerGrant> b)
+    {
+        b.ToTable("ledger_grants", t => t.HasCheckConstraint("ck_ledger_grants_access", "access IN ('read', 'edit')"));
+        b.HasKey(x => new { x.MembershipId, x.LedgerId });
+        b.HasIndex(x => new { x.OrgId, x.LedgerId });
+        // Composite keys keep a grant's member and ledger inside the same organization.
+        b.HasOne<Membership>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.MembershipId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.GrantedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}

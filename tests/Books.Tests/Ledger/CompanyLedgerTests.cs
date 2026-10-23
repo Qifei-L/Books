@@ -148,11 +148,7 @@ public sealed class CompanyLedgerTests(TestHost host)
     {
         await using var db = host.CreateDbContext();
         var userId = await AccessSchemaTests.InsertUserAsync(db);
-        var orgId = Guid.NewGuid();
-        await db.Database.ExecuteSqlAsync(
-            $"INSERT INTO organizations (id, name, state, created_by, created_at, version) VALUES ({orgId}, 'Org', 'active', {userId}, now(), 1)", Ct);
-        await AccessSchemaTests.InsertMembershipAsync(db, orgId, userId);
-        return (orgId, userId);
+        return (await AccessSchemaTests.InsertOrganizationAsync(db, userId), userId);
     }
 
     private static Task InsertLedgerAsync(DbContext db, Guid orgId, Guid companyId) =>

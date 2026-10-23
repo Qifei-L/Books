@@ -37,10 +37,7 @@ public sealed class AccessSchemaTests(TestHost host)
     {
         await using var db = host.CreateDbContext();
         var userId = await InsertUserAsync(db);
-        var orgId = Guid.NewGuid();
-        await db.Database.ExecuteSqlAsync(
-            $"INSERT INTO organizations (id, name, state, created_by, created_at, version) VALUES ({orgId}, 'Org', 'active', {userId}, now(), 1)", Ct);
-        await InsertMembershipAsync(db, orgId, userId);
+        var orgId = await InsertOrganizationAsync(db, userId);
 
         var duplicate = await Assert.ThrowsAsync<PostgresException>(() => InsertMembershipAsync(db, orgId, userId));
 
@@ -53,6 +50,19 @@ public sealed class AccessSchemaTests(TestHost host)
         await db.Database.ExecuteSqlAsync(
             $"INSERT INTO users (id, status, display_name, created_at, version) VALUES ({userId}, 'active', 'Test', now(), 1)", Ct);
         return userId;
+    }
+
+    /// <summary>Inserts an organization with the user as its administrator, in one statement so the pair commits together.</summary>
+    internal static async Task<Guid> InsertOrganizationAsync(DbContext db, Guid userId)
+    {
+        var orgId = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync(
+            $"""
+            INSERT INTO organizations (id, name, state, created_by, created_at, version) VALUES ({orgId}, 'Org', 'active', {userId}, now(), 1);
+            INSERT INTO memberships (id, org_id, user_id, role, status, generation, version, joined_at)
+            VALUES ({Guid.NewGuid()}, {orgId}, {userId}, 'admin', 'active', 1, 1, now());
+            """, Ct);
+        return orgId;
     }
 
     internal static Task InsertMembershipAsync(DbContext db, Guid orgId, Guid userId, string role = "admin") =>
