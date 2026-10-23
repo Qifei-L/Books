@@ -29,7 +29,8 @@ builder.Services.ConfigureHttpJsonOptions(json =>
 builder.AddBooksAuthentication();
 builder.Services.AddMcpServer()
     .WithHttpTransport(options => options.Stateless = true)
-    .WithTools<BooksReadTools>();
+    .WithTools<BooksReadTools>()
+    .WithTools<BooksJournalTools>();
 
 var app = builder.Build();
 
