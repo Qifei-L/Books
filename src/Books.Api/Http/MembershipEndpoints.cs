@@ -24,6 +24,9 @@ public static class MembershipEndpoints
             return Envelope.Ok(http, me, me.Version);
         });
 
+        members.MapPost("/me/leave", async (Guid orgId, PrincipalAccessor principals, MembershipService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.LeaveAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), orgId, ct)));
+
         members.MapPut("/{membershipId:guid}/access", async (Guid orgId, Guid membershipId, SetAccessRequest body, PrincipalAccessor principals, MembershipService service, HttpContext http, CancellationToken ct) =>
         {
             var grants = (body.Grants ?? throw BooksProblem.Invalid("grants is required; [] means no ledgers."))
@@ -31,6 +34,9 @@ public static class MembershipEndpoints
             return WriteHttp.Result(http, await service.SetAccessAsync(
                 await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, membershipId, ParseRole(body.Role), grants, ct));
         });
+
+        members.MapPost("/{membershipId:guid}/remove", async (Guid orgId, Guid membershipId, PrincipalAccessor principals, MembershipService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.RemoveAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), orgId, membershipId, ct)));
     }
 
     internal static MembershipRole ParseRole(string? role) => role switch

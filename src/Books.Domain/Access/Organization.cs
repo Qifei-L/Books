@@ -67,6 +67,13 @@ public sealed class Membership
         Role = role;
         Version++;
     }
+
+    public void Remove(DateTimeOffset at)
+    {
+        Status = MembershipStatus.Removed;
+        RemovedAt = at;
+        Version++;
+    }
 }
 
 /// <summary>
