@@ -16,14 +16,15 @@ public sealed class TaxCode
 {
     private TaxCode() { }
 
-    public TaxCode(Guid id, Ledger ledger, string name, TaxKind kind, decimal rate, Account? account, DateOnly? effectiveFrom, DateOnly? effectiveTo, DateTimeOffset createdAt)
+    public TaxCode(Guid id, Ledger ledger, string name, TaxKind kind, decimal rate, Account? account, Account? nonDeductibleAccount,
+        DateOnly? effectiveFrom, DateOnly? effectiveTo, DateTimeOffset createdAt)
     {
         Id = id;
         OrgId = ledger.OrgId;
         LedgerId = ledger.Id;
         Kind = kind;
         CreatedAt = createdAt;
-        Set(name, rate, account, effectiveFrom, effectiveTo);
+        Set(name, rate, account, nonDeductibleAccount, effectiveFrom, effectiveTo);
     }
 
     public Guid Id { get; private set; }
@@ -38,6 +39,12 @@ public sealed class TaxCode
     /// <summary>Where the tax is posted: a liability for output VAT and withholding, an asset for input VAT; none for 0% and non-VAT.</summary>
     public Guid? AccountId { get; private set; }
 
+    /// <summary>
+    /// Input VAT only: where the VAT goes when no valid tax invoice was received (a Cost &amp; Expense account,
+    /// owner decision). Required for input VAT; the setting is generic so other kinds can use it later.
+    /// </summary>
+    public Guid? NonDeductibleAccountId { get; private set; }
+
     public DateOnly? EffectiveFrom { get; private set; }
     public DateOnly? EffectiveTo { get; private set; }
     public bool Active { get; private set; } = true;
@@ -47,14 +54,14 @@ public sealed class TaxCode
     public bool AppliesOn(DateOnly date) =>
         Active && (EffectiveFrom is null || date >= EffectiveFrom) && (EffectiveTo is null || date <= EffectiveTo);
 
-    public void Update(string name, decimal rate, Account? account, DateOnly? effectiveFrom, DateOnly? effectiveTo, bool active)
+    public void Update(string name, decimal rate, Account? account, Account? nonDeductibleAccount, DateOnly? effectiveFrom, DateOnly? effectiveTo, bool active)
     {
-        Set(name, rate, account, effectiveFrom, effectiveTo);
+        Set(name, rate, account, nonDeductibleAccount, effectiveFrom, effectiveTo);
         Active = active;
         Version++;
     }
 
-    private void Set(string name, decimal rate, Account? account, DateOnly? effectiveFrom, DateOnly? effectiveTo)
+    private void Set(string name, decimal rate, Account? account, Account? nonDeductibleAccount, DateOnly? effectiveFrom, DateOnly? effectiveTo)
     {
         var carriesTax = Kind is not (TaxKind.VatZeroRated or TaxKind.NonVat);
         if (!carriesTax && (rate != 0 || account is not null))
@@ -65,9 +72,17 @@ public sealed class TaxCode
         {
             throw new DomainException("rate must be a percent above 0 and at most 100, with up to 4 decimals.");
         }
-        if (carriesTax && (account is null || account.LedgerId != LedgerId || account.Type != RequiredAccountType()))
+        if (carriesTax && (account is null || account.LedgerId != LedgerId || !Usages.Types(Usages.ForTaxKind(Kind)!.Value).Contains(account.Type)))
         {
-            throw new DomainException($"This tax code needs a {Text(RequiredAccountType())} account in the same ledger.");
+            throw new DomainException($"This tax code needs a {string.Join(" or ", Usages.Types(Usages.ForTaxKind(Kind)!.Value))} account in the same ledger.");
+        }
+        if ((Kind == TaxKind.VatInput) != (nonDeductibleAccount is not null))
+        {
+            throw new DomainException("Input VAT codes need a non-deductible account; other kinds have none.");
+        }
+        if (nonDeductibleAccount is not null && (nonDeductibleAccount.LedgerId != LedgerId || nonDeductibleAccount.Type != AccountType.CostAndExpense))
+        {
+            throw new DomainException("The non-deductible account must be a Cost & Expense account in the same ledger.");
         }
         if (effectiveFrom is { } from && effectiveTo is { } to && to < from)
         {
@@ -76,13 +91,10 @@ public sealed class TaxCode
         Name = Names.Require(name);
         Rate = rate;
         AccountId = account?.Id;
+        NonDeductibleAccountId = nonDeductibleAccount?.Id;
         EffectiveFrom = effectiveFrom;
         EffectiveTo = effectiveTo;
     }
-
-    private AccountType RequiredAccountType() => Kind == TaxKind.VatInput ? AccountType.Assets : AccountType.Liabilities;
-
-    private static string Text(AccountType type) => type == AccountType.Assets ? "an Assets" : "a Liabilities";
 }
 
 /// <summary>The tax on one document line: calculated from the code, and possibly overridden by a person.</summary>

@@ -153,6 +153,9 @@ internal sealed class TaxCodeConfiguration : IEntityTypeConfiguration<TaxCode>
         b.HasOne<Account>().WithMany()
             .HasForeignKey(x => new { x.LedgerId, x.AccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.NonDeductibleAccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -226,6 +229,23 @@ internal sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
             .OnDelete(DeleteBehavior.Restrict);
         b.HasOne<TaxCode>().WithMany()
             .HasForeignKey(x => new { x.LedgerId, x.DefaultTaxCodeId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class AccountUsageConfiguration : IEntityTypeConfiguration<AccountUsage>
+{
+    public void Configure(EntityTypeBuilder<AccountUsage> b)
+    {
+        b.ToTable("account_usages", t => t.HasCheckConstraint("ck_account_usages_usage",
+            "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable')"));
+        b.HasKey(x => new { x.AccountId, x.Usage });
+        b.HasIndex(x => new { x.LedgerId, x.Usage });
+        b.HasOne<Account>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.AccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

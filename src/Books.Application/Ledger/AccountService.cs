@@ -8,7 +8,7 @@ namespace Books.Application.Ledgers;
 
 public sealed record AccountDto(
     Guid Id, Guid LedgerId, Guid? GroupId, string Code, string Name, string Type, bool IsControl, bool IsBank,
-    string? Currency, bool Active, bool Postable, bool Used, IReadOnlyList<string> Purposes, string Version);
+    string? Currency, bool Active, bool Postable, bool Used, IReadOnlyList<string> Purposes, IReadOnlyList<string> Usages, string Version);
 
 /// <param name="GroupChanges">True when group_id was sent; GroupId null then means no group.</param>
 public sealed record UpdateAccount(string? Code, string? Name, AccountType? Type, bool? Active, bool GroupChanges, Guid? GroupId);
@@ -134,8 +134,10 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
             .ToListAsync(ct);
         var purposes = (await db.AccountPurposes.AsNoTracking().Where(p => p.LedgerId == ledgerId).ToListAsync(ct))
             .ToLookup(p => p.AccountId, p => Text.Of(p.Purpose));
+        var usages = (await db.AccountUsages.AsNoTracking().Where(u => u.LedgerId == ledgerId).ToListAsync(ct))
+            .ToLookup(u => u.AccountId, u => Text.Of(u.Usage));
         return rows.Select(x => new AccountDto(
             x.a.Id, x.a.LedgerId, x.a.GroupId, x.a.Code, x.a.Name, Text.Of(x.a.Type), x.a.IsControl, x.a.IsBank, x.a.Currency,
-            x.a.Active, x.a.Postable, x.Used, purposes[x.a.Id].ToList(), x.a.Version.ToString())).ToList();
+            x.a.Active, x.a.Postable, x.Used, purposes[x.a.Id].ToList(), usages[x.a.Id].Order().ToList(), x.a.Version.ToString())).ToList();
     }
 }

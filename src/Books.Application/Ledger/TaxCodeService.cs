@@ -7,13 +7,14 @@ using Microsoft.EntityFrameworkCore;
 namespace Books.Application.Ledgers;
 
 public sealed record TaxCodeDto(
-    Guid Id, Guid LedgerId, string Name, string Kind, string Rate, Guid? AccountId,
+    Guid Id, Guid LedgerId, string Name, string Kind, string Rate, Guid? AccountId, Guid? NonDeductibleAccountId,
     DateOnly? EffectiveFrom, DateOnly? EffectiveTo, bool Active, string Version);
 
-public sealed record TaxCodeInput(string Name, TaxKind Kind, decimal Rate, Guid? AccountId, DateOnly? EffectiveFrom, DateOnly? EffectiveTo, bool Active = true);
+public sealed record TaxCodeInput(
+    string Name, TaxKind Kind, decimal Rate, Guid? AccountId, DateOnly? EffectiveFrom, DateOnly? EffectiveTo, bool Active = true, Guid? NonDeductibleAccountId = null);
 
 /// <summary>Tax codes of a ledger. Anyone with access reads them; only administrators change them (owner decision).</summary>
-public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner reads)
+public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner reads, AccountUsageService usages)
 {
     public Task<IReadOnlyList<TaxCodeDto>> ListAsync(Principal principal, Guid orgId, Guid ledgerId, CancellationToken ct) =>
         reads.RunAsync(principal, orgId, async scope =>
@@ -28,8 +29,9 @@ public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner r
             scope.RequireAdmin();
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
-            var code = new TaxCode(Guid.CreateVersion7(), ledger, input.Name, input.Kind, input.Rate,
-                await AccountAsync(ledgerId, input.AccountId, ct), input.EffectiveFrom, input.EffectiveTo, scope.Now);
+            var (account, nonDeductible) = (await AccountAsync(ledgerId, input.AccountId, ct), await AccountAsync(ledgerId, input.NonDeductibleAccountId, ct));
+            var code = new TaxCode(Guid.CreateVersion7(), ledger, input.Name, input.Kind, input.Rate, account, nonDeductible, input.EffectiveFrom, input.EffectiveTo, scope.Now);
+            await EnsureUsagesAsync(code, account, nonDeductible, ct);
             db.TaxCodes.Add(code);
             await db.SaveChangesAsync(ct);
             var dto = (await LoadAsync(ledgerId, code.Id, ct)).Single();
@@ -49,12 +51,27 @@ public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner r
                 throw BooksProblem.Invalid("The kind of a tax code cannot change; create a new code instead.");
             }
             var before = (await LoadAsync(ledgerId, code.Id, ct)).Single();
-            code.Update(input.Name, input.Rate, await AccountAsync(ledgerId, input.AccountId, ct), input.EffectiveFrom, input.EffectiveTo, input.Active);
+            var (account, nonDeductible) = (await AccountAsync(ledgerId, input.AccountId, ct), await AccountAsync(ledgerId, input.NonDeductibleAccountId, ct));
+            code.Update(input.Name, input.Rate, account, nonDeductible, input.EffectiveFrom, input.EffectiveTo, input.Active);
+            await EnsureUsagesAsync(code, account, nonDeductible, ct);
             await db.SaveChangesAsync(ct);
             var after = (await LoadAsync(ledgerId, code.Id, ct)).Single();
             scope.Audit("tax_code.updated", "tax_code", code.Id, new { before, after });
             return WriteResult.Of(200, after, code.Version);
         }, ct);
+
+    /// <summary>The referenced accounts carry the matching usage, added here in the same transaction if missing.</summary>
+    private async Task EnsureUsagesAsync(TaxCode code, Account? account, Account? nonDeductible, CancellationToken ct)
+    {
+        if (account is not null && Usages.ForTaxKind(code.Kind) is { } usage)
+        {
+            await usages.EnsureAsync(account, usage, ct);
+        }
+        if (nonDeductible is not null)
+        {
+            await usages.EnsureAsync(nonDeductible, Usage.NonDeductibleVat, ct);
+        }
+    }
 
     private async Task<Account?> AccountAsync(Guid ledgerId, Guid? accountId, CancellationToken ct) =>
         accountId is { } id
@@ -66,6 +83,6 @@ public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner r
         (await db.TaxCodes.AsNoTracking().Where(t => t.LedgerId == ledgerId && (id == null || t.Id == id))
             .OrderBy(t => t.Name).ThenBy(t => t.Id).ToListAsync(ct))
         .Select(t => new TaxCodeDto(t.Id, t.LedgerId, t.Name, Text.Of(t.Kind), t.Rate.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture),
-            t.AccountId, t.EffectiveFrom, t.EffectiveTo, t.Active, t.Version.ToString()))
+            t.AccountId, t.NonDeductibleAccountId, t.EffectiveFrom, t.EffectiveTo, t.Active, t.Version.ToString()))
         .ToList();
 }

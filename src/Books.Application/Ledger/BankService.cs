@@ -12,7 +12,7 @@ public sealed record BankAccountDto(Guid AccountId, Guid LedgerId, string Code, 
 public sealed record ExchangeRateDto(DateOnly Date, string FromCurrency, string ToCurrency, string Rate, string Source, string Version);
 
 /// <summary>Bank accounts of a ledger (edit access) and the organization's exchange rates (administrators).</summary>
-public sealed class BankService(IBooksDb db, WriteRunner writes, ReadRunner reads)
+public sealed class BankService(IBooksDb db, WriteRunner writes, ReadRunner reads, AccountUsageService usages)
 {
     public Task<IReadOnlyList<BankAccountDto>> ListAsync(Principal principal, Guid orgId, Guid ledgerId, CancellationToken ct) =>
         reads.RunAsync(principal, orgId, async scope =>
@@ -33,6 +33,7 @@ public sealed class BankService(IBooksDb db, WriteRunner writes, ReadRunner read
                 throw BooksProblem.Conflict("BANK_ACCOUNT_EXISTS", "This account already has bank details.");
             }
             var bank = new BankAccount(ledger, account, bankName, accountNumber, scope.Now);
+            await usages.EnsureAsync(account, Usage.Bank, ct);
             db.BankAccounts.Add(bank);
             await db.SaveChangesAsync(ct);
             var dto = (await LoadAsync(ledgerId, accountId, ct)).Single();

@@ -1007,6 +1007,43 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.AccountUsage", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<string>("Usage")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("usage");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.HasKey("AccountId", "Usage")
+                        .HasName("pk_account_usages");
+
+                    b.HasIndex("LedgerId", "AccountId")
+                        .HasDatabaseName("ix_account_usages_ledger_id_account_id");
+
+                    b.HasIndex("LedgerId", "Usage")
+                        .HasDatabaseName("ix_account_usages_ledger_id_usage");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_account_usages_org_id_ledger_id");
+
+                    b.ToTable("account_usages", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable')");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.BankAccount", b =>
                 {
                     b.Property<Guid>("AccountId")
@@ -1451,6 +1488,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("name");
 
+                    b.Property<Guid?>("NonDeductibleAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("non_deductible_account_id");
+
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid")
                         .HasColumnName("org_id");
@@ -1472,6 +1513,9 @@ namespace Books.Infrastructure.Migrations
 
                     b.HasIndex("LedgerId", "AccountId")
                         .HasDatabaseName("ix_tax_codes_ledger_id_account_id");
+
+                    b.HasIndex("LedgerId", "NonDeductibleAccountId")
+                        .HasDatabaseName("ix_tax_codes_ledger_id_non_deductible_account_id");
 
                     b.HasIndex("OrgId", "LedgerId")
                         .HasDatabaseName("ix_tax_codes_org_id_ledger_id");
@@ -1755,6 +1799,25 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_account_purposes_ledgers_org_id_ledger_id");
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.AccountUsage", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "AccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_account_usages_accounts_ledger_id_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_account_usages_ledgers_org_id_ledger_id");
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.BankAccount", b =>
                 {
                     b.HasOne("Books.Domain.Ledgers.Account", null)
@@ -1867,6 +1930,13 @@ namespace Books.Infrastructure.Migrations
                         .HasPrincipalKey("LedgerId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_tax_codes_accounts_ledger_id_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "NonDeductibleAccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_tax_codes_accounts_ledger_id_non_deductible_account_id");
 
                     b.HasOne("Books.Domain.Ledgers.Ledger", null)
                         .WithMany()

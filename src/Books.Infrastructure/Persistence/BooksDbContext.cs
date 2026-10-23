@@ -23,6 +23,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<AccountGroup> AccountGroups => Set<AccountGroup>();
     public DbSet<AccountPurpose> AccountPurposes => Set<AccountPurpose>();
+    public DbSet<AccountUsage> AccountUsages => Set<AccountUsage>();
     public DbSet<Party> Parties => Set<Party>();
     public DbSet<TaxCode> TaxCodes => Set<TaxCode>();
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
@@ -53,6 +54,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
         configurationBuilder.Properties<SystemPurpose>().HaveConversion<LowerCaseEnumConverter<SystemPurpose>>().HaveMaxLength(40);
         configurationBuilder.Properties<TaxKind>().HaveConversion<LowerCaseEnumConverter<TaxKind>>().HaveMaxLength(20);
         configurationBuilder.Properties<Books.Domain.Documents.DocumentStatus>().HaveConversion<LowerCaseEnumConverter<Books.Domain.Documents.DocumentStatus>>().HaveMaxLength(20);
+        configurationBuilder.Properties<Usage>().HaveConversion<LowerCaseEnumConverter<Usage>>().HaveMaxLength(40);
         configurationBuilder.Properties<MembershipStatus>().HaveConversion<LowerCaseEnumConverter<MembershipStatus>>().HaveMaxLength(20);
     }
 }

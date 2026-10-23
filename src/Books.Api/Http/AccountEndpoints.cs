@@ -13,6 +13,8 @@ public static class AccountEndpoints
 
     public sealed record CreateGroupRequest(string Name, string Type, Guid? ParentId);
 
+    public sealed record UsagesRequest(IReadOnlyList<string> Usages);
+
     public static void MapAccountEndpoints(this RouteGroupBuilder api)
     {
         var groups = api.MapGroup("/organizations/{orgId:guid}/ledgers/{ledgerId:guid}/groups");
@@ -48,6 +50,10 @@ public static class AccountEndpoints
         accounts.MapPatch("/{accountId:guid}", async (Guid orgId, Guid ledgerId, Guid accountId, JsonElement body, PrincipalAccessor principals, AccountService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.UpdateAsync(
                 await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, accountId, ParseUpdate(body), ct)));
+
+        accounts.MapPut("/{accountId:guid}/usages", async (Guid orgId, Guid ledgerId, Guid accountId, UsagesRequest body, PrincipalAccessor principals, AccountUsageService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.ReplaceAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, accountId,
+                (body.Usages ?? []).Select(AccountUsageService.Parse).ToList(), ct)));
 
         accounts.MapDelete("/{accountId:guid}", async (Guid orgId, Guid ledgerId, Guid accountId, PrincipalAccessor principals, AccountService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.DeleteAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), orgId, ledgerId, accountId, ct)));
