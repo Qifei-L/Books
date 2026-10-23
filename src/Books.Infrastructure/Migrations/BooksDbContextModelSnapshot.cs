@@ -122,7 +122,7 @@ namespace Books.Infrastructure.Migrations
 
                     b.Property<string>("ResponseBody")
                         .IsRequired()
-                        .HasColumnType("jsonb")
+                        .HasColumnType("text")
                         .HasColumnName("response_body");
 
                     b.Property<int>("ResponseStatus")
