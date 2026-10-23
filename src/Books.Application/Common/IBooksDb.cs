@@ -32,6 +32,8 @@ public interface IBooksDb
     DbSet<ItemCategory> ItemCategories { get; }
     DbSet<Item> Items { get; }
     DbSet<BankTransfer> BankTransfers { get; }
+    DbSet<PurchaseInvoice> PurchaseInvoices { get; }
+    DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines { get; }
     DbSet<Journal> Journals { get; }
     DbSet<JournalRevision> JournalRevisions { get; }
     DbSet<JournalLine> JournalLines { get; }

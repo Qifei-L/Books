@@ -598,6 +598,199 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.PurchaseInvoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("due_date");
+
+                    b.Property<long>("InvoiceNo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("invoice_no");
+
+                    b.Property<string>("Issues")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("issues");
+
+                    b.Property<Guid?>("JournalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("journal_id");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<Guid>("PayableAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payable_account_id");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reference");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("SupplierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("supplier_id");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_purchase_invoices");
+
+                    b.HasAlternateKey("LedgerId", "Id")
+                        .HasName("ak_purchase_invoices_ledger_id_id");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_purchase_invoices_created_by");
+
+                    b.HasIndex("LedgerId", "InvoiceNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_purchase_invoices_ledger_id_invoice_no");
+
+                    b.HasIndex("LedgerId", "JournalId")
+                        .HasDatabaseName("ix_purchase_invoices_ledger_id_journal_id");
+
+                    b.HasIndex("LedgerId", "PayableAccountId")
+                        .HasDatabaseName("ix_purchase_invoices_ledger_id_payable_account_id");
+
+                    b.HasIndex("LedgerId", "SupplierId")
+                        .HasDatabaseName("ix_purchase_invoices_ledger_id_supplier_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_purchase_invoices_org_id_ledger_id");
+
+                    b.ToTable("purchase_invoices", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_purchase_invoices_status", "status IN ('draft', 'posted', 'deleted') AND (status <> 'posted' OR journal_id IS NOT NULL) AND due_date >= date");
+                        });
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.PurchaseInvoiceLine", b =>
+                {
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_no");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid?>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<Guid>("LineId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("line_id");
+
+                    b.Property<decimal>("NetAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("net_amount");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("quantity");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("tax_amount");
+
+                    b.Property<decimal>("TaxCalculated")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("tax_calculated");
+
+                    b.Property<Guid?>("TaxCodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tax_code_id");
+
+                    b.Property<string>("TaxReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("tax_reason");
+
+                    b.Property<decimal?>("UnitPrice")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("unit_price");
+
+                    b.Property<bool>("ValidTaxInvoice")
+                        .HasColumnType("boolean")
+                        .HasColumnName("valid_tax_invoice");
+
+                    b.Property<decimal>("WithholdingAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("withholding_amount");
+
+                    b.Property<Guid?>("WithholdingCodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("withholding_code_id");
+
+                    b.HasKey("InvoiceId", "LineNo")
+                        .HasName("pk_purchase_invoice_lines");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_purchase_invoice_lines_account_id");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_purchase_invoice_lines_item_id");
+
+                    b.HasIndex("TaxCodeId")
+                        .HasDatabaseName("ix_purchase_invoice_lines_tax_code_id");
+
+                    b.HasIndex("WithholdingCodeId")
+                        .HasDatabaseName("ix_purchase_invoice_lines_withholding_code_id");
+
+                    b.ToTable("purchase_invoice_lines", (string)null);
+                });
+
             modelBuilder.Entity("Books.Domain.Journals.Journal", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1680,6 +1873,82 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_bank_transfers_ledgers_org_id_ledger_id");
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.PurchaseInvoice", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_purchase_invoices_users_created_by");
+
+                    b.HasOne("Books.Domain.Journals.Journal", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "JournalId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_purchase_invoices_journals_ledger_id_journal_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "PayableAccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_purchase_invoices_accounts_ledger_id_payable_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Party", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "SupplierId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_purchase_invoices_parties_ledger_id_supplier_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_purchase_invoices_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.PurchaseInvoiceLine", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_purchase_invoice_lines_accounts_account_id");
+
+                    b.HasOne("Books.Domain.Documents.PurchaseInvoice", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_purchase_invoice_lines_purchase_invoices_invoice_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_purchase_invoice_lines_items_item_id");
+
+                    b.HasOne("Books.Domain.Ledgers.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("TaxCodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_purchase_invoice_lines_tax_codes_tax_code_id");
+
+                    b.HasOne("Books.Domain.Ledgers.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("WithholdingCodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_purchase_invoice_lines_tax_codes_withholding_code_id");
+                });
+
             modelBuilder.Entity("Books.Domain.Journals.Journal", b =>
                 {
                     b.HasOne("Books.Domain.Access.User", null)
@@ -1950,6 +2219,11 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_tax_codes_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.PurchaseInvoice", b =>
+                {
+                    b.Navigation("Lines");
                 });
 #pragma warning restore 612, 618
         }
