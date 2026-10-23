@@ -53,6 +53,12 @@ Status: Review record. No coding or deployment is approved.
 - Use two top-level P&L groups: **Income (add)** and **Cost & Expense (subtract)**.
 - This is reporting classification, not a change to debit/credit treatment or an instruction to discard signed or contra balances.
 
+### Account tree planning baseline
+
+The five-type account tree in [Chart of Accounts](04-chart-of-accounts.md#account-tree) is accepted with these changes: no Other Income group, FX gains directly under Income, and generic asset names such as Bank Account and Property, Plant & Equipment. System is a function flag, not another type. Current Year Profit is a calculated non-posting report item.
+
+This approval covers the tree, not automatic account generation, new field requirements or maintenance policies. Future/conditional account activation, detailed year-end calculations and the separate FX line/account design remain open.
+
 ### Initial System Account purposes
 
 - Identify System Accounts by fixed function mapped to account identity, not by name or code.
@@ -73,9 +79,9 @@ This replaces the earlier Go proposal. It does not select exact package versions
 
 ## Proposed, not approved
 
-The accounting chapters now contain a complete starting proposal. Except for the specifically confirmed labels, P&L grouping and initial System Account purposes above, they are not a statement of approved accounting policy.
+The accounting chapters now contain a complete starting proposal. Except for the specifically confirmed labels, P&L grouping, account tree and initial System Account purposes above, they are not a statement of approved accounting policy.
 
-Default Accounts as optional starter templates remain proposed. Current Year Profit is proposed as a calculated display rather than a routine posting account. The posted-account versus unposted-review distinction is accepted. A shared entry point and Posted / Not posted / Pending or Unknown presentation remain workflow proposals. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. Further proposed candidates are realized/unrealized FX gains or losses, and AR/AP/Inventory/Tax controls only with the relevant modules. They are not approved by acceptance of the three initial System Account purposes. No account or mapping has been created.
+Default Accounts as optional starter templates remain proposed. Current Year Profit's non-posting place in the tree is accepted; calculation and closing details remain open. The posted-account versus unposted-review distinction is accepted. A shared entry point and Posted / Not posted / Pending or Unknown presentation remain workflow proposals. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. FX and AR/AP/Inventory placeholders are accepted in the planning tree, but their module activation and behavior are not approved. A tax-control mapping remains a further proposal. No account or mapping has been created.
 
 The detailed technical contract proposes .NET/EF Core/Npgsql version families, Keycloak evaluation, authenticated invitation inboxes, transaction and lock rules, API fields, MCP delegation and development stages. Exact implementation details remain under review.
 
@@ -90,7 +96,7 @@ The recommended defaults are proposals. Answer by topic; do not repeat the confi
 | Topic | What needs a decision |
 | --- | --- |
 | 1. Ledger setup | Base currency for each company, whether foreign-currency transactions are needed in the first accounting release, fiscal year and business time zone. |
-| 2. Accounts | Flat accounts or a parent-child structure; custom code rules; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and optional starter templates. |
+| 2. Accounts | The tree is accepted. Custom code rules; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and optional starter templates. |
 | 3. Posting and corrections | Opening balances, who can post, period closing/reopening and the correction process for posted entries. |
 | 4. First reports | Which reports are required, date and balance presentation, and whether export is needed initially. |
 
@@ -130,6 +136,8 @@ All decisions above were recorded on 2026-10-23.
 
 10. Confirmed Cost & Expense naming, two P&L groups and three conditional System Account purposes. Default templates and further System Account candidates remain proposed.
 11. Included incomplete, unusable and errored records in Suspense scope. Added proposed safe review and resolution handling without approving invalid posting.
+
+12. Accepted the revised account tree with no Other Income group and generic asset names. Conditional activation and operational rules remain separate decisions.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

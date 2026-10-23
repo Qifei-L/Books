@@ -1,8 +1,8 @@
 # Chart of Accounts
 
-Status: Review draft. Ledger access rules, the Cost & Expense label, two P&L groups and initial System Account purposes are confirmed. Account structure and maintenance rules below are proposed and need approval.
+Status: Review draft. Ledger access rules, the Cost & Expense label, two P&L groups and initial System Account purposes are confirmed. The account tree below is the accepted planning baseline. Field requirements and maintenance rules remain proposed.
 
-The proposed tree, repeated account names, fixed codes after use and deactivation with a remaining balance are new review recommendations. They are alternatives for discussion, not previously confirmed accounting policies. These accounting features belong to a later accounting stage, not the organization foundation's phase-one API contract.
+The tree is accepted for planning, not automatic account generation. Repeated account names, fixed codes after use and deactivation with a remaining balance remain review recommendations, not confirmed maintenance policies. These accounting features belong to a later accounting stage, not the organization foundation's phase-one API contract.
 
 ## Confirmed
 
@@ -24,11 +24,76 @@ Example: Renaming account 1000 from “Bank” to “Main Bank” must not move 
 
 Code length and allowed characters remain open. The chosen rule must work consistently in entry forms, imports and searches.
 
-## Proposed: Types and groups
+## Accepted planning baseline: Types and tree
 
-Start with five account types: Assets, Liabilities, Equity, Income and Cost & Expense. These types drive report classification. The overall type model remains proposed; the Cost & Expense label and two P&L groups are confirmed. This is not a prescribed local chart of accounts.
+The tree uses five account types: Assets, Liabilities, Equity, Income and Cost & Expense. These types drive report classification. The five top-level types and the tree below are accepted for planning. This is not a prescribed local chart of accounts.
 
-Use a parent-child tree to organize accounts. A parent and its children belong to the same ledger and account type. An account cannot be its own parent or form a loop.
+### Account tree
+
+Legend:
+- **Type:** the accounting classification.
+- **Group:** an organizing heading, not an additional account type.
+- **Account:** an ordinary account in the planning baseline.
+- **System:** a functional mapping on an account, not a separate type or branch.
+- **Future / If needed:** a conditional item, not enabled or created now.
+- **Calculated:** a report item, not a posting account.
+
+```text
+Assets [Type]
+├─ Current Assets [Group]
+│  ├─ Cash and Bank [Group]
+│  │  ├─ Cash [Account]
+│  │  └─ Bank Account [Account]
+│  ├─ Accounts Receivable [System control, Future]
+│  ├─ Inventory [System control, Future]
+│  ├─ Prepaid Expenses [Account]
+│  └─ Suspense [System]
+└─ Non-current Assets [Group]
+   ├─ Property, Plant & Equipment [Account]
+   └─ Accumulated Depreciation [Account]
+
+Liabilities [Type]
+├─ Current Liabilities [Group]
+│  ├─ Accounts Payable [System control, Future]
+│  ├─ Accrued Expenses [Account]
+│  └─ Tax Payable [Account]
+└─ Non-current Liabilities [Group]
+   └─ Long-term Loans [Account]
+
+Equity [Type]
+├─ Share Capital [Account]
+├─ Retained Earnings [System]
+├─ Opening Balance Clearing [System, Temporary]
+└─ Current Year Profit [Calculated, Non-posting]
+
+Income [Type, P&L add]
+├─ Sales Revenue [Account]
+├─ Service Revenue [Account]
+├─ Realized FX Gain [System, Future]
+└─ Unrealized FX Gain [System, Future]
+
+Cost & Expense [Type, P&L subtract]
+├─ Cost of Sales [Group]
+│  └─ Cost of Goods Sold [Account]
+├─ Operating Expenses [Group]
+│  ├─ Salaries [Account]
+│  ├─ Rent [Account]
+│  └─ Depreciation [Account]
+└─ Other Costs & Expenses [Group]
+   ├─ Rounding Differences [System, If needed]
+   ├─ Realized FX Loss [System, Future]
+   └─ Unrealized FX Loss [System, Future]
+```
+
+There is no Other Income group. FX gains appear directly under Income. Asset names are generic and do not assume a particular bank or asset inventory.
+
+This is a planning baseline, not a jurisdiction-specific template or an instruction to create every item. Future control accounts wait for their modules. Tax Payable does not by itself enable a tax-control module. FX placeholders do not approve foreign-currency processing or settle the separate FX line/account design. Rounding Differences is conditional on a real automatic-rounding need.
+
+Current Year Profit appears only to show report placement. It is calculated, not an account to post to; closing and equity calculations still need review. Suspense's place under Current Assets is part of the accepted baseline, not permission to hide an opposite balance or post an invalid record.
+
+### Proposed operational safeguards
+
+Use the accepted parent-child tree to organize accounts. A parent and its children belong to the same ledger and account type. An account cannot be its own parent or form a loop.
 
 Only leaf accounts accept postings. Parent accounts show the total of their descendants and cannot also receive direct entries. Do not add children below an account that already has posted entries without a separately approved restructuring process.
 
@@ -51,11 +116,11 @@ Accepted System Account purposes:
 | Opening Balance Clearing | Temporary offset while setting up opening balances. It must be zero when setup is complete; it is not a way to conceal an unresolved difference. |
 | Rounding Differences | Only if an approved feature actually needs automatic rounding adjustments. Do not create it by default or use it to hide an unbalanced journal. |
 
-**Current Year Profit** is proposed as a calculated report value, not an ordinary posting account. Its relationship to closing entries and retained earnings still needs an agreed reporting policy.
+**Current Year Profit** is shown in the accepted tree as a calculated report item, not an ordinary posting account. Its relationship to closing entries and retained earnings still needs an agreed reporting policy.
 
-Further candidates, still Proposed: realized and unrealized foreign-exchange gains/losses only if foreign-currency accounting is added; and receivable, payable, inventory and tax control accounts only when the relevant module is enabled. Their posting and clearing policies need separate review. Do not enable them just because a starter template includes similarly named accounts.
+Conditional future scope: the tree includes realized/unrealized FX and receivable, payable and inventory control placeholders. Their activation depends on the relevant modules. A tax-control mapping remains a further proposal. Their posting and clearing policies need separate review. Do not enable them just because a starter template includes similarly named accounts.
 
-Codes, names, template contents, mapping permissions and safeguards for changing a used mapping remain proposals. No accounts or mappings are created by this document.
+Account codes, additional template contents, mapping permissions and safeguards for changing a used mapping remain proposals. No accounts or mappings are created by this document.
 
 ## Suspense: records needing attention
 
@@ -104,7 +169,7 @@ These scenarios have not been executed. Proposed behavior must be approved befor
 ## Open Questions
 
 1. Are custom codes, duplicate names and leaf-only posting suitable? What code format is needed?
-2. Are the five account types enough, or are templates, control accounts or subledgers required?
+2. Are any additional templates or subledgers needed beyond the accepted planning tree? Conditional future items are not enabled by this approval.
 3. Is fixing a used account's code, type and parent acceptable?
 4. Do historical reports need the exact account labels shown when originally issued?
 5. Are any additional System Account functions or optional Default Account templates needed? The three accepted purposes do not approve these additions or template contents.
