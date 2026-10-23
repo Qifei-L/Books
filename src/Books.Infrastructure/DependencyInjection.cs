@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<StatementService>();
         services.AddScoped<AccountPurposeService>();
         services.AddScoped<PartyService>();
+        services.AddScoped<TaxCodeService>();
         return services;
     }
 

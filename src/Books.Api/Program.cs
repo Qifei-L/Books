@@ -60,6 +60,7 @@ api.MapMembershipEndpoints();
 api.MapInvitationEndpoints();
 api.MapAccountEndpoints();
 api.MapPartyEndpoints();
+api.MapTaxCodeEndpoints();
 api.MapJournalEndpoints();
 api.MapReportEndpoints();
 
