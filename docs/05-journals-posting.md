@@ -30,6 +30,16 @@ Confirmed Item behavior: Item is optional, so a pure adjustment journal need not
 
 Confirmed numbering: the system generates a unique **Journal No.**; the user enters **Reference**, which may repeat. Keep the stable internal journal identity separate from both. Number format, uniqueness scope, allocation timing and gap behavior remain design details; do not promise gap-free numbering. Journal No. does not make a posted journal immutable before Close.
 
+## Attachment storage portability
+
+Confirmed requirement: replacing the attachment storage container must preserve the files and their links to journals. This concerns file storage, not a new journal data container.
+
+Proposed solution: a **Document Provider** separates attachment identity from storage location. Journals link to a stable Attachment ID rather than a container URL. Moving a file changes its storage-location record, not the journal's attachment reference. List versus Map does not provide migration safety.
+
+Migration needs verified copying, version tracking, backups and a rollback path; changing containers alone cannot guarantee no data loss. See the [migration proposal](09-deployment-operations.md#attachment-storage-portability).
+
+Attachment reads and migration access must preserve the same organization/ledger boundary. This requirement does not approve a storage provider, new credentials, wider sharing, actual migration or deletion. Attachment counts, optionality and retention rules remain separate decisions.
+
 ## Proposed: Draft and posted states
 
 1. Save a draft. It may be incomplete or unbalanced, with visible validation warnings. It does not affect any ledger balance or posted report.
@@ -116,6 +126,22 @@ Proposed handling:
 - If posting may have committed but the response was lost, mark the outcome Pending / Unknown and check the saved result before retrying. Do not assume failure or create a second journal.
 - Corrections trigger fresh validation. Apply the confirmed Close-based edit/delete policy to posted items. Keep failed edit attempts and unposted error records out of ledger balances; preserve the previous valid posted effect.
 - Preserve relevant source and resolution history with current ledger access checks. Error details must not contain authentication secrets or another organization's data.
+
+### Proposed durable submission handling
+
+Do not rely on rolling back a failed posting and then separately saving Suspense: a crash between those steps could lose the failed submission.
+
+Proposed sequence:
+1. Reliably save the submitted content and a stable processing ID before attempting posting. This record has no accounting effect.
+2. Attempt posting. Validate and commit only valid, balanced formal accounting entries.
+3. Link success to the posted result. A definite validation failure marks the saved submission for Suspense review.
+4. After a crash, timeout or lost response, retain Pending / Unknown and reconcile whether posting committed before any idempotent retry.
+
+Submission records and formal accounting records are logically distinct; they do not require two databases. Accounting balance constraints protect formal entries, not the raw invalid data retained for correction. When editing an existing posting, retain its valid effect until replacement succeeds.
+
+Protect submitted content with current organization/ledger access, data minimization and retention rules. Preserve what is needed for resolution without storing credentials, authentication tokens or unrelated data in error payloads or logs.
+
+This is an engineering proposal requiring implementation and fault-injection testing. Durable linkage, crash recovery and duplicate prevention have not been validated; do not claim that this design has already proved loss-free.
 
 This is a workflow proposal, not a new implemented journal state or approval of a posting engine.
 

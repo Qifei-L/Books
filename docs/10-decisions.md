@@ -109,6 +109,12 @@ Unknown outcomes such as a lost response require reconciliation before retrying.
 
 The system generates a unique Journal No. Reference is entered by the user and may repeat. Number format, scope and allocation timing remain design details. No attachment policy or new Document/container model is approved by this decision.
 
+### Attachment storage portability
+
+Files and their journal links must be preserved when changing the attachment storage container. This requirement is confirmed. It does not introduce a new journal Document data model.
+
+Document Provider, stable Attachment IDs, location mappings, copy/checksum/read verification, version tracking, backups and rollback are proposed means of meeting the requirement. No storage provider, credentials, sharing expansion, migration or deletion is approved. Attachment counts, optionality and retention policy are not settled by this clarification.
+
 ### Technology direction
 
 Use C#, ASP.NET Core, EF Core and PostgreSQL. API and MCP come first. Do not add ABP in phase one. A modular monolith is the proposed application structure, not an instruction to implement it.

@@ -36,6 +36,22 @@ A backup job reporting success is not proof of recovery. Restore into an isolate
 
 Do not restore an old backup over newer transactions as a routine application rollback. Assess the missing transactions and use an approved recovery or forward-repair plan. Keep an incident record.
 
+## Attachment storage portability
+
+Confirmed requirement: files and journal attachment links must survive a change of storage container.
+
+Proposed Document Provider migration sequence:
+1. Keep the stable Attachment ID and record the source location and file version.
+2. Copy files to the proposed destination without removing the source.
+3. Compare file counts, sizes and checksums, and reconcile each Attachment ID to its copied version.
+4. Update the storage-location mapping only for verified copies. Preserve a rollback path to the previous mapping.
+5. Verify authorized reads through the normal attachment lookup, and confirm denied reads stay denied.
+6. Consider cleanup of old copies only after verification, agreed retention and separate deletion authorization.
+
+If copying or verification fails, retain the old copy and usable mapping. Do not cut over to incomplete or unreadable files. Changes made during migration must be accounted for; version checks and backups are needed, not just matching filenames. The exact migration mechanism belongs to later technical design.
+
+No provider is selected, no files are moved and no old copies are deleted by this document. Preserve organization/ledger access and retention boundaries; migration must not make attachments publicly accessible. This is a design objective with checks, not an absolute no-loss guarantee.
+
 ## Monitoring and audit
 
 Track service availability, error rate, response time, failed authentication, denied access, database capacity and failed background work. Alerts need an owner and a clear next action.
