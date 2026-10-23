@@ -2,6 +2,50 @@
 
 Status: System-design overview, not an implementation report. **Confirmed** identifies accepted business requirements. **Proposed** identifies how engineering intends to satisfy them. No code, deployment or real accounting changes are authorized.
 
+## Six confirmed design principles
+
+These six principles are confirmed. The Books examples explain their application; they do not approve every linked implementation proposal. Earlier confirmed business rules remain in force.
+
+### Single Source of Truth
+
+**Principle:** each concern has one authoritative owner.  
+**Why:** independent copies of the same business fact can disagree.  
+**Books example:** a subsystem owns its business document; Journal owns the effective accounting result. Reports derive accounting amounts from that result, not a second set of books. Linked source and Journal records have different responsibilities, not competing truth. [Journal core](05-journals-posting.md#journal-core-contract)
+
+### Consistency by Design
+
+**Principle:** related official changes succeed or fail together.  
+**Why:** a saved official source without its matching accounting effect is misleading.  
+**Books example:** accept the source version and its Journal effects atomically. A failed edit preserves both previous official versions. Candidate input and Error details may remain for correction; external files do not become transactional database records. The same-database transaction mechanism remains a proposal. [Transaction boundary](design/journal-posting-contract.md#4-durable-candidate-and-atomic-official-effects)
+
+### Traceability
+
+**Principle:** explain each number and each change through its source, actor and reason.  
+**Why:** users need to investigate differences without guessing what happened.  
+**Books example:** follow a report amount to Journal and, where applicable, its source revision. Keep who changed or deleted what, when and why. An open posted journal may still be edited or deleted under the confirmed Close rule; traceability does not force reversal-only accounting. Exact reason fields and retention remain design details. [Source traceability](05-journals-posting.md#proposed-source-traceability)
+
+### Secure by Default
+
+**Principle:** the server enforces organization, ledger and operation access at every entry point.  
+**Why:** a client, link or earlier login is not proof of current permission.  
+**Books example:** Frontend, direct API and MCP face the same current-access checks. Account Usage eligibility is not authorization. A removed member cannot use a saved request or guessed ID to recover protected data. This adds no role hierarchy or real permission grant. [Access design](design/organizations-permissions.md#check-access-on-every-operation)
+
+### Explicit over Implicit
+
+**Principle:** make rules, states and errors visible; do not silently guess or change their meaning.  
+**Why:** hidden assumptions cause incorrect entries and unsafe retries.  
+**Books example:** valid posted Suspense, definite Error and unknown Pending are different. Show the actual selected Account and specific validation issues. Common, subsystem and Account requirements add together; no layer silently waives another. A timeout is not proof of failure. [Combined requirements](05-journals-posting.md#confirmed-combined-requirements)
+
+### Design for Change
+
+**Principle:** connect modules through clear, stable contracts so change is controlled.  
+**Why:** adding a subsystem should not require copying or bypassing the Journal rules.  
+**Books example:** future subsystems use the common posting boundary; stable identities keep source and attachment references meaningful. Stable does not mean frozen forever: incompatible changes need explicit versioning and migration. This is not a promise of no future core changes or approval of a new module. [Posting contract](design/journal-posting-contract.md)
+
+## How these principles apply in Books
+
+The sections below summarize existing requirements and proposed mechanisms. Their status labels still apply; accepting a high-level principle is not blanket implementation approval.
+
 ## What each document does
 
 - **Business requirements:** what users can do and the rules that must hold.

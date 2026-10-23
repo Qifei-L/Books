@@ -13,6 +13,12 @@ Status: Review record. No coding or deployment is approved.
 - Complete and review the documents before development.
 - Write all documents in plain, direct English.
 
+### Six system-design principles
+
+Confirm Single Source of Truth, Consistency by Design, Traceability, Secure by Default, Explicit over Implicit and Design for Change. See their principle, reason and Books example in [System Design Principles](00-system-design-principles.md#six-confirmed-design-principles).
+
+This selection does not mark the other four items from the same proposal (Correctness First, Clear Boundaries, Simplicity First and Testability) as newly confirmed principles. It does not revoke any previously confirmed business rule, validation requirement or testing obligation. Linked implementation mechanisms retain their own Proposed status.
+
 ### Organizations and ledgers
 
 - An organization manages a team.
@@ -229,6 +235,8 @@ All decisions above were recorded on 2026-10-23.
 22. Organized the reading path into system principles, business requirements, technical details and acceptance/decisions. Status labels preserve confirmed rules versus proposed mechanisms.
 
 23. Replaced Default Usage with Account Usage only. One purpose may have several eligible accounts; persist the actual selection. Do not introduce Default Account or Link settings. Required Details remains separate, and the earlier Item account suggestion remains an optional suggestion rather than an exclusive default.
+
+24. Confirmed the six selected high-level system-design principles and their purpose. Kept official atomic effects distinct from durable candidate/error storage and external uploads; retained open-before-Close edits and controlled contract evolution.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 
