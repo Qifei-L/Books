@@ -18,7 +18,7 @@ namespace Books.Api.Mcp;
 /// idempotency and versioning are identical. Writes require an idempotency key; retrying with it never posts twice.
 /// </summary>
 [McpServerToolType]
-public sealed class BooksJournalTools(PrincipalAccessor principals, JournalService journals, ReportService reports, IHttpContextAccessor http)
+public sealed class BooksJournalTools(PrincipalAccessor principals, JournalService journals, ReportService reports, StatementService statements, IHttpContextAccessor http)
 {
     public sealed record JournalLineInput(
         [property: JsonPropertyName("account_id"), Description("Account ID from list_accounts; must be postable.")] Guid AccountId,
@@ -71,6 +71,16 @@ public sealed class BooksJournalTools(PrincipalAccessor principals, JournalServi
     [Description("Trial Balance for a date range: opening, period and closing debit/credit per account, totals and whether it balances.")]
     public Task<CallToolResult> GetTrialBalance(Guid org_id, Guid ledger_id, DateOnly from, DateOnly to, CancellationToken ct) =>
         BooksReadTools.RunAsync(async () => await reports.TrialBalanceAsync(await principals.GetAsync(ct), org_id, ledger_id, from, to, ct));
+
+    [McpServerTool(Name = "get_profit_and_loss", ReadOnly = true, Idempotent = true)]
+    [Description("Profit and Loss for a date range: Income and Cost & Expense with group subtotals, and net profit. The range may span fiscal years.")]
+    public Task<CallToolResult> GetProfitAndLoss(Guid org_id, Guid ledger_id, DateOnly from, DateOnly to, CancellationToken ct) =>
+        BooksReadTools.RunAsync(async () => await statements.ProfitAndLossAsync(await principals.GetAsync(ct), org_id, ledger_id, from, to, ct));
+
+    [McpServerTool(Name = "get_balance_sheet", ReadOnly = true, Idempotent = true)]
+    [Description("Balance Sheet as of a date: Assets, Liabilities and Equity with group subtotals. Prior years' and current year profit are calculated lines.")]
+    public Task<CallToolResult> GetBalanceSheet(Guid org_id, Guid ledger_id, DateOnly as_of, CancellationToken ct) =>
+        BooksReadTools.RunAsync(async () => await statements.BalanceSheetAsync(await principals.GetAsync(ct), org_id, ledger_id, as_of, ct));
 
     [McpServerTool(Name = "get_gl_detail", ReadOnly = true, Idempotent = true)]
     [Description("GL Detail for one account: opening balance, each posting with running balance, period totals.")]
