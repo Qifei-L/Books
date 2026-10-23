@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<JournalService>();
         services.AddScoped<LedgerSettingsService>();
         services.AddScoped<ReportService>();
+        services.AddScoped<StatementService>();
         services.AddScoped<AccountPurposeService>();
         return services;
     }
