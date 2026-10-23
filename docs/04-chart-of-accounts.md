@@ -61,7 +61,7 @@ Codes, names, template contents, mapping permissions and safeguards for changing
 
 Confirmed scope: Suspense includes incomplete data, unusable account references, and import or processing errors, as well as unresolved classification.
 
-Proposed distinction:
+Confirmed distinction:
 - **Suspense Account:** a temporary accounting destination only when a transaction can otherwise be validly posted and the final classification is unknown.
 - **Suspense review list:** records needing correction or investigation. Missing amounts, unbalanced entries, unusable accounts and failed validation do not become posted entries merely because they are in Suspense.
 

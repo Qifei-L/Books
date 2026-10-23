@@ -63,7 +63,7 @@ Status: Review record. No coding or deployment is approved.
 
 ### Suspense scope
 
-Include incomplete data, unusable records and import or processing errors in Suspense review. This scope does not authorize posting invalid entries or selecting a Frontend layout.
+Include incomplete data, unusable records and import or processing errors in Suspense review. Distinguish valid entries posted to a Suspense Account from invalid or failed records kept unposted for review. This does not authorize posting invalid entries or select a Frontend layout.
 
 ### Technology direction
 
@@ -75,7 +75,7 @@ This replaces the earlier Go proposal. It does not select exact package versions
 
 The accounting chapters now contain a complete starting proposal. Except for the specifically confirmed labels, P&L grouping and initial System Account purposes above, they are not a statement of approved accounting policy.
 
-Default Accounts as optional starter templates remain proposed. Current Year Profit is proposed as a calculated display rather than a routine posting account. The distinction between a posted Suspense Account and an unposted review list, a shared entry point, and Posted / Not posted / Pending or Unknown presentation remain workflow proposals. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. Further proposed candidates are realized/unrealized FX gains or losses, and AR/AP/Inventory/Tax controls only with the relevant modules. They are not approved by acceptance of the three initial System Account purposes. No account or mapping has been created.
+Default Accounts as optional starter templates remain proposed. Current Year Profit is proposed as a calculated display rather than a routine posting account. The posted-account versus unposted-review distinction is accepted. A shared entry point and Posted / Not posted / Pending or Unknown presentation remain workflow proposals. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. Further proposed candidates are realized/unrealized FX gains or losses, and AR/AP/Inventory/Tax controls only with the relevant modules. They are not approved by acceptance of the three initial System Account purposes. No account or mapping has been created.
 
 The detailed technical contract proposes .NET/EF Core/Npgsql version families, Keycloak evaluation, authenticated invitation inboxes, transaction and lock rules, API fields, MCP delegation and development stages. Exact implementation details remain under review.
 
