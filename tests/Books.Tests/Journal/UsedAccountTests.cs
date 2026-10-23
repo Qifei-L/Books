@@ -64,6 +64,41 @@ public sealed class UsedAccountTests(TestHost host)
         Assert.Equal(0, done.GetProperty("warnings").GetArrayLength());
     }
 
+    [Fact]
+    public async Task System_purposes_accept_only_their_account_types()
+    {
+        var books = await JournalBooks.CreateAsync(host);
+        var purposes = $"/api/v1/organizations/{books.OrgId}/ledgers/{books.LedgerId}/purposes";
+
+        var clearingOnAsset = await books.Admin.WriteAsync(HttpMethod.Put, $"{purposes}/opening_balance_clearing", new { account_id = books.Cash }, ifMatch: 1);
+        var roundingOnAsset = await books.Admin.WriteAsync(HttpMethod.Put, $"{purposes}/rounding_differences", new { account_id = books.Cash }, ifMatch: 1);
+        var suspenseOnIncome = await books.Admin.WriteAsync(HttpMethod.Put, $"{purposes}/suspense", new { account_id = books.Sales }, ifMatch: 1);
+        await (await books.Admin.WriteAsync(HttpMethod.Put, $"{purposes}/rounding_differences", new { account_id = books.Sales }, ifMatch: 1)).DataAsync();
+
+        await clearingOnAsset.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
+        await roundingOnAsset.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
+        await suspenseOnIncome.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
+    }
+
+    [Fact]
+    public async Task Postings_to_suspense_are_valid_and_the_trial_balance_flags_them_until_reclassified()
+    {
+        var books = await JournalBooks.CreateAsync(host);
+        var suspense = await AccountTests.CreateAsync(books.Admin, books.OrgId, books.LedgerId, "2999", "Suspense", "liabilities");
+        await (await books.Admin.WriteAsync(HttpMethod.Put, $"/api/v1/organizations/{books.OrgId}/ledgers/{books.LedgerId}/purposes/suspense",
+            new { account_id = suspense.Id() }, ifMatch: 1)).DataAsync();
+        await PostAsync(books, books.Cash, suspense.Id(), "80.00");
+        var tbUrl = $"/api/v1/organizations/{books.OrgId}/ledgers/{books.LedgerId}/reports/trial-balance?from=2026-01-01&to=2026-12-31";
+
+        var unclassified = await (await books.Admin.GetAsync(tbUrl, Ct)).DataAsync();
+        await PostAsync(books, suspense.Id(), books.Sales, "80.00");
+        var classified = await (await books.Admin.GetAsync(tbUrl, Ct)).DataAsync();
+
+        Assert.Equal("SUSPENSE_NOT_ZERO", Assert.Single(unclassified.GetProperty("warnings").EnumerateArray()).GetProperty("code").GetString());
+        Assert.True(unclassified.GetProperty("balanced").GetBoolean());
+        Assert.Equal(0, classified.GetProperty("warnings").GetArrayLength());
+    }
+
     private static async Task PostAsync(JournalBooks books, Guid debit, Guid credit, string amount) =>
         await (await books.Admin.PostAsync(books.JournalsUrl, new
         {

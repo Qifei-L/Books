@@ -34,6 +34,11 @@
 | 2026-10-23 | Administrators may move a Close date back (reopen). |
 | 2026-10-23 | Drafts are visible only to their creator. |
 | 2026-10-23 | Journal lines carry no Party or Item until M4. |
+| 2026-10-23 | Suspense is a system account that keeps a journal balanced while a classification is not decided; the Trial Balance warns while it is not zero. |
+| 2026-10-23 | AI clients (MCP) may save drafts only; a person posts, edits or deletes posted journals. |
+| 2026-10-23 | System purposes are limited by type: Retained Earnings and Opening Balance Clearing are Equity; Rounding Differences is Income or Cost & Expense; Suspense is a balance-sheet account. |
+| 2026-10-23 | An account referenced by any journal line, including drafts, counts as used. Opening balances are entered as journals against Opening Balance Clearing. |
+| 2026-10-23 | Reopening a Close needs no written reason. Prior years' profit shows as a calculated Retained Earnings line; GL Detail balances are signed. |
 | 2026-10-23 | `docs/16-ledger-accounting-policy.md` dropped; 01–06 are the only current documents. |
 
 ## Proposed defaults (accept or change)
@@ -58,4 +63,3 @@
 2. Cambodian adviser review of [Cambodia tax](04-cambodia-tax.md#to-confirm-with-an-adviser).
 3. Is v1 only for our own companies, or open to other teams from the start? Our own companies only lets us simplify invitation and delegation flows.
 4. Which Manager.io modules are actually in use (to finalize the migration scope)?
-5. What is the Suspense account in rule 26, and when may postings go to it?

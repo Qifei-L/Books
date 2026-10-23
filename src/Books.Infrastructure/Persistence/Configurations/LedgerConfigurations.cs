@@ -103,7 +103,7 @@ internal sealed class AccountPurposeConfiguration : IEntityTypeConfiguration<Acc
     public void Configure(EntityTypeBuilder<AccountPurpose> b)
     {
         b.ToTable("account_purposes", t => t.HasCheckConstraint(
-            "ck_account_purposes_purpose", "purpose IN ('retained_earnings', 'opening_balance_clearing', 'rounding_differences')"));
+            "ck_account_purposes_purpose", "purpose IN ('retained_earnings', 'opening_balance_clearing', 'rounding_differences', 'suspense')"));
         b.HasKey(x => new { x.LedgerId, x.Purpose });
         b.HasIndex(x => new { x.LedgerId, x.AccountId });
         b.HasOne<Ledger>().WithMany()

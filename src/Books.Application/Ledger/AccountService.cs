@@ -66,9 +66,10 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
                 {
                     throw BooksProblem.Invalid("The type of an account used by journals cannot change (rule 19).");
                 }
-                if (await db.AccountPurposes.AnyAsync(p => p.AccountId == account.Id && p.Purpose == SystemPurpose.RetainedEarnings, ct))
+                var purposes = await db.AccountPurposes.Where(p => p.AccountId == account.Id).Select(p => p.Purpose).ToListAsync(ct);
+                if (purposes.Any(p => !AccountPurpose.AllowedTypes(p).Contains(type)))
                 {
-                    throw BooksProblem.Invalid("The Retained Earnings account must stay an Equity account.");
+                    throw BooksProblem.Invalid("This account serves a system purpose that does not allow that type.");
                 }
             }
             var group = await FindGroupAsync(ledgerId, command.GroupChanges ? command.GroupId : account.GroupId, ct);

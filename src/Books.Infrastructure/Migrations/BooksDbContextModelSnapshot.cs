@@ -857,7 +857,7 @@ namespace Books.Infrastructure.Migrations
 
                     b.ToTable("account_purposes", null, t =>
                         {
-                            t.HasCheckConstraint("ck_account_purposes_purpose", "purpose IN ('retained_earnings', 'opening_balance_clearing', 'rounding_differences')");
+                            t.HasCheckConstraint("ck_account_purposes_purpose", "purpose IN ('retained_earnings', 'opening_balance_clearing', 'rounding_differences', 'suspense')");
                         });
                 });
 

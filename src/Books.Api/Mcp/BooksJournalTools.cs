@@ -32,8 +32,9 @@ public sealed class BooksJournalTools(PrincipalAccessor principals, JournalServi
         BooksReadTools.RunAsync(async () => await journals.ListAsync(await principals.GetAsync(ct), org_id, ledger_id, ct));
 
     [McpServerTool(Name = "save_journal", Idempotent = true)]
-    [Description("Creates a journal, or replaces one when journal_id and expected_version are given. post=true saves and posts (Save); "
-        + "post=false keeps a draft (Save Draft). If validation fails the result is an error that lists issues; nothing is posted. "
+    [Description("Saves a draft journal, or replaces one of your drafts when journal_id and expected_version are given. "
+        + "AI clients cannot post: send post=false; a person reviews and posts the draft. The result lists any issues that would block posting. "
+        + "Use the Suspense account for amounts whose account is not known yet. "
         + "Always send a new UUID as idempotency_key, and reuse it only to retry the same request.")]
     public Task<CallToolResult> SaveJournal(
         Guid org_id,
@@ -60,7 +61,7 @@ public sealed class BooksJournalTools(PrincipalAccessor principals, JournalServi
         });
 
     [McpServerTool(Name = "delete_journal", Destructive = true, Idempotent = true)]
-    [Description("Deletes a journal while its date is after Close. History is kept.")]
+    [Description("Deletes one of your draft journals. Posted journals can only be deleted by a person.")]
     public Task<CallToolResult> DeleteJournal(Guid org_id, Guid ledger_id, Guid journal_id, Guid idempotency_key, long expected_version, CancellationToken ct = default) =>
         WriteAsync(async () => await journals.DeleteAsync(
             await principals.GetAsync(ct), Meta("delete_journal", idempotency_key, expected_version, new { org_id, ledger_id, journal_id }),
