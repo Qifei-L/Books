@@ -157,7 +157,7 @@ The earlier base-currency-only starting point is a release-scope proposal, not t
 
 Proposed field placement: put Currency in the journal Header. Each line stores its amount in that shared transaction currency and, where conversion is supported, the corresponding ledger base-currency amount. Do not allow an independent Currency override on a line.
 
-Confirmed: one journal uses one shared exchange rate. Users may enter it manually. Rate source is stored as backend information; a manually entered rate has source **Manual**. Rate direction, precision, rounding and account-currency constraints remain design details. Cross-currency transfers need a separate future workflow; they do not relax the one-transaction-currency rule. This does not approve FX implementation. Taxes are configured by people; the system validates and processes according to those settings, without choosing taxes on its own. Tax multiplicity, calculation methods and accounting versus reporting-only treatment are not settled by this rule.
+Confirmed: one journal uses one shared exchange rate. Users may enter it manually. Rate source is stored as backend information; a manually entered rate has source **Manual**. Rate direction, precision and rounding follow the [selected ledger policy](16-ledger-accounting-policy.md); account-currency eligibility remains separately defined. Cross-currency transfers need a separate future workflow; they do not relax the one-transaction-currency rule. This does not approve FX implementation. Taxes are configured by people; the system validates and processes according to those settings, without choosing taxes on its own. Tax multiplicity, calculation methods and accounting versus reporting-only treatment are not settled by this rule.
 
 Keep three concepts separate:
 
@@ -247,7 +247,7 @@ These are proposed acceptance scenarios, not completed tests.
 ## Open Questions
 
 1. Are manual journals enough initially? Do editors also post and reverse, or is approval required?
-2. What amount precision, maximum value and rounding rule are required?
+2. Precision, maximum storage range and rounding are selected in the ledger policy, not pending owner questions. Specialized Qty/unit policies remain module-specific.
 3. Which date restrictions beyond the confirmed Close cutoff are needed? Number format and allocation are engineering tasks within the confirmed unique Journal No. rule.
 4. Who may reopen an administrator-controlled cutoff? Are optional reversals needed?
 5. For future generated journals, should corrections happen only through the source document, or may users edit the journal directly? Decide this before connecting that subsystem.
@@ -258,4 +258,8 @@ These are proposed acceptance scenarios, not completed tests.
 
 ## Confirmed: Foreign-currency revaluation
 
-Use the [FX workflow and design](15-foreign-currency.md) for human-initiated monetary revaluation and subsequent settlement. A normal Journal still has one transaction currency and one shared rate. A generated valuation adjustment changes only base-currency carrying value, with balanced base debits/credits and zero original-currency principal movement. Its explicit system-kind validation is a proposed mechanism, not permission to invent a rate, mix currencies or bypass Close. Revaluation remains posted without automatic next-month reversal. Exact decimal, rounding, date representation and year-end policies remain separate.
+Use the [FX workflow and design](15-foreign-currency.md) for human-initiated monetary revaluation and subsequent settlement. A normal Journal still has one transaction currency and one shared rate. A generated valuation adjustment changes only base-currency carrying value, with balanced base debits/credits and zero original-currency principal movement. Its explicit system-kind validation is a proposed mechanism, not permission to invent a rate, mix currencies or bypass Close. Revaluation remains posted without automatic next-month reversal. Precision, rounding, date representation and year-end policies now follow the selected ledger policy.
+
+## Current Close and accounting baseline
+
+[Ledger accounting policy](16-ledger-accounting-policy.md) selects DateOnly accounting, currency minor-unit validation, explicit transaction/base amounts, deterministic rounding and calculated fiscal carryforward. An administrator's single Close action performs required FX and advances the inclusive cutoff atomically. Missing rates or any failed adjustment leave the official books and cutoff unchanged. This supersedes any earlier implication that Close requires a separate revaluation click. Reopening authority remains open.

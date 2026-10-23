@@ -74,8 +74,10 @@ record JournalLineCandidate(
     Guid? ItemId,
     decimal? Qty,
     Guid? UnitId,
-    decimal? Debit,
-    decimal? Credit,
+    decimal? TransactionDebit,
+    decimal? TransactionCredit,
+    decimal? BaseDebit,
+    decimal? BaseCredit,
     string? Description);
 
 record SaveJournalRequest(
@@ -234,3 +236,9 @@ No provider has been selected, no code or migrations written, and no tests run b
 The [confirmed FX workflow](../15-foreign-currency.md) adds a generated base-only valuation case to the shared posting boundary. The normal transaction DTO above is not yet a complete valuation DTO. Proposed implementation: an explicit validated system kind with exposure currency, zero original principal movement, balanced base movements, rate evidence and stable exposure/run links. Do not fake an exchange rate or relax ordinary single-currency validation. Revalidate as-of versions and Close, serialize incremental adjustment calculation, and commit official links and effects together. Exact typed extension remains design work; no implementation is claimed.
 
 Settlement at a new rate needs the separate proposed representation in that page: normal shared-rate principal plus an atomically linked base-only settlement FX component. The ordinary DTO must not silently accept different line rates to clear prior carrying value. Both official components succeed or fail together.
+
+## Selected ledger and Close contract
+
+Use [Ledger accounting policy](../16-ledger-accounting-policy.md) for numeric(20,4) amounts, numeric(20,10) positive base-per-transaction rate, currency minor-unit validation before database coercion, exact scaled-integer/rational intermediate arithmetic with range-checked decimal storage and MidpointAwayFromZero final derived rounding. Official ordinary lines persist explicit transaction/base debit and credit amounts with exact balance in both currencies. Incomplete candidates may remain nullable; official persisted amounts cannot. The explicit generated FX kind permits zero transaction movement and nonzero balanced base movement; ordinary conversion checks still apply to normal Journals.
+
+Use DateOnly / PostgreSQL date. One administrator Close command coordinates all generated FX Journals, links, cutoff, audit and success receipt in the same database transaction. Candidate/error durability is separate. Posting, Close and relevant master/rate updates share the existing lock order. All generated currency groups succeed together, not per-group partial success. The canonical calculated year-end stream is shared by TB, GL and statements; it is not a second stored ledger or physical closing Journal. No code has been compiled or tested.

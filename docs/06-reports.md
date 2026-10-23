@@ -33,7 +33,7 @@ Use an **As of Date**. Show:
 - Equity: Share Capital, Retained Earnings, Current Year Profit / Loss and Total Equity.
 - Check: Total Assets = Total Liabilities + Total Equity.
 
-Expand a group to its accounts, then open GL Detail. Current Year Profit / Loss is calculated, not an ordinary posting account, and must not duplicate amounts already included in Retained Earnings. Detailed fiscal-year and closing calculations still need design.
+Expand a group to its accounts, then open GL Detail. Current Year Profit / Loss is calculated, not an ordinary posting account, and must not duplicate amounts already included in Retained Earnings. The selected [ledger policy](16-ledger-accounting-policy.md) defines calculated year-end carryforward and the common reconciliation algorithm.
 
 ### Profit & Loss (P&L)
 
@@ -41,7 +41,7 @@ Use a From/To date range. Show **Income (add)** minus **Cost & Expense (subtract
 
 Report totals use the ledger's base currency. Journal list and journal detail remain supporting views, not a fifth summary report.
 
-Cash-flow statements, budgets, tax returns, comparative periods, segment reporting and consolidated accounts remain outside the proposed first release. Approval of these four reports does not approve a year-end processing implementation or every export and presentation option below.
+Cash-flow statements, budgets, tax returns, comparative periods, segment reporting and consolidated accounts remain outside the proposed first release. Year-end processing now has a selected design baseline, not an implemented feature. Export and presentation options below remain proposals.
 
 ## Proposed: One consistent accounting source
 
@@ -82,7 +82,7 @@ The add/subtract groups are not debit/credit labels. Preserve contra movements a
 
 Current Year Profit / Loss is confirmed as a calculated report value, not an ordinary posting account. The accepted Retained Earnings purpose and other system-function mappings are described in [Chart of Accounts](04-chart-of-accounts.md#system-accounts-and-default-accounts). Acceptance of a purpose does not settle year-end calculations or create accounts.
 
-A balance sheet also needs a defined treatment of current-year profit, previous-year results and closing entries. The detailed calculation and year-end transfer rules are not yet approved. Do not add an unexplained “balancing figure,” double-count transferred profit, or label an unbalanced result as final. The layout above is confirmed, but calculation and year-end transfer details must be validated before claiming a complete implementation; TB and GL Detail remain reconciliation references.
+A balance sheet also needs a defined treatment of current-year profit, previous-year results and closing entries. Use the selected calculated carryforward algorithm in the ledger policy, not the earlier unresolved year-end proposal. Do not add an unexplained “balancing figure,” double-count transferred profit, or label an unbalanced result as final. The layout above is confirmed, and the selected carryforward calculation must be tested before claiming a complete implementation; TB and GL Detail remain reconciliation references.
 
 Report classification follows the account type and hierarchy. Fixing the type and parent of used accounts is proposed in [Chart of Accounts](04-chart-of-accounts.md) to avoid silent changes to earlier classifications.
 
@@ -140,12 +140,15 @@ These checks have not been executed. Proposed accounting behavior must be review
 
 ## Open Questions
 
-1. Which fiscal-year and profit-transfer policy should detailed year-end processing support?
-2. Are CSV exports enough, or are Excel and PDF required?
-3. Should zero-balance accounts appear by default? Are comparative periods or saved historical report snapshots needed?
+1. Are CSV exports enough, or are Excel and PDF required?
+2. Should zero-balance accounts appear by default? Are comparative periods or saved historical report snapshots needed?
 
 [Document index](README.md)
 
 ## Foreign-currency revaluation
 
 The confirmed [FX workflow](15-foreign-currency.md) produces official base-currency Journal adjustments without changing original-currency principal. Include each effective adjustment once in TB, GL Detail, Balance Sheet and P&L. Proposed presentation: disclose stale downstream valuations caused by historical edits and link to the affected sources and adjustments; do not present those valuations as reviewed/current or silently patch report totals. Detailed reprocessing and reporting status controls still need design.
+
+## Selected year-end reconciliation
+
+The [canonical ledger calculation](16-ledger-accounting-policy.md#3-opening-balances-and-one-year-end-calculation) supersedes a raw-postings-only formula at fiscal boundaries. TB and GL include clearly labelled calculated carryforward rows; actual posting movements remain distinguishable from derived transfers. P&L excludes virtual transfers. Balance Sheet shows direct Retained Earnings plus prior-year results and current-year profit once. Imports cannot duplicate pre-opening profit or physical closing entries. These are selected design rules; tests remain Not run.

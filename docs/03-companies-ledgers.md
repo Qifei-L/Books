@@ -1,6 +1,6 @@
 # Companies and Ledgers
 
-Status: Review draft. The organization, company and ledger relationship is confirmed. The accounting settings below are proposals, not approved rules. No implementation is authorized by this document.
+Status: Review draft. The organization, company and ledger relationship is confirmed. Accounting settings now follow the delegated [ledger policy baseline](16-ledger-accounting-policy.md); unrelated company/archive proposals remain unconfirmed. No implementation is authorized by this document.
 
 Scope note: Accounting setup, company archiving and the accounting workflows in chapters 04–06 are proposals for a later accounting stage. They do not add endpoints or expand the limited company/ledger operations in the organization foundation's phase-one API contract. Physical deletion remains outside that contract.
 
@@ -26,20 +26,11 @@ Only an organization administrator would create or archive a company or change i
 
 Moving a company between organizations is outside the proposed first release. It must not be treated as an ordinary name change.
 
-## Proposed: Required ledger settings
+## Selected accounting settings
 
-Before the first posting, record:
+Use the [Ledger accounting policy](16-ledger-accounting-policy.md): explicitly selected base currency and timezone, fiscal start month, monthly periods, date-only accounting and a validated opening date. Base currency cannot be changed through ordinary settings after posting. Supported foreign-currency transactions and automatic FX during one-click Close replace the earlier base-only/no-conversion proposal.
 
-- Base currency: the currency used for ledger balances and reports.
-- Financial year: its start date and how accounting periods are defined.
-- Business timezone: used when suggesting today's accounting date.
-- Opening date: when this ledger starts recording activity.
-
-No currency, year start, timezone or decimal precision has been selected. Do not silently use the server's timezone, a calendar year or a two-decimal currency as a business default.
-
-An accounting date is a date chosen for the transaction. It is separate from the time someone entered or posted it. Changing timezone must not move historical accounting dates.
-
-Proposed first-release scope: one base currency per ledger, with no foreign-currency conversion. This still needs approval. If foreign currency is required, specify transaction currency, exchange rates, conversion dates and rounding before developing that workflow.
+Precision, rounding, opening import boundaries and calculated year-end carryforward are defined in that policy. These are design specifications, not running code.
 
 ## Proposed: Changes and historical protection
 
@@ -47,11 +38,11 @@ Allow name corrections, with a history of who changed them. Once a ledger has po
 
 Archive rather than delete a company with accounting history. Archiving would stop new accounting writes but keep authorized historical reading and reporting available. Restoring an archived company would require an administrator. Archive and restore rules still need approval.
 
-Opening balances would be recorded as a balanced opening journal, not typed into report totals. Whether previous periods must also be imported is an open business choice.
+Opening balances would be recorded as a balanced opening journal, not typed into report totals. The first-release opening import boundary and duplicate-history safeguards are selected in the ledger policy; broader historical/midyear imports remain separate scope.
 
 ## Proposed: First-release boundary
 
-Queries and reports operate on one ledger at a time. Cross-company consolidation, intercompany eliminations and automatic currency conversion are not included in this proposal. Any later combined view must define its currency, periods and access rules first.
+Queries and reports operate on one ledger at a time. Cross-company consolidation and intercompany eliminations are not included. Ordinary saved-rate conversion and Close-time monetary revaluation follow the selected ledger policy. Any later combined view must define its currency, periods and access rules first.
 
 No report or ledger setting in these documents is claimed to meet a particular country's statutory, tax or filing requirements.
 
@@ -68,10 +59,9 @@ These are review scenarios, not test results. Accounting scenarios depend on app
 
 ## Open Questions
 
-1. What base currency, financial-year start and business timezone does each ledger need? Are periods monthly?
-2. Is single-currency accounting sufficient for the first release?
-3. Should setup accept opening balances only, or also import historical transactions?
-4. Is the proposed administrator-only setup and archive workflow acceptable?
+Each ledger's actual base currency, fiscal start month and timezone are setup inputs, not unresolved system rules. Broader historical import remains future scope.
+
+1. Is the proposed administrator-only setup and archive workflow acceptable?
 
 [Business workflow diagrams](11-workflows.md)
 [Next: Chart of Accounts](04-chart-of-accounts.md) · [Document index](README.md)

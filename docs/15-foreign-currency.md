@@ -6,14 +6,16 @@ Status: The business behavior marked Confirmed below was approved on 2026-10-23.
 
 A normal Journal has one transaction currency and one shared exchange rate. Save original-currency amounts and their base-currency values. Manual rates retain backend source information labelled Manual. This does not approve mixed-currency ordinary journals.
 
-Daily transactions use their saved conversion information. Revaluation is a separate action initiated by a person, not an automatic daily rewrite of the books.
+Daily transactions use their saved conversion information. A person initiates one-click ledger Close, which performs required revaluation automatically and closes only if all effects succeed. There is no automatic daily rewrite. Manual open-date revaluation may remain optional; it is not a prerequisite for Close.
 
 ## Confirmed: Revaluation workflow
 
-1. Select the ledger, accounting date and rates for the relevant currencies.
-2. Preview eligible foreign-currency monetary balances and the change in their base-currency carrying values.
-3. Confirm the preview to generate linked system Journal adjustments.
-4. Retain the revaluation in the books. The first version does not automatically reverse it next month.
+1. Select the ledger and cutoff date, then click Close once.
+2. Validate the configured dated rates and monetary balances. Missing rates block Close with instructions to complete them.
+3. Generate all required incremental FX adjustments and advance the cutoff atomically. A preview is optional, not a required extra confirmation.
+4. Retain the revaluation in the books; do not automatically reverse it next month.
+
+The [ledger policy](16-ledger-accounting-policy.md) is the current authoritative Close and precision design and supersedes the earlier separate-confirmation workflow.
 
 Revalue explicitly identified monetary exposures, not every account containing a foreign-currency amount. Historical-cost non-monetary items are not included in this workflow. Hedging and consolidation translation are outside this scope.
 
@@ -70,7 +72,7 @@ The preview identifies ledger/date/currency, selected source exposures, rate inp
 - A changed preview is rejected for refresh; never silently post a different amount.
 - A stable operation/request ID and saved result make retries return the same result, subject to current authorization.
 - Two requests with different IDs for the same unchanged target must still not double-post. Serialize calculation and commit against current carrying values.
-- Commit each official adjustment, its source links and success receipt atomically. Proposed batch behavior: currency groups are separate atomic operations with explicit per-group outcomes, not a false all-or-nothing batch.
+- For Close, commit every currency group's adjustments, links, cutoff and success receipt in one transaction. All succeed or none take effect; the earlier separate atomic group proposal is superseded.
 - Retain candidate inputs before attempting official effects. Definite validation failure is Error and has no new effect. A genuinely unknown result is Pending and must be reconciled before retry.
 - Failed edits preserve the previous effective source and posting. External attachments remain outside the database transaction.
 
@@ -100,16 +102,16 @@ All scenarios are **Not run**.
 | Earlier open-period source is edited | Preserve allowed edit behavior; flag dependent valuations/settlements and report review status |
 | Historical-cost non-monetary item selected | Not treated as an eligible monetary exposure by guessing |
 | Timeout after commit | Reconcile saved operation and Journal; no blind second posting |
-| Multi-currency preview | Separate single-currency system Journals with explicit group outcomes |
+| Multi-currency Close | Separate single-currency system Journals, but one atomic official Close outcome |
 | Wrong ledger or revoked access | No preview data disclosure or posting |
 
 ## Still open
 
-- Exact decimal scales, rounding, residual allocation and exchange-rate direction/source contract.
+- Specialized settlement allocation and residual treatment beyond the selected [precision and rate baseline](16-ledger-accounting-policy.md).
 - Monetary classification and eligible exposure selection, including settlement allocation details.
-- Exact accounting date/time and timezone representation, and permission to reopen Close.
+- Permission and controlled workflow to reopen Close; date-only accounting and ledger timezone defaults are selected.
 - Backdated dependency correction and rebuild workflow.
-- Base-currency changes, fiscal years and year-end profit transfer remain separate topics.
+- Exceptional base-currency migration remains future work. Ordinary base-currency immutability, monthly fiscal periods and calculated year-end carryforward are selected in the ledger policy.
 
 These are not newly approved by the FX workflow. No automatic account creation, tax treatment or full IFRS compliance is claimed.
 

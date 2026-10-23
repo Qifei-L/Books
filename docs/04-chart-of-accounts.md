@@ -90,8 +90,7 @@ Equity [Type]
 Income [Type, P&L add]
 ├─ Sales Revenue [Account]
 ├─ Service Revenue [Account]
-├─ Realized FX Gain [System, Future]
-└─ Unrealized FX Gain [System, Future]
+└─ FX Gain [System]
 
 Cost & Expense [Type, P&L subtract]
 ├─ Cost of Sales [Group]
@@ -102,15 +101,14 @@ Cost & Expense [Type, P&L subtract]
 │  └─ Depreciation [Account]
 └─ Other Costs & Expenses [Group]
    ├─ Rounding Differences [System, If needed]
-   ├─ Realized FX Loss [System, Future]
-   └─ Unrealized FX Loss [System, Future]
+   └─ FX Loss [System]
 ```
 
 There is no Other Income group. FX gains appear directly under Income. Asset names are generic and do not assume a particular bank or asset inventory.
 
-This is a planning baseline, not a jurisdiction-specific template or an instruction to create every item. Future control accounts wait for their modules. Tax Payable does not by itself enable a tax-control module. FX placeholders do not approve foreign-currency processing or settle the separate FX line/account design. Rounding Differences is conditional on a real automatic-rounding need.
+This is a planning baseline, not a jurisdiction-specific template or an instruction to create every item. Future control accounts wait for their modules. Tax Payable does not by itself enable a tax-control module. The selected first-release FX policy uses one FX Gain and one FX Loss purpose, without a realized/unrealized split; see [ledger policy](16-ledger-accounting-policy.md). This does not automatically create accounts. Rounding Differences is conditional on a real automatic-rounding need.
 
-Current Year Profit appears only to show report placement. It is calculated, not an account to post to; closing and equity calculations still need review. Suspense's place under Current Assets is part of the accepted baseline, not permission to hide an opposite balance or post an invalid record.
+Current Year Profit appears only to show report placement. It is calculated, not an account to post to; closing and equity calculations use the selected [calculated carryforward policy](16-ledger-accounting-policy.md#3-opening-balances-and-one-year-end-calculation). Suspense's place under Current Assets is part of the accepted baseline, not permission to hide an opposite balance or post an invalid record.
 
 ### Proposed operational safeguards
 
@@ -132,13 +130,13 @@ Accepted System Account purposes:
 
 | System purpose | Accepted purpose and limit |
 | --- | --- |
-| Retained Earnings | Prior-year results within an agreed year-end process. Closing and transfer rules still need review; do not double-count current-year profit. |
+| Retained Earnings | Prior-year results within an agreed year-end process. Use calculated carryforward under the ledger policy; do not double-count current-year profit. |
 | Opening Balance Clearing | Temporary offset while setting up opening balances. It must be zero when setup is complete; it is not a way to conceal an unresolved difference. |
 | Rounding Differences | Only if an approved feature actually needs automatic rounding adjustments. Do not create it by default or use it to hide an unbalanced journal. |
 
-**Current Year Profit** is shown in the accepted tree as a calculated report item, not an ordinary posting account. Its relationship to closing entries and retained earnings still needs an agreed reporting policy.
+**Current Year Profit** is shown in the accepted tree as a calculated report item, not an ordinary posting account. Its relationship to Retained Earnings follows the selected calculated carryforward policy, with no automatic physical clearing Journal.
 
-Conditional future scope: the tree includes realized/unrealized FX and receivable, payable and inventory control placeholders. Their activation depends on the relevant modules. A tax-control mapping remains a further proposal. Their posting and clearing policies need separate review. Account Usage examples do not enable these modules.
+The earlier realized/unrealized FX split is superseded by the single FX Gain/FX Loss pair. Conditional future scope includes receivable, payable and inventory control placeholders. Their activation depends on the relevant modules. A tax-control mapping remains a further proposal. Their posting and clearing policies need separate review. Account Usage examples do not enable these modules.
 
 Account codes, mapping permissions and safeguards for changing a used mapping remain proposals. No accounts or mappings are created by this document.
 

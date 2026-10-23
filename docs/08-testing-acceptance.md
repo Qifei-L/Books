@@ -202,3 +202,7 @@ Candidate release blockers include unauthorized access, normal membership change
 This draft does not authorize tests on real books, real member creation, credential setup, code implementation, merges, or deployment.
 
 [Organization and permission design](design/organizations-permissions.md) · [Back to documentation](README.md)
+
+## Ledger policy and one-click Close acceptance
+
+Execute the [full ledger policy checklist](16-ledger-accounting-policy.md#7-acceptance-checklist) when implementation is authorized. Cover JPY/USD precision, negative midpoint rounding, exact transaction/base balance, fiscal-boundary TB/GL/BS reconciliation, opening imports, EUR revaluation, missing rates, rollback of any currency-group failure, repeated/concurrent Close, prior-date posting races, revoked admin access and separate-ledger isolation. All cases are **Not run**. This extends the design acceptance plan, not evidence of working software.

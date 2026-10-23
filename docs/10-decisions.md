@@ -79,7 +79,7 @@ This approval covers the tree, not automatic account generation, new field requi
 ### Initial System Account purposes
 
 - Identify System Accounts by fixed function mapped to account identity, not by name or code.
-- Retained Earnings holds prior-year accumulated results; the detailed closing policy remains open.
+- Retained Earnings holds prior-year accumulated results; the selected calculated carryforward policy is defined below.
 - Opening Balance Clearing is temporary during opening-balance setup and must be zero when setup is complete.
 - Rounding Differences is enabled only if automatic rounding adjustments are needed.
 - These purposes are accepted, not an instruction to create all accounts initially or to implement them.
@@ -108,7 +108,7 @@ Official accepted source changes and their Journal/accounting effects are atomic
 
 Each journal uses one transaction currency, with the same currency on all lines. No independent line-currency override is allowed. Base-currency conversion amounts are valuations, not mixed transaction currencies.
 
-Header Currency and line transaction/base amounts are proposed field placement. One journal shares one exchange rate. Manual entry is allowed; source is backend information and manually entered rates are labelled Manual. Supported currencies, rate direction/precision, rounding and account-currency constraints remain separate design decisions. Cross-currency transfers require a separate future workflow. No tax or FX implementation is approved.
+Header Currency and line transaction/base amounts are proposed field placement. One journal shares one exchange rate. Manual entry is allowed; source is backend information and manually entered rates are labelled Manual. The ledger policy below selects supported precision, rate direction and rounding; concrete currency setup and account eligibility remain explicit configuration/design. Cross-currency transfers require a separate future workflow. No tax or FX implementation is approved.
 
 ### Post validation and Error
 
@@ -128,7 +128,7 @@ Subsystem Posting Contract is the proposed name for the shared internal integrat
 - Authorized users may change amounts, accounts or dates, or delete posted journals, while the applicable scope is open.
 - People control Close or leaving the scope open; it is not automatic. Close blocks edits and deletion. Authorized people control reopening; it is never automatic.
 - The cutoff is evaluated against accounting date/time, not record creation time. Both the old and new accounting dates must be editable when moving a journal date.
-- Date-versus-instant and timezone interpretation are later design details; do not silently use UTC midnight or force monthly closing.
+- Accounting dates are now DateOnly, with ledger timezone used for defaults and UTC audit timestamps. Close may use any selected date; monthly fiscal periods do not force month-only closing.
 - Successful edits replace the prior accounting effect after validation. A failed edit retains the valid posted version and sends the attempted change to Error review without changing balances.
 - Successful deletion removes the accounting effect and retains an audit record of actor, time and changes.
 - Organization administrators perform Close within their organization. Close uses an inclusive accounting cutoff; new posting, edits and deletion at or before it are blocked. Later accounting dates/times remain open. Reopening permissions remain open. Reversal may be optional; it is not the only allowed correction method.
@@ -153,7 +153,7 @@ Confirm four reports: Trial Balance (TB), General Ledger Detail, Balance Sheet a
 
 GL Detail shows accounting date, Journal No., Reference, Description, debit, credit and running balance, with opening balance and period totals. Balance Sheet uses an As of Date and the Assets / Liabilities / Equity layout in [Reports](06-reports.md), with Assets = Liabilities + Equity. Current Year Profit / Loss is calculated and must not duplicate Retained Earnings. P&L uses a date range and Income minus Cost & Expense. Totals use base currency and the currently effective posted accounting source.
 
-This confirms the report discussion, not all earlier technical drafts. Detailed year-end calculations, export choices and drilldown implementation remain proposals or open decisions. Posted Suspense affects totals; failed Error attempts do not. Failed edits retain the prior valid posting. Pending outcomes require reconciliation.
+This confirms the report discussion, not all earlier technical drafts. Year-end now uses the selected ledger policy; export choices and drilldown implementation remain proposals or open decisions. Posted Suspense affects totals; failed Error attempts do not. Failed edits retain the prior valid posting. Pending outcomes require reconciliation.
 
 ### Technology direction
 
@@ -165,7 +165,7 @@ This replaces the earlier Go proposal. It does not select exact package versions
 
 The accounting chapters now contain a complete starting proposal. Only the policies explicitly listed under Confirmed above are approved; other proposals are not approved merely because they appear in a complete draft.
 
-The earlier Default Accounts/default-usage concepts are superseded by Account Usage; no separate default configuration is adopted. Current Year Profit's non-posting place in the tree is accepted; calculation and closing details remain open. The posted-account versus unposted-review distinction is accepted. A shared or separate page layout remains proposed. Suspense, Error and Pending remain distinct categories, not interchangeable accounting balances. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. FX and AR/AP/Inventory placeholders are accepted in the planning tree. The later FX workflow decision confirms only its stated behavior; automatic activation and full AR/AP/Inventory modules are not approved. A tax-control mapping remains a further proposal. No account or mapping has been created.
+The earlier Default Accounts/default-usage concepts are superseded by Account Usage; no separate default configuration is adopted. Current Year Profit's non-posting place in the tree is accepted; calculation and closing now follow the selected ledger policy below. The posted-account versus unposted-review distinction is accepted. A shared or separate page layout remains proposed. Suspense, Error and Pending remain distinct categories, not interchangeable accounting balances. Uncertain commit outcomes must be reconciled before retrying; errors never justify unbalanced posting. FX and AR/AP/Inventory placeholders are accepted in the planning tree. The later FX workflow decision confirms only its stated behavior; automatic activation and full AR/AP/Inventory modules are not approved. A tax-control mapping remains a further proposal. No account or mapping has been created.
 
 The detailed technical contract proposes .NET/EF Core/Npgsql version families, Keycloak evaluation, authenticated invitation inboxes, transaction and lock rules, API fields, MCP delegation and development stages. Exact implementation details remain under review.
 
@@ -179,10 +179,10 @@ The recommended defaults are proposals. Answer by topic; do not repeat the confi
 
 | Topic | What needs a decision |
 | --- | --- |
-| 1. Ledger setup | Base currency for each company, whether foreign-currency transactions are needed in the first accounting release, fiscal year and business time zone. |
+| 1. Ledger setup | Select each ledger's actual base currency, fiscal start month and timezone during setup. System precision, monthly periods, FX and calculated carryforward now have a selected design baseline. |
 | 2. Accounts | The tree is accepted. Code format and comparison rules; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and concrete business-purpose mappings. |
 | 3. Posting and corrections | Opening balances, who can post and who can reopen. The confirmed administrator Close cutoff and open-journal correction rules do not need reconfirmation. |
-| 4. Reports | The four reports and core layout are confirmed. Agree fiscal-year/profit-transfer details, export needs and optional presentation choices. |
+| 4. Reports | The four reports and core layout are confirmed; calculated carryforward is selected. Export needs and optional presentation choices remain open. |
 
 Read the corresponding chapter for the proposed behavior and a concrete example. Once a choice is accepted, update that chapter and this record together.
 
@@ -263,4 +263,12 @@ Steps 7–9 clarify the drafts and review process. They do not approve new accou
 
 **Proposed technical design:** explicit system Journal kind, one currency per generated Journal, as-of/versioned snapshots, serialization and idempotency receipts, partial-settlement allocation, batch outcomes and stale-result reporting/rebuild mechanics. These still require implementation and tests.
 
-**Not approved by this decision:** exact precision/rounding, base-currency migration, fiscal-year/year-end processing, date/timezone details or reopen authority. Existing independent confirmations remain unchanged. No code, merge or deployment is authorized.
+**Historical scope of this FX decision:** it did not select precision/rounding, fiscal-year/year-end or date/timezone details; the later delegated ledger policy below now selects those. Exceptional base-currency migration and reopen authority remain open. Existing independent confirmations remain unchanged. No code, merge or deployment is authorized.
+
+## Ledger accounting baseline and one-click Close: 2026-10-23
+
+**Confirmed:** administrator-initiated one-click Close automatically performs required FX revaluation and advances the per-ledger cutoff only when the complete operation succeeds. Missing rates require correction, not guessing or a separate compulsory revaluation click. This supersedes the earlier separate preview-confirm and per-currency partial-commit Close proposals.
+
+**Delegated design selections:** [Ledger accounting policy](16-ledger-accounting-policy.md) defines explicit base currency immutable by ordinary edit after posting; monthly periods/fiscal start month; DateOnly cutoff and ledger timezone defaults; currency minor units with MidpointAwayFromZero; exact scaled-integer/rational intermediate calculations with checked decimal amount/rate storage; no hidden imbalance tolerance; calculated year-end carryforward without physical clearing; validated opening imports; and one FX Gain / FX Loss pair rather than realized/unrealized split. These are selected implementation specifications, not verified code.
+
+**Still open:** reopening authority and controlled rebuild workflow, exceptional base-currency migration, specialized settlement/allocation and tax policies. No account creation, migration, merge or deployment occurs through this documentation update.
