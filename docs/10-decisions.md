@@ -63,7 +63,7 @@ This approval covers the tree, not automatic account generation, new field requi
 
 - Add Default Usage to identify the subsystems that use an account by default. It is distinct from Type and System Purpose.
 - Code is user-entered and editable. A stable Account ID preserves journal identity when Code changes.
-- Code uniqueness is awaiting clarification. Neither duplicate Codes nor mandatory uniqueness is confirmed.
+- Code must be unique within the same ledger; different ledgers may use the same Code. Editable Code must still satisfy this rule.
 - Specific subsystem examples and multiple Default Usages per account remain proposals.
 
 ### Initial System Account purposes
@@ -103,7 +103,7 @@ The recommended defaults are proposals. Answer by topic; do not repeat the confi
 | Topic | What needs a decision |
 | --- | --- |
 | 1. Ledger setup | Base currency for each company, whether foreign-currency transactions are needed in the first accounting release, fiscal year and business time zone. |
-| 2. Accounts | The tree is accepted. Code uniqueness clarification and format; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and optional starter templates. |
+| 2. Accounts | The tree is accepted. Code format and comparison rules; whether duplicate names are acceptable; how account changes and deactivation should work; needed system functions and optional starter templates. |
 | 3. Posting and corrections | Opening balances, who can post, period closing/reopening and the correction process for posted entries. |
 | 4. First reports | Which reports are required, date and balance presentation, and whether export is needed initially. |
 
@@ -146,7 +146,7 @@ All decisions above were recorded on 2026-10-23.
 
 12. Accepted the revised account tree with no Other Income group and generic asset names. Conditional activation and operational rules remain separate decisions.
 
-13. Added Default Usage and user-editable Code. Code uniqueness remains pending clarification; existing uniqueness and fixed-Code proposals are not final rules.
+13. Added Default Usage and user-editable Code. Confirmed Code uniqueness within each ledger; the same Code may exist in different ledgers. The earlier fixed-Code-after-use proposal is superseded.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

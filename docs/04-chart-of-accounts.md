@@ -18,11 +18,11 @@ Confirmed: add **Default Usage** to identify which subsystems use an account by 
 
 Proposed examples: Sales, Purchases, Banking, Payroll and Inventory. Allowing several usages on one account is proposed, not yet confirmed. Default Usage does not itself grant access, enable a subsystem or approve automatic postings.
 
-**Open clarification:** whether Code must be unique within a ledger. Do not enforce the earlier unique-Code proposal as a confirmed rule, and do not assume duplicates are approved.
+**Confirmed:** Code must be unique within the same ledger. Different ledgers may use the same Code. Code remains user-editable; edits must satisfy this uniqueness rule.
 
 - Allow user-defined codes. Store codes as text so leading zeroes survive.
-- Code uniqueness, including inactive accounts, is awaiting clarification. Stable Account ID remains distinct regardless of that choice.
-- Proposed: trim surrounding spaces and define comparison rules after Code uniqueness is resolved. Do not silently change an existing code.
+- Enforce Code uniqueness within a ledger. Stable Account ID remains distinct from Code.
+- Proposed: trim surrounding spaces and define exact comparison rules. Do not silently change an existing code.
 - Proposed: show Code and Name together when selecting an account. Duplicate-name rules remain open; stable IDs must distinguish selected accounts.
 - Code reuse rules remain open and must not change historical Account IDs.
 
@@ -163,7 +163,7 @@ Historical reports would use the current account name, with stable identity and 
 
 ## Review checks
 
-- Code behavior follows the uniqueness decision once clarified; do not claim duplicate rejection or acceptance is approved.
+- Reject duplicate Codes within a ledger, including changes that would collide. Allow the same Code in another ledger.
 - A leading-zero code stays unchanged after save and export.
 - Cross-ledger parents, hierarchy loops and postings to a parent are rejected.
 - A name or Code change does not change balances or journal references.
@@ -175,7 +175,7 @@ These scenarios have not been executed. Proposed behavior must be approved befor
 
 ## Open Questions
 
-1. Must Code be unique within a ledger? What code format is needed, and are duplicate names and leaf-only posting suitable?
+1. What Code format and comparison rules are needed, and are duplicate names and leaf-only posting suitable?
 2. Are any additional templates or subledgers needed beyond the accepted planning tree? Conditional future items are not enabled by this approval.
 3. Is fixing a used account's type and parent acceptable? Code remains editable.
 4. Do historical reports need the exact account labels shown when originally issued?
