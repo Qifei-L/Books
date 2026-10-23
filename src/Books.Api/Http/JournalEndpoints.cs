@@ -21,6 +21,12 @@ public static class JournalEndpoints
         journals.MapPost("", async (Guid orgId, Guid ledgerId, JournalRequest body, PrincipalAccessor principals, JournalService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.CreateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, ToDraft(body), body.Post, ct)));
 
+        journals.MapPut("/{journalId:guid}", async (Guid orgId, Guid ledgerId, Guid journalId, JournalRequest body, PrincipalAccessor principals, JournalService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.UpdateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, journalId, ToDraft(body), body.Post, ct)));
+
+        journals.MapDelete("/{journalId:guid}", async (Guid orgId, Guid ledgerId, Guid journalId, PrincipalAccessor principals, JournalService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.DeleteAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), orgId, ledgerId, journalId, ct)));
+
         journals.MapGet("", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, JournalService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.ListAsync(await principals.GetAsync(ct), orgId, ledgerId, ct)));
 

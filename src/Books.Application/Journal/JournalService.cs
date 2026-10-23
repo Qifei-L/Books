@@ -46,6 +46,86 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             return WriteResult.Of(status == RevisionStatus.Error ? 422 : 201, dto, journal.Version);
         }, ct);
 
+    /// <summary>
+    /// Saves a new revision of an existing journal. A valid Save replaces the posted effect exactly once; a failed
+    /// Save adds an Error revision and leaves the previous posting untouched (rule 28). Both the original and the
+    /// new date must be after Close (rule 27). A stale version is rejected, never merged (rule 29).
+    /// </summary>
+    public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid journalId, JournalDraft draft, bool post, CancellationToken ct) =>
+        writes.RunAsync(principal, new WriteRequest(post ? "journal.save" : "journal.save_draft", orgId, meta), async scope =>
+        {
+            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            var journal = await FindForWriteAsync(ledgerId, journalId, principal, ct);
+            scope.CheckVersion(journal.Version);
+            if (!post && journal.IsPosted)
+            {
+                throw BooksProblem.Conflict("JOURNAL_POSTED", "A posted journal cannot go back to draft; save it or delete it.");
+            }
+            var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
+            var effective = journal.EffectiveRevisionId is { } effectiveId ? await db.JournalRevisions.SingleAsync(r => r.Id == effectiveId, ct) : null;
+            var issues = JournalValidator.Validate(draft, await ContextAsync(ledger, draft, effective?.AccountingDate, ct));
+            var status = !post ? RevisionStatus.Draft : issues.Count == 0 ? RevisionStatus.Posted : RevisionStatus.Error;
+
+            await SupersedeAsync(journal, keepEffective: status != RevisionStatus.Posted, scope.Now, ct);
+            var revision = AddRevision(journal, draft, status, issues, principal.UserId, scope.Now);
+            scope.Audit($"journal.{Text.Of(status)}", "journal", journal.Id, new
+            {
+                journal_no = journal.JournalNo,
+                revision_no = revision.RevisionNo,
+                replaced_revision_id = status == RevisionStatus.Posted ? effective?.Id : null,
+                issues = issues.Select(i => i.Code),
+            });
+            await db.SaveChangesAsync(ct);
+            var dto = await LoadAsync(journal.Id, revision.Id, ledger, ct);
+            return WriteResult.Of(status == RevisionStatus.Error ? 422 : 200, dto, journal.Version);
+        }, ct);
+
+    /// <summary>Deletes a journal while its date is after Close (rule 27). History stays as revisions.</summary>
+    public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid journalId, CancellationToken ct) =>
+        writes.RunAsync(principal, new WriteRequest("journal.delete", orgId, meta), async scope =>
+        {
+            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            var journal = await FindForWriteAsync(ledgerId, journalId, principal, ct);
+            scope.CheckVersion(journal.Version);
+            var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
+            var shown = await db.JournalRevisions.SingleAsync(r => r.Id == (journal.EffectiveRevisionId ?? journal.CurrentRevisionId), ct);
+            if (journal.IsPosted && ledger.ClosedThrough is { } closed && shown.AccountingDate <= closed)
+            {
+                throw BooksProblem.Conflict("DATE_CLOSED", $"The books are closed through {closed:yyyy-MM-dd}.");
+            }
+            await SupersedeAsync(journal, keepEffective: false, scope.Now, ct);
+            var revision = AddRevision(journal, new JournalDraft(shown.AccountingDate, [], shown.Reference, shown.Description),
+                RevisionStatus.Deleted, [], principal.UserId, scope.Now);
+            scope.Audit("journal.deleted", "journal", journal.Id, new { journal_no = journal.JournalNo, deleted_revision_id = shown.Id });
+            await db.SaveChangesAsync(ct);
+            return WriteResult.Of(200, new { id = journal.Id, journal_no = journal.JournalNo, deleted = true, revision_no = revision.RevisionNo }, journal.Version);
+        }, ct);
+
+    /// <summary>Unposted journals belong to their creator alone; a deleted journal cannot change again.</summary>
+    private async Task<Journal> FindForWriteAsync(Guid ledgerId, Guid journalId, Principal principal, CancellationToken ct)
+    {
+        var journal = await db.Journals.SingleOrDefaultAsync(j => j.LedgerId == ledgerId && j.Id == journalId, ct);
+        if (journal is null || (!journal.IsPosted && journal.CreatedBy != principal.UserId))
+        {
+            throw BooksProblem.NotFound();
+        }
+        var current = await db.JournalRevisions.AsNoTracking().SingleAsync(r => r.Id == journal.CurrentRevisionId, ct);
+        return current.Status == RevisionStatus.Deleted
+            ? throw BooksProblem.Conflict("JOURNAL_DELETED", "This journal was deleted.")
+            : journal;
+    }
+
+    /// <summary>Marks the current revision superseded, and the effective one too unless the posting must stay.</summary>
+    private async Task SupersedeAsync(Journal journal, bool keepEffective, DateTimeOffset now, CancellationToken ct)
+    {
+        var ids = new[] { journal.CurrentRevisionId, keepEffective ? null : journal.EffectiveRevisionId }
+            .OfType<Guid>().Where(id => !keepEffective || id != journal.EffectiveRevisionId).Distinct().ToList();
+        foreach (var revision in await db.JournalRevisions.Where(r => ids.Contains(r.Id) && r.Status != RevisionStatus.Superseded).ToListAsync(ct))
+        {
+            revision.Supersede(now);
+        }
+    }
+
     /// <summary>Posted journals for anyone with read access; drafts and failed saves only for their creator.</summary>
     public Task<IReadOnlyList<JournalDto>> ListAsync(Principal principal, Guid orgId, Guid ledgerId, CancellationToken ct) =>
         reads.RunAsync<IReadOnlyList<JournalDto>>(principal, orgId, async scope =>
