@@ -6,7 +6,11 @@ These workflows are proposed for a later accounting stage. They do not add journ
 
 ## Confirmed
 
+Read the [System Design Principles](00-system-design-principles.md) for the overall model and the [Journal posting technical proposal](design/journal-posting-contract.md) for typed requests, rule composition and transaction boundaries.
+
 Every journal belongs to one ledger. A member needs edit access to change ledger data; read-only access never permits a write. An organization administrator's access is limited to that organization and does not bypass accounting checks. Members cannot delegate access.
+
+A journal line includes **Qty**. Qty does not automatically calculate money, move stock or select inventory costing. Unit is a proposed companion where a relevant rule needs it; permitted signs, precision and unit policy depend on the intended use.
 
 A journal line includes **Item** (the product or service) separately from **Account** (the accounting destination). Adding Item does not approve the full journal header/line model, inventory processing, quantities, costing or foreign-currency rules.
 
@@ -15,6 +19,14 @@ Confirmed currency boundary: each journal has **one transaction currency** share
 Confirmed Post outcome: validate the date, accounts, currency, amounts and debit/credit balance. Post only when all checks pass. A definite validation failure keeps the draft and specific errors in the **Error review list**, with no balance/report effect and no partial journal lines. Correct it and validate again before resubmission. This is not forced posting to a Suspense Account.
 
 Current organization and ledger authorization still applies. Do not expose another organization's input or errors. A network timeout or lost response is an unknown outcome, not proof of validation failure; reconcile the saved outcome before retrying.
+
+## Confirmed: Combined requirements
+
+Final requirements combine **Journal common rules + subsystem requirements + each line's Account requirements**. They add to each other; one cannot cancel another. A manual journal has common and Account requirements even without a subsystem.
+
+The server is authoritative. Frontend, API and MCP use the same validation meanings. Show relevant line details according to the resolved requirements, not a separate Frontend-only rule. Changing Account or source type can change required details, so the server must recheck before posting.
+
+Proposed implementation: return typed field requirements and a rule-set version for the authorized context. Required fields are a union; allowed values must satisfy all applicable constraints. Incompatible rule definitions produce a configuration conflict, not a weaker fallback. Exact Customer, Supplier, inventory and tax rules still need their own requirements; examples do not approve those modules.
 
 ## Confirmed: Save and Save Draft
 
@@ -26,7 +38,7 @@ For a future posting-capable business subsystem, normal **Save** is one user act
 - Unknown outcome: show **Pending**, reconcile the saved result and do not blindly post again.
 - **Save Draft** is a separate optional action for unfinished work. It saves without posting.
 
-One click does not mean input preservation and every possible posting outcome must share one all-or-nothing transaction. The input must survive a failed posting attempt; effective accounting changes still commit atomically. Current permissions, Close, validation, duplicate prevention and audit rules apply.
+One click does not mean candidate input and every possible outcome share one all-or-nothing transaction. Preserve the candidate before posting. The accepted official source version and its Journal/accounting effects commit atomically together. A failed edit keeps both the old official source and old posting effective; the attempted revision remains available for correction. Current permissions, Close, validation, duplicate prevention and audit rules apply.
 
 **Proposed name and boundary: Subsystem Posting Contract.** A business subsystem prepares its source document and journal proposal; the common accounting service applies the same posting rules and returns the confirmed outcome. This can be an internal application-service call in the same program, not a new HTTP service or separate accounting engine. A Sales document is an example, not approval to implement Sales now. Exact source links, payloads and lifecycle contracts belong to later design.
 
@@ -89,7 +101,7 @@ Ledger editors and organization administrators would be able to prepare, post an
 
 ## Proposed: Journal content
 
-A journal contains its ledger, accounting date, description, stable identity, status and lines. Each line contains an Account and a separate Item field, plus the proposed optional description and debit or credit amount. Keep the creator, creation time, latest editor and posting actor/time separately.
+A journal contains its ledger, accounting date, description, stable identity, status and lines. Each line contains an Account, separate Item and Qty fields, plus the proposed optional description and debit or credit amount. Keep the creator, creation time, latest editor and posting actor/time separately.
 
 Confirmed Item behavior: Item is optional, so a pure adjustment journal need not select one. Selecting Item may suggest a default Account, but the line stores the actual Account selected for that entry. Changing an Item's default later must not rewrite historical lines or their Account references. Optionality, the default-Account suggestion and saving the actual line Account are confirmed. A suggested Account does not bypass account validity or posting checks.
 
@@ -201,10 +213,10 @@ This simplification applies only to **Error**. The confirmed categories remain d
 - **Error:** incomplete, unusable or definitely failed attempts needing attention. Unposted attempts do not affect balances; a failed edit retains the previous effective posted result.
 - **Pending:** unfinished or unknown outcomes. Reconcile whether posting committed before retrying; do not classify a timeout alone as Error.
 
-Keep one business journal: **preserve input first, then attempt posting**. This describes backend ordering, not two required user actions; normal Save performs both, while Save Draft does not post. Error is a filtered worklist, not a copied business journal. Page layout remains proposed. Keep posted Suspense classification issues separate from Error attempts and Pending outcomes; never mix their balances.
+Keep one business journal: **preserve candidate input first, then attempt posting**. This describes backend ordering, not two required user actions; normal Save performs both, while Save Draft does not post. Error is a filtered worklist, not a copied business journal. Page layout remains proposed. Keep posted Suspense classification issues separate from Error attempts and Pending outcomes; never mix their balances.
 
-1. Save the draft and its current content before Post. Saving alone has no balance effect.
-2. On Post, validate and commit only valid, balanced accounting entries. A definite validation failure keeps the saved content and errors for Error review.
+1. Save the candidate draft/revision before Post. Saving candidate input has no balance effect and does not overwrite an existing official source version.
+2. On Post, validate the composed requirements and commit the official source version plus valid, balanced Journal/accounting effects together. A definite validation failure keeps the saved content and errors for Error review.
 3. For an edit of a posted journal, retain the attempted revision separately from the effective posted version. Replace the accounting effect only after the edit succeeds. A failed edit leaves the old posted result intact.
 4. After a timeout or crash, show Pending / Unknown and reconcile the saved outcome before retrying. Do not assume that a lost response means posting failed.
 

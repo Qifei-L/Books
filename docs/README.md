@@ -1,46 +1,63 @@
 # Books documentation
 
-Status: Review drafts. The documents do not authorize development or deployment.
+**Start with [System Design Principles](00-system-design-principles.md).** It explains the system in plain English before the detailed rules and contracts.
 
-## Start here
+Current stage: requirements and system/technical design review. No implementation or deployment is approved. All acceptance scenarios are **Not run**.
 
-Read [Project scope](01-project-scope.md), the [business workflows](11-workflows.md), then the [decision list](10-decisions.md). Confirmed decisions do not need another answer.
+## 1. Start here
 
-Planning → Requirements & Workflow → Technical Design → Development & Testing.
+- [Software development learning guide](development-guide.md): PRD → system design → technical design → tasks → acceptance → operations, using Journal Save as one example. **Guide; not a claim of completed development.**
 
-The business requirements and workflows remain the basis for review. Next, reconcile the existing organization foundation design and prepare its development tasks. See the [foundation reconciliation](design/phase-1-technical-contract.md#foundation-reconciliation-and-task-ownership). Frontend implementation and broader accounting technical expansion remain deferred. Technical drafts are not permission to implement.
+- [Project scope and delivery stages](01-project-scope.md): the product goal, boundaries and staged plan. **Review draft.**
+- [System Design Principles](00-system-design-principles.md): a short overview of the core boundaries and rules. **Confirmed principles plus labelled proposals.**
+- [Decisions and open questions](10-decisions.md): what is settled and what still needs a decision. **Living review record.**
 
-## Business requirements
+Current focus: Journal requirements, common/subsystem/Account validation and the atomic source-to-accounting contract. The organization foundation task list is retained. Frontend implementation and new subsystem development remain out of scope.
 
-1. [Project scope and delivery stages](01-project-scope.md)
-2. [Organizations, members and access](02-organizations-permissions.md)
-3. [Companies and ledgers](03-companies-ledgers.md)
-4. [Chart of accounts](04-chart-of-accounts.md)
-5. [Journals and posting](05-journals-posting.md)
-6. [Balances, activity and reports](06-reports.md)
-7. [API and MCP principles](07-api-conventions.md)
-8. [Testing and acceptance](08-testing-acceptance.md)
-9. [Deployment and operations](09-deployment-operations.md)
-10. [Decisions and open questions](10-decisions.md)
-11. [Business workflows](11-workflows.md): diagrams, not Frontend designs.
+## 2. System design
 
-## Technical proposals
+- [System Design Principles](00-system-design-principles.md): organization/ledger isolation, the shared Journal core, validation, posting outcomes, Close, attachments and report truth.
+- [Journal core contract](05-journals-posting.md#journal-core-contract): module responsibilities and the business effect of Save, edit and delete. **Confirmed rules and proposed source links.**
+- [Posting data flow](design/journal-posting-contract.md#4-durable-candidate-and-atomic-official-effects): candidate input → checks → atomic official source and Journal result. **Technical proposal.**
+- [Business workflows](11-workflows.md): User / Frontend / API responsibilities in compact diagrams. **Mixed confirmed rules and proposed interactions; not Frontend designs.**
 
-- [Organization and access design](design/organizations-permissions.md): the model, authorization and lifecycle rules.
-- [Detailed phase-one contract](design/phase-1-technical-contract.md): the proposed C# implementation, database constraints, HTTP/MCP contracts and development tasks.
+## 3. Business requirements
 
-The C# direction is confirmed. Exact versions, identity provider and other technical details remain proposals. Phase one creates the organization and access foundation, not a working accounting engine.
+- [Organizations, members and access](02-organizations-permissions.md): who belongs to a team and who may do what. **Core policies confirmed; some interactions proposed.**
+- [Companies and ledgers](03-companies-ledgers.md): one ledger per company and accounting setup boundaries. **Relationship confirmed; setup options remain open.**
+- [Chart of accounts](04-chart-of-accounts.md): account tree, fields, System/Default Usage and maintenance rules. **Accepted baseline plus proposed operations.**
+- [Journals and posting](05-journals-posting.md): Qty, combined requirements, Save/Draft, Close and posting outcomes. **Confirmed requirements with labelled remaining choices.**
+- [Reports](06-reports.md): TB, GL Detail, Balance Sheet and P&L. **Report set/core layout confirmed; detailed mechanics proposed.**
+- [API and MCP principles](07-api-conventions.md): shared access checks and consistent request/result behavior. **Principles confirmed; exact contracts proposed.**
+
+## 4. Technical design
+
+- [Journal posting contract](design/journal-posting-contract.md): proposed C# request/result shapes, rule composition, versions, transactions and recovery. **Not implemented or tested.**
+- [Organization and access design](design/organizations-permissions.md): identity, membership, invitation and grant responsibilities. **Design proposal.**
+- [Foundation technical contract](design/phase-1-technical-contract.md): proposed API/data models, constraints, transactions, MCP and development tasks. **Foundation only; not accounting implementation.**
+
+The direction is C#, ASP.NET Core, EF Core and PostgreSQL, without ABP in phase one. Exact versions, identity provider and interoperability remain unverified proposals. Each module keeps its own requirements and technical detail; this index does not combine everything into one large document.
+
+## 5. Testing, acceptance and operations
+
+- [Testing and acceptance](08-testing-acceptance.md): expected scenarios, rule basis and evidence to collect. **All Not run.**
+- [Deployment and operations](09-deployment-operations.md): recovery, attachments, operational responsibilities and release safeguards. **Proposal; no environment or deployment created.**
+
+## 6. Decisions and open questions
+
+- [Confirmed decisions](10-decisions.md#confirmed): accepted business and technology choices. Do not ask for them again.
+- [Short business review list](10-decisions.md#short-business-review-list): genuine owner decisions, not engineering implementation questions.
+- [Technical design tasks](10-decisions.md#technical-design-tasks): engineering-owned mechanisms and validation work.
+
+## Status labels
+
+- **Confirmed:** the owner accepted this rule.
+- **Proposed:** a recommendation, not automatic approval.
+- **Open:** a business, cost or workflow choice is unresolved.
+- **Not run:** no execution evidence exists.
+
+Planning → Requirements & Workflow → System/Technical Design → Development & Testing. A separate instruction is required to start coding; deployment needs separate authorization. Publishing these documents is not implementation approval.
 
 ## Historical material
 
-[Earlier account requirements](requirements.md) is a superseded summary. It records the original discussion without turning its suggestions into approved rules.
-
-## Reading the status labels
-
-- **Confirmed:** the owner accepted this decision.
-- **Proposed:** a recommendation for review.
-- **Open questions:** a business, cost or user-workflow decision is still needed; use the short business review list.
-- **Technical Design Tasks:** engineering owns the details and validation. A proposed mechanism is not a request for the owner to choose its implementation.
-- **Not run:** no test evidence exists yet.
-
-Publishing a draft does not approve its contents. The next steps are review, a separate instruction to code, tests, and a separate release decision.
+[Earlier account requirements](requirements.md) is a superseded summary retained for context, not the current contract.

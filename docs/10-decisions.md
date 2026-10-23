@@ -83,6 +83,12 @@ Call the second category **Error**, replacing the earlier label Suspense Review.
 
 Add Item (product or service) to journal lines, separate from Account. Item is optional, including for pure adjustment journals. Selecting Item may suggest a default Account; the actual Account used is saved on the line. This does not approve the full header/line model, inventory, quantity, costing or FX behavior.
 
+### Journal Qty and requirement composition
+
+Add Qty to JournalLine. The effective requirements are Journal common rules + subsystem requirements + each line's Account requirements. One layer cannot waive another; manual journals still apply common and Account checks. Frontend, API and MCP share the authoritative server validation contract.
+
+Official accepted source changes and their Journal/accounting effects are atomic. Preserve candidate input separately so a failed edit leaves the previous valid source version and posting intact. Typed shapes, rule metadata, lock order and recovery mechanics are proposed in the [Journal posting contract](design/journal-posting-contract.md), not implemented behavior. Unit, Qty signs/precision and specific subsystem or Account policies are not all decided by adding Qty.
+
 ### Journal transaction currency
 
 Each journal uses one transaction currency, with the same currency on all lines. No independent line-currency override is allowed. Base-currency conversion amounts are valuations, not mixed transaction currencies.
@@ -217,6 +223,9 @@ All decisions above were recorded on 2026-10-23.
 19. Confirmed one-click Save with a posting attempt and optional Save Draft. Kept Error, Pending and failed-edit protection; the proposed Subsystem Posting Contract does not add an accounting subsystem to phase one.
 
 20. Consolidated the [Journal core contract](05-journals-posting.md#journal-core-contract): one posting boundary, operation outcomes, source traceability proposals and report reconciliation. Corrected an older check that rejected any already-posted journal; open posted journals use the confirmed validated replacement path. Source lifecycle policy remains open, and no subsystem implementation is approved.
+
+21. Added JournalLine Qty, combined common/subsystem/Account requirements and the atomic official source-plus-Journal boundary. Added a technical proposal and unexecuted acceptance cases; no inventory, Sales, code or production scope was added.
+22. Organized the reading path into system principles, business requirements, technical details and acceptance/decisions. Status labels preserve confirmed rules versus proposed mechanisms.
 
 Steps 7–9 clarify the drafts and review process. They do not approve new accounting policies or start development.
 

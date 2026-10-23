@@ -142,6 +142,20 @@ These cases support the confirmed API principles. They are Not run. Exact format
 - API-05: Check filters, their combinations, default ordering, pages, and totals against the same contract across similar queries.
 - API-06: Test an API or MCP contract change with an existing client. Follow the agreed compatibility or migration plan rather than silently changing field meanings.
 
+## Journal composition and atomic source checks
+
+All cases are **Not run**. Qty and combined requirements are confirmed; exact typed contracts and recovery mechanisms remain proposed. See the [Journal posting design acceptance plan](design/journal-posting-contract.md#7-acceptance-plan-and-readiness).
+
+- JCORE-01: Common, subsystem and Account requirements add together. A manual journal still applies common and Account rules. No client marks a required field optional to bypass validation.
+- JCORE-02: Change Account or rule version after loading the Frontend form. Recompute requirements on the server and return safe line/field errors consistently through API and MCP.
+- JCORE-03: Preserve missing versus zero Qty; do not infer Qty × Price, inventory movement or unit conversion.
+- JCORE-04: On success, commit official source version and effective Journal/accounting result together. On a failed edit, retain both prior official versions and the candidate with errors.
+- JCORE-05: Crash before/after each durable-candidate, official-commit and failure-status boundary. Reconcile Pending without losing saved input or double posting.
+- JCORE-06: Race retries, stale versions, Close or revoked permission. Require one valid ordered result and original/target accounting-date checks.
+- JCORE-07: An unavailable or unauthorized Attachment ID cannot become an accepted source/Journal link. Database rollback must not claim to undo an external upload.
+- JCORE-08: TB, GL Detail and statements reconcile to the same effective posting; failed source revisions and Error records do not alter totals.
+- JCORE-09: Save Draft preserves incomplete input without posting. Saving a candidate change does not unpost or replace the existing valid version.
+
 ## Evidence for each test
 
 Cover service logic, storage constraints, and API/MCP integration where relevant. Inject failures between transaction steps. Check the final data, permissions, history, and audit records together.
