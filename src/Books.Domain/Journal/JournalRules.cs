@@ -2,7 +2,7 @@ namespace Books.Domain.Journals;
 
 /// <summary>What a user or AI submits for a journal, before any accounting effect.</summary>
 /// <param name="Amount">Signed, in base currency: debit positive, credit negative.</param>
-public sealed record DraftLine(Guid AccountId, decimal Amount, string? Description = null, Guid? LineId = null);
+public sealed record DraftLine(Guid AccountId, decimal Amount, string? Description = null, Guid? LineId = null, Guid? PartyId = null);
 
 public sealed record JournalDraft(DateOnly AccountingDate, IReadOnlyList<DraftLine> Lines, string? Reference = null, string? Description = null);
 
@@ -11,11 +11,15 @@ public sealed record AccountFacts(Guid Id, bool Active, bool IsControl);
 
 /// <summary>Everything validation reads, gathered by the caller inside its transaction.</summary>
 /// <param name="PreviousDate">For an edit, the accounting date of the posted revision being replaced.</param>
+/// <param name="Parties">Parties of this ledger named by the draft, with whether each is active.</param>
+/// <param name="FromDocument">True when a document's posting adapter produced the lines (control accounts allowed).</param>
 public sealed record JournalContext(
     int MinorUnits,
     DateOnly? ClosedThrough,
     IReadOnlyDictionary<Guid, AccountFacts> Accounts,
-    DateOnly? PreviousDate = null);
+    DateOnly? PreviousDate = null,
+    IReadOnlyDictionary<Guid, bool>? Parties = null,
+    bool FromDocument = false);
 
 /// <summary>A definite validation failure. <see cref="Line"/> is 1-based when the issue belongs to one line.</summary>
 public sealed record JournalIssue(string Code, string Message, int? Line = null);
@@ -40,6 +44,7 @@ public static class JournalValidator
         new AmountRule(),
         new BalanceRule(),
         new AccountRule(),
+        new PartyRule(),
         new CloseDateRule(),
     ];
 
@@ -119,9 +124,36 @@ public sealed class AccountRule : IJournalRule
             {
                 yield return new JournalIssue("INACTIVE_ACCOUNT", "The account is inactive.", i + 1);
             }
-            else if (account.IsControl)
+            else if (account.IsControl && !context.FromDocument)
             {
                 yield return new JournalIssue("CONTROL_ACCOUNT", "Control accounts are posted only by documents.", i + 1);
+            }
+            else if (account.IsControl && draft.Lines[i].PartyId is null)
+            {
+                yield return new JournalIssue("PARTY_REQUIRED", "Lines on control accounts need a party.", i + 1);
+            }
+        }
+    }
+}
+
+/// <summary>A named party must be an active party of this ledger (rule 23).</summary>
+public sealed class PartyRule : IJournalRule
+{
+    public IEnumerable<JournalIssue> Check(JournalDraft draft, JournalContext context)
+    {
+        for (var i = 0; i < draft.Lines.Count; i++)
+        {
+            if (draft.Lines[i].PartyId is not { } party)
+            {
+                continue;
+            }
+            if (context.Parties is null || !context.Parties.TryGetValue(party, out var active))
+            {
+                yield return new JournalIssue("UNKNOWN_PARTY", "The party is not in this ledger.", i + 1);
+            }
+            else if (!active)
+            {
+                yield return new JournalIssue("INACTIVE_PARTY", "The party is inactive.", i + 1);
             }
         }
     }

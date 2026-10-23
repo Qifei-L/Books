@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Books.Application.Journals;
 
-public sealed record JournalLineDto(Guid LineId, Guid AccountId, string Debit, string Credit, string? Description);
+public sealed record JournalLineDto(Guid LineId, Guid AccountId, Guid? PartyId, string Debit, string Credit, string? Description);
 
 /// <param name="Status">Status of the revision shown: draft, error, posted or deleted.</param>
 public sealed record JournalDto(
@@ -28,7 +28,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             RefuseAgentPosting(principal, post);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
-            var issues = JournalValidator.Validate(draft, await ContextAsync(ledger, draft, null, ct));
+            var issues = RejectUnknownReferences(JournalValidator.Validate(draft, await ContextAsync(ledger, draft, null, ct)));
             var status = !post ? RevisionStatus.Draft : issues.Count == 0 ? RevisionStatus.Posted : RevisionStatus.Error;
 
             var journal = new Journal(Guid.CreateVersion7(), orgId, ledgerId, ledger.IssueJournalNo(), principal.UserId, scope.Now);
@@ -69,7 +69,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             }
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var effective = journal.EffectiveRevisionId is { } effectiveId ? await db.JournalRevisions.SingleAsync(r => r.Id == effectiveId, ct) : null;
-            var issues = JournalValidator.Validate(draft, await ContextAsync(ledger, draft, effective?.AccountingDate, ct));
+            var issues = RejectUnknownReferences(JournalValidator.Validate(draft, await ContextAsync(ledger, draft, effective?.AccountingDate, ct)));
             var status = !post ? RevisionStatus.Draft : issues.Count == 0 ? RevisionStatus.Posted : RevisionStatus.Error;
 
             await SupersedeAsync(journal, keepEffective: status != RevisionStatus.Posted, scope.Now, ct);
@@ -111,6 +111,15 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             await db.SaveChangesAsync(ct);
             return WriteResult.Of(200, new { id = journal.Id, journal_no = journal.JournalNo, deleted = true, revision_no = revision.RevisionNo }, journal.Version);
         }, ct);
+
+    /// <summary>
+    /// An account or party that is not in this ledger cannot be stored even in a draft or Error revision, so the
+    /// request is rejected as invalid input (400) and nothing is saved.
+    /// </summary>
+    private static IReadOnlyList<JournalIssue> RejectUnknownReferences(IReadOnlyList<JournalIssue> issues) =>
+        issues.FirstOrDefault(i => i.Code is "UNKNOWN_ACCOUNT" or "UNKNOWN_PARTY") is { } unknown
+            ? throw BooksProblem.Invalid($"Line {unknown.Line}: {unknown.Message}")
+            : issues;
 
     /// <summary>AI clients prepare drafts; only a person posts, edits or deletes posted journals (owner decision 2026-10-23).</summary>
     private static void RefuseAgentPosting(Principal principal, bool touchesPosting)
@@ -192,7 +201,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         for (var i = 0; i < draft.Lines.Count; i++)
         {
             var line = draft.Lines[i];
-            db.JournalLines.Add(new JournalLine(revision, i + 1, line.LineId ?? Guid.CreateVersion7(), line.AccountId, Trim(line.Description), line.Amount));
+            db.JournalLines.Add(new JournalLine(revision, i + 1, line.LineId ?? Guid.CreateVersion7(), line.AccountId, Trim(line.Description), line.Amount, line.PartyId));
         }
         journal.Apply(revision);
         return revision;
@@ -204,7 +213,11 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         var accounts = await db.Accounts.AsNoTracking()
             .Where(a => a.LedgerId == ledger.Id && accountIds.Contains(a.Id))
             .ToDictionaryAsync(a => a.Id, a => new AccountFacts(a.Id, a.Active, a.IsControl), ct);
-        return new JournalContext(Currencies.Require(ledger.BaseCurrency).MinorUnits, ledger.ClosedThrough, accounts, previousDate);
+        var partyIds = draft.Lines.Where(l => l.PartyId != null).Select(l => l.PartyId!.Value).Distinct().ToList();
+        var parties = await db.Parties.AsNoTracking()
+            .Where(p => p.LedgerId == ledger.Id && partyIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => p.Active, ct);
+        return new JournalContext(Currencies.Require(ledger.BaseCurrency).MinorUnits, ledger.ClosedThrough, accounts, previousDate, parties);
     }
 
     internal async Task<JournalDto> LoadAsync(Guid journalId, Guid revisionId, Ledger ledger, CancellationToken ct)
@@ -217,7 +230,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         return new JournalDto(
             journal.Id, journal.LedgerId, journal.JournalNo, Text.Of(revision.Status), journal.IsPosted, revision.AccountingDate,
             revision.Reference, revision.Description,
-            lines.Select(l => new JournalLineDto(l.LineId, l.AccountId, Format(Math.Max(l.Amount, 0), minor), Format(Math.Max(-l.Amount, 0), minor), l.Description)).ToList(),
+            lines.Select(l => new JournalLineDto(l.LineId, l.AccountId, l.PartyId, Format(Math.Max(l.Amount, 0), minor), Format(Math.Max(-l.Amount, 0), minor), l.Description)).ToList(),
             issues, revision.RevisionNo, journal.CreatedBy, journal.CreatedAt, journal.Version.ToString());
     }
 

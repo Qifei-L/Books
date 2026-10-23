@@ -23,6 +23,7 @@ public interface IBooksDb
     DbSet<Account> Accounts { get; }
     DbSet<AccountGroup> AccountGroups { get; }
     DbSet<AccountPurpose> AccountPurposes { get; }
+    DbSet<Party> Parties { get; }
     DbSet<Journal> Journals { get; }
     DbSet<JournalRevision> JournalRevisions { get; }
     DbSet<JournalLine> JournalLines { get; }

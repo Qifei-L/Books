@@ -125,7 +125,7 @@ public sealed class JournalLine
 {
     private JournalLine() { }
 
-    public JournalLine(JournalRevision revision, int lineNo, Guid lineId, Guid accountId, string? description, decimal amount)
+    public JournalLine(JournalRevision revision, int lineNo, Guid lineId, Guid accountId, string? description, decimal amount, Guid? partyId = null)
     {
         RevisionId = revision.Id;
         OrgId = revision.OrgId;
@@ -135,6 +135,7 @@ public sealed class JournalLine
         AccountId = accountId;
         Description = description;
         Amount = amount;
+        PartyId = partyId;
     }
 
     public Guid RevisionId { get; private set; }
@@ -143,6 +144,10 @@ public sealed class JournalLine
     public Guid OrgId { get; private set; }
     public Guid LedgerId { get; private set; }
     public Guid AccountId { get; private set; }
+
+    /// <summary>Optional counterparty; required on control accounts (rule 18).</summary>
+    public Guid? PartyId { get; private set; }
+
     public string? Description { get; private set; }
     public decimal Amount { get; private set; }
 }

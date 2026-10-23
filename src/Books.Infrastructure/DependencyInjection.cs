@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.AddScoped<ReportService>();
         services.AddScoped<StatementService>();
         services.AddScoped<AccountPurposeService>();
+        services.AddScoped<PartyService>();
         return services;
     }
 
