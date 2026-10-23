@@ -76,7 +76,7 @@ Proposed security exception check, also Not run: Suspend a compromised account t
 
 ## Proposed accounting cases
 
-All cases below are Proposed and Not run. Review the accounting policies first, then finalize the expected results. Examples use synthetic amounts and do not choose a production currency, decimal scale, or rounding rule.
+All cases below are Not run. Cases explicitly labelled Confirmed rule test an accepted policy; other accounting behavior remains Proposed. Review unresolved policies before finalizing their expected results. Examples use synthetic amounts and do not choose a production currency, decimal scale, or rounding rule.
 
 ### Amounts and balanced entries
 
@@ -93,15 +93,18 @@ All cases below are Proposed and Not run. Review the accounting policies first, 
 
 ### Posted history and reversals
 
-- ACC-08: Try to edit or delete a posted entry, including as an administrator. Proposed result: reject direct changes and keep the original entry. Immutability of posted entries still needs policy approval.
+- ACC-08 (Confirmed rule): Edit an open posted journal with current permission. Validate date, account, currency, amounts and balance again. On success replace the prior accounting effect once. On validation failure retain the valid posted version unchanged and place only the attempted change in Suspense review.
 - ACC-09: Reverse a posted entry. Proposed result: create a linked correcting entry, retain the original, and show the combined balance effect correctly. The permitted reversal date, accounts, and permissions remain open.
 - ACC-10: Retry or simultaneously request the same reversal. Proposed result: do not reverse the same effect twice. If multiple partial reversals are later allowed, test their limits under that explicit policy.
 
 ### Closed periods
 
-- ACC-11: Try to post, backdate, edit, or reverse into a closed period. Proposed result: deny changes to that period. The period-close and reopening policies are not confirmed.
+- ACC-11 (Confirmed edit/delete boundary): Attempt to edit or delete a posted journal covered by Close, or move its date from a closed date to an open one. Reject the change without altering accounting effects. Both original and target dates must be editable. New posting and optional reversal restrictions remain proposed; exact Close scope and close/reopen roles remain open.
 - ACC-12: Close a period while another request posts into it. Proposed result: one clear order. A posting cannot slip into the period after closure takes effect.
 - ACC-13: Test the last accounting date of one period and the first date of the next. Proposed result: apply the agreed accounting calendar and business time zone consistently. Do not derive an accounting date from a timestamp without the agreed rule.
+
+- ACC-18 (Confirmed rule): Delete an open posted journal with current permission. Remove its accounting effect once and keep actor/time/change evidence. If permission is revoked or Close takes effect first, reject deletion and retain the original effect.
+- ACC-19 (Confirmed rule; mechanism to design): Race an edit or deletion against Close, or lose the response after a possible commit. Produce one consistent outcome, reconcile uncertain results before retrying and never duplicate effects. Reopening must be an explicit authorized human action.
 
 ### Reports and ledger isolation
 
@@ -112,12 +115,12 @@ All cases below are Proposed and Not run. Review the accounting policies first, 
 
 ## Proposed Suspense checks
 
-The inclusion of incomplete, unusable and errored records in Suspense is confirmed. These handling scenarios remain proposed and **Not run**:
+The inclusion of incomplete, unusable and errored records in Suspense, and the failure-to-Suspense outcome of Post validation, are confirmed. All scenarios are **Not run**; technical mechanisms remain proposed.
 
-- SUS-01: Missing amounts, unbalanced lines or unusable accounts enter the review list without posting or balance changes.
+- SUS-01 (Confirmed outcome): Missing amounts, unbalanced lines or unusable accounts that fail Post validation retain the draft and errors in Suspense review without partial posting or balance/report changes. For a failed edit of an already-posted journal, preserve its previous valid effect and queue the attempted change instead.
 - SUS-02: An otherwise valid, balanced entry with unknown classification can use a Suspense Account only under the agreed posting policy. Its posted balance appears in the accounting source, not as a fabricated review-list total.
 - SUS-03: A response is lost after a possible commit. Show Pending / Unknown, check the saved outcome and retry safely without duplicate posting.
-- SUS-04: Correct a record and validate again. Resolve an already-posted item through the agreed correction process; keep the original and resolution history.
+- SUS-04: Correct a record and validate again. Resolve an already-posted item through the confirmed Close-based edit/delete rules or an adopted optional reversal; keep the original and resolution history.
 - SUS-05: A user without ledger access cannot read the source record, issue count, error details or resolution history. Error records contain no authentication secrets.
 
 ## Proposed API contract checks

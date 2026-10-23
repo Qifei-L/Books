@@ -356,7 +356,7 @@ These choices do not reopen the confirmed roles, seven-day invitation policy, me
 
 ## 6. Prepare and post a journal
 
-Proposed accounting workflow: Manual journals can be saved as drafts and posted only after validation. Editors and administrators would prepare and post them; a separate approval role is not assumed. The permission boundary is confirmed, but the posting roles, states and accounting controls still need approval.
+Proposed accounting workflow: Manual journals can be saved as drafts and posted only after validation. Editors and administrators would prepare and post them; a separate approval role is not assumed. The permission boundary and validation-failure-to-Suspense outcome are confirmed. Detailed posting roles, states and accounting controls remain proposed.
 
 ```mermaid
 flowchart TD
@@ -364,19 +364,26 @@ flowchart TD
     B -->|No| C["Reject the write"]
     B -->|Yes| D["Save or edit draft; no balance effect"]
     D --> E["Request posting"]
-    E --> F{"Current access and all posting checks pass?"}
-    F -->|No| G["Explain the blocker and leave no partial posting"]
-    G --> D
+    E --> P{"Current access still permits posting?"}
+    P -->|No| C
+    P -->|Yes| F{"Date, account, currency, amount and balance checks pass?"}
+    F -->|No| G["Keep draft and errors in Suspense review; no posting"]
+    G --> K["Correct errors and resubmit for validation"]
+    K --> D
     F -->|Yes| H["Post all lines and status together; assign posting reference"]
     H --> I["Include posted lines in ledger balances and reports"]
-    I --> J["Keep posted journal unchanged; corrections use linked journals"]
+    I --> J["Open scope: authorized edit or delete; Close blocks changes"]
 ```
 
 Proposed posting checks include an active company, complete ledger settings, a current draft version, eligible same-ledger accounts, at least two non-zero lines, valid debit or credit amounts, exact balance at agreed precision, and a valid accounting date in an open period. A cancelled or already posted draft cannot post again.
 
-A retry must not create a second posting. An uncertain response requires checking the saved outcome before starting a new request. A reversal would be a separate validated journal; it affects balances only when posted and does not erase the original.
+Confirmed: a definite Post validation failure enters the Suspense review list, not the Suspense Account. It changes neither balances nor reports and creates no partial entries. Current access checks apply to the draft and errors; unauthorized users must not see another ledger's payload.
 
-This proposal does not add accounting endpoints to phase one or settle currency, precision, numbering, period closure or approval policy.
+A retry must not create a second posting. An uncertain response requires checking the saved outcome before starting a new request. A timeout is an unknown outcome, not a failed validation. The Close-based edit/delete policy is confirmed. Under the existing reversal proposal, a reversal would be a separate validated journal; it affects balances only when posted and does not erase the original.
+
+These workflows do not add accounting endpoints to phase one. One transaction currency per journal and the Close-based edit/delete boundary are confirmed; detailed precision, numbering, Close scope and close/reopen roles remain open.
+
+Confirmed posted-journal changes: recheck current access and Close before applying an edit or deletion. Validate edits before replacing prior effects. Failed edits retain the old valid posting and send the attempted change to Suspense review. Deletion removes accounting effects but retains actor/time/change evidence. Both dates must be editable when a journal date changes. No automatic reopening.
 
 See [Journals and posting](05-journals-posting.md).
 
@@ -399,7 +406,7 @@ flowchart TD
     H -->|Yes| J["Recheck access and export the same scope and totals"]
 ```
 
-Drafts and cancelled drafts would not affect balances. Original entries and posted reversals would both count on their own accounting dates. Opening-balance journals would be included once. Pagination would not change totals; an export download would require current access.
+Drafts and cancelled drafts would not affect balances. Effective entries and optional posted reversals would count on their own accounting dates. Successful edits replace previous effects; deleted journals and superseded versions retained for audit must not remain in report totals. Failed edits leave previous effects unchanged. Opening-balance journals would be included once. Pagination would not change totals; an export download would require current access.
 
 Trial balance and account detail are proposed reconciliation references. Balance sheet and income statement layouts remain drafts until account classification, current-year profit and year-end rules are agreed. No statutory or tax compliance is claimed.
 

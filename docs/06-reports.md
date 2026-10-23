@@ -24,9 +24,9 @@ Cash-flow statements, budgets, tax returns, comparative periods, segment reporti
 
 ## Proposed: One consistent accounting source
 
-Use posted journal lines as the source of accounting amounts. Drafts and cancelled drafts do not count. Do not allow users to edit a balance or report total independently of a journal.
+Use the currently effective posted journal lines as the source of accounting amounts. Under the confirmed Close-based policy, a successful edit replaces the old accounting effect and a successful deletion removes it. Do not count superseded or deleted versions merely because they are retained in audit history. A rejected edit leaves the previous valid posted effect unchanged. Drafts and cancelled drafts do not count. Do not allow users to edit a balance or report total independently of a journal.
 
-Both the original journal and any posted reversal count on their respective accounting dates. A “reversed” label does not remove the original amount.
+If optional reversals are adopted, effective original journals and posted reversals count on their respective accounting dates. A “reversed” label does not remove the original amount.
 
 Account name changes must not break references. Inactive accounts still appear when they have relevant balances or movements. Group totals include descendants once only; a parent total must not be added to its children again in the grand total.
 

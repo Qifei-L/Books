@@ -1,6 +1,6 @@
 # Journals and Posting
 
-Status: Review draft. Access boundaries, the agreed Item behavior and one transaction currency per journal are confirmed. The journal workflow and accounting controls below are proposals, not approved accounting policy.
+Status: Review draft. Access boundaries, the agreed Item behavior and one transaction currency per journal, Post validation outcomes and the Close-based edit/delete boundary are confirmed. The journal workflow and accounting controls below are proposals, not approved accounting policy.
 
 These workflows are proposed for a later accounting stage. They do not add journal endpoints or other accounting work to the organization foundation's phase-one API contract.
 
@@ -11,6 +11,10 @@ Every journal belongs to one ledger. A member needs edit access to change ledger
 A journal line includes **Item** (the product or service) separately from **Account** (the accounting destination). Adding Item does not approve the full journal header/line model, inventory processing, quantities, costing or foreign-currency rules.
 
 Confirmed currency boundary: each journal has **one transaction currency** shared by all its lines. Lines cannot select or override their own transaction currency. A converted base-currency amount is a valuation of the same line, not a second transaction currency.
+
+Confirmed Post outcome: validate the date, accounts, currency, amounts and debit/credit balance. Post only when all checks pass. A definite validation failure keeps the draft and specific errors in the **Suspense review list**, with no balance/report effect and no partial journal lines. Correct it and validate again before resubmission. This is not forced posting to a Suspense Account.
+
+Current organization and ledger authorization still applies. Do not expose another organization's input or errors. A network timeout or lost response is an unknown outcome, not proof of validation failure; reconcile the saved outcome before retrying.
 
 ## Proposed: First-release scope
 
@@ -24,18 +28,20 @@ A journal contains its ledger, accounting date, description, stable identity, st
 
 Confirmed Item behavior: Item is optional, so a pure adjustment journal need not select one. Selecting Item may suggest a default Account, but the line stores the actual Account selected for that entry. Changing an Item's default later must not rewrite historical lines or their Account references. Optionality, the default-Account suggestion and saving the actual line Account are confirmed. A suggested Account does not bypass account validity or posting checks.
 
-Use a stable internal identity from creation. Assign an immutable human-readable posting number when posting succeeds. The numbering format and sequence scope remain open; do not promise gap-free numbering before those rules are defined.
+Confirmed numbering: the system generates a unique **Journal No.**; the user enters **Reference**, which may repeat. Keep the stable internal journal identity separate from both. Number format, uniqueness scope, allocation timing and gap behavior remain design details; do not promise gap-free numbering. Journal No. does not make a posted journal immutable before Close.
 
 ## Proposed: Draft and posted states
 
 1. Save a draft. It may be incomplete or unbalanced, with visible validation warnings. It does not affect any ledger balance or posted report.
 2. Edit the draft. Reject a stale edit if another person has changed it; do not silently overwrite their work.
 3. Post after all checks pass. All lines and the posted status become effective together, or nothing does.
-4. Keep the posted journal unchanged. Corrections use linked journals rather than editing or deleting the original.
+4. Apply the confirmed Close boundary: authorized users can edit or delete a posted journal while its applicable scope is not closed. Closed journals cannot be edited or deleted; reopening is a separate authorized human action.
 
 An abandoned draft can be cancelled and retained outside the working list. It has no accounting effect. Posting or editing a cancelled draft is rejected; a new draft can be prepared instead. Hard deletion is outside this proposal.
 
-## Proposed: Posting checks
+## Posting checks
+
+The date/account/currency/amount/balance checks and failure-to-Suspense outcome are confirmed. Detailed eligibility, precision, period and role rules below remain proposed where not separately confirmed.
 
 At the moment of posting, verify:
 
@@ -48,7 +54,7 @@ At the moment of posting, verify:
 - The accounting date is valid, no earlier than the ledger opening date, and belongs to an open accounting period.
 - The journal has not already been posted or cancelled, and the submitted draft version is current.
 
-Do not invent a balancing line or silently round an unbalanced journal into balance. A failed check explains what must be corrected and leaves no partial posting.
+Do not invent a balancing line or silently round an unbalanced journal into balance. A definite validation failure explains what must be corrected and enters Suspense review without posting. Permission failures disclose no unauthorized record or payload and cannot be used to bypass ledger access.
 
 ## Proposed: Amounts and dates
 
@@ -66,22 +72,29 @@ Keep three concepts separate:
 - Entry time: when the draft was created.
 - Posting time: when it became effective in the ledger.
 
-Proposed period control: administrators can close an accounting period; posting into a closed period is blocked for everyone. Reopening requires a recorded reason and an audit trail. Closing a period does not itself create year-end entries or certify compliance. Closing and posting at the same time must have a definite order, never a partial result.
+Confirmed: a person chooses whether to Close or leave the scope open; there is no automatic Close. Close blocks edits and deletion of posted journals. A person with the required authority controls reopening; the system must not reopen automatically. The exact Close scope and the roles allowed to close or reopen remain open, not assumed to be every administrator.
+
+Proposed additional controls: block new postings into a closed scope and record a reason for reopening. Close does not itself create year-end entries or certify compliance. A concurrent Close and journal change must have one definite order, never partial results.
 
 Whether future-dated journals are allowed, how far back users can post, and how year-end closing works remain open. Do not infer them from the timezone or financial-year setting.
 
-## Proposed: Reversals and corrections
+## Confirmed: Edit or delete a posted journal before Close
 
-A reversal creates a separate journal with the original lines' debit and credit sides swapped. It records the original journal, a reason and a chosen accounting date. A replacement journal can then record the corrected entry.
+Posted status alone does not lock a journal.
 
-- Keep the original posted entry and its number unchanged.
-- A reversal draft has no effect until posted. Mark the original as reversed only when the reversal posts successfully.
-- Allow at most one posted full reversal of an original journal. Prevent concurrent duplicate reversals.
-- Include both the original and its posted reversal in reports, each on its own accounting date. Never remove the original from history.
-- If the original period is closed, use an eligible open-period date or follow the approved reopening process. Do not silently change the original date.
-- The same validation applies to reversals. If an original account is inactive, explain the blocker; reactivation requires an authorized, audited change. Do not quietly bypass account controls.
+- With current ledger permission and an open applicable scope, a user may change amounts, accounts or the accounting date, or delete the posted journal.
+- If the applicable scope is closed, reject the edit or deletion. Reopening requires an authorized person's explicit action.
+- On a date change, both the original date and the new date must be in an editable scope. Moving the date cannot bypass Close.
+- Validate an edited journal again. Only a successful edit replaces the previous accounting effect, with no intermediate partial result.
+- If edit validation fails, keep the existing valid posted version and its balances unchanged. Put the attempted change and errors in Suspense review. Do not create a second posted journal or remove the existing effect.
+- A successful deletion removes the journal's accounting effect consistently from balances and reports. Preserve evidence of who changed or deleted what and when, including the previous values.
+- A failed or unauthorized change leaves the original unchanged. Do not expose another ledger's journal or error details.
 
-Partial reversals, editing a reversal and reversing a reversal are outside this proposed first-release workflow. A further error would require an explicitly linked correction journal with a reason.
+The exact close boundary, close/reopen roles and detailed audit, archive and deletion mechanisms require later design. Deletion here is a business operation, not a promise of physical erasure or a particular recovery feature. No real journal may be changed by this document.
+
+## Proposed: Optional reversals
+
+A linked reversal may remain an optional correction workflow, but it is not mandatory for an open posted journal. If adopted, it would be a separate validated journal and have no accounting effect until posted. Preserve links and avoid duplicate reversal effects. Rules for reversal dates, partial reversals and handling edits or deletion of linked journals still need review.
 
 ## Proposed: Retries, concurrency and audit
 
@@ -99,9 +112,9 @@ Confirmed Suspense scope includes incomplete data, unusable accounts and import 
 
 Proposed handling:
 - Valid balanced transactions with unresolved classification may use a Suspense Account under an agreed policy.
-- Invalid records remain unposted in the review list. Do not fill in missing amounts, bypass an inactive account or force a balancing entry just to post.
+- Confirmed: records failing Post validation remain unposted in the Suspense review list with the draft and error reasons. Do not fill in missing amounts, bypass an inactive account or force a balancing entry just to post.
 - If posting may have committed but the response was lost, mark the outcome Pending / Unknown and check the saved result before retrying. Do not assume failure or create a second journal.
-- Corrections trigger fresh validation. Resolve posted items through traceable correcting entries; keep unposted error records out of ledger balances.
+- Corrections trigger fresh validation. Apply the confirmed Close-based edit/delete policy to posted items. Keep failed edit attempts and unposted error records out of ledger balances; preserve the previous valid posted effect.
 - Preserve relevant source and resolution history with current ledger access checks. Error details must not contain authentication secrets or another organization's data.
 
 This is a workflow proposal, not a new implemented journal state or approval of a posting engine.
@@ -123,7 +136,7 @@ These are proposed acceptance scenarios, not completed tests.
 1. Are manual journals enough initially? Do editors also post and reverse, or is approval required?
 2. What amount precision, maximum value and rounding rule are required?
 3. What numbering rule, date restrictions and close/reopen process should apply?
-4. Is full reversal plus a replacement journal sufficient? Are partial reversals needed?
+4. What exact scope does Close protect, and who may close or reopen it? Are optional reversals needed?
 
 [Business workflow diagrams](11-workflows.md)
 [Next: Balances and Reports](06-reports.md) · [Document index](README.md)

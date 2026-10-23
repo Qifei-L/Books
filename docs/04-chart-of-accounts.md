@@ -142,7 +142,7 @@ A shared Suspense entry point is a presentation proposal, not an approved Fronte
 
 Keep the source reference, relevant original values, error reason and resolution history under the same organization and ledger access rules. Retain only the data needed for resolution; never expose another organization's records or store credentials and authentication tokens in error details.
 
-Correction requires validation again. A posted item is resolved through the agreed reclassification or correction process, not by overwriting history. An unposted item may be posted only after validation succeeds. An uncertain outcome must be reconciled before retrying. Detailed clearing rules remain proposed; Suspense is not a way to force invalid transactions into reports.
+Correction requires validation again. A posted item follows the confirmed Close-based journal edit/delete policy or an adopted optional correction workflow. Preserve audit evidence; do not silently overwrite history. An unposted item may be posted only after validation succeeds. An uncertain outcome must be reconciled before retrying. Detailed clearing rules remain proposed; Suspense is not a way to force invalid transactions into reports.
 
 ## Proposed: Create, change and deactivate
 

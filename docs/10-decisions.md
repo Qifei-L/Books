@@ -89,6 +89,26 @@ Each journal uses one transaction currency, with the same currency on all lines.
 
 Header Currency and line transaction/base amounts are proposed field placement. Supported currencies, rate direction/source/precision, rate scope, rounding and account-currency constraints remain separate decisions. Cross-currency transfers require a separate future workflow. No tax or FX implementation is approved.
 
+### Post validation and Suspense
+
+Validate date, accounts, currency, amounts and debit/credit balance before posting. All must pass. Definite validation failures retain the draft and specific errors in Suspense review, not a forced Suspense Account posting. They have no balance/report effect or partial entries. Correct and revalidate before resubmitting.
+
+Unknown outcomes such as a lost response require reconciliation before retrying. Current ledger permissions apply to drafts and error details. Detailed posting eligibility and calculation policies remain subject to their separate status.
+
+### Posted journal changes and Close
+
+- Posted status does not itself prohibit editing or deletion.
+- Authorized users may change amounts, accounts or dates, or delete posted journals, while the applicable scope is open.
+- People control Close or leaving the scope open; it is not automatic. Close blocks edits and deletion. Authorized people control reopening; it is never automatic.
+- Both the old and new dates must be editable when moving a journal date.
+- Successful edits replace the prior accounting effect after validation. A failed edit retains the valid posted version and sends the attempted change to Suspense review without changing balances.
+- Successful deletion removes the accounting effect and retains an audit record of actor, time and changes.
+- Exact Close scope and close/reopen roles remain open. Reversal may be optional; it is not the only allowed correction method.
+
+### Journal numbering
+
+The system generates a unique Journal No. Reference is entered by the user and may repeat. Number format, scope and allocation timing remain design details. No attachment policy or new Document/container model is approved by this decision.
+
 ### Technology direction
 
 Use C#, ASP.NET Core, EF Core and PostgreSQL. API and MCP come first. Do not add ABP in phase one. A modular monolith is the proposed application structure, not an instruction to implement it.
