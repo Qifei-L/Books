@@ -320,6 +320,98 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("identities", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.Company", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_companies");
+
+                    b.HasAlternateKey("OrgId", "Id")
+                        .HasName("ak_companies_org_id_id");
+
+                    b.HasIndex("OrgId", "CreatedAt", "Id")
+                        .HasDatabaseName("ix_companies_org_id_created_at_id");
+
+                    b.ToTable("companies", (string)null);
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.Ledger", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BaseCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("base_currency")
+                        .IsFixedLength();
+
+                    b.Property<DateOnly?>("ClosedThrough")
+                        .HasColumnType("date")
+                        .HasColumnName("closed_through");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("FyStartMonth")
+                        .HasColumnType("integer")
+                        .HasColumnName("fy_start_month");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ledgers");
+
+                    b.HasAlternateKey("OrgId", "CompanyId")
+                        .HasName("ak_ledgers_org_id_company_id");
+
+                    b.HasAlternateKey("OrgId", "Id")
+                        .HasName("ak_ledgers_org_id_id");
+
+                    b.HasIndex("CompanyId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_ledgers_company_id");
+
+                    b.ToTable("ledgers", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ledgers_fy_start_month", "fy_start_month BETWEEN 1 AND 12");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Access.Membership", b =>
                 {
                     b.HasOne("Books.Domain.Access.Organization", null)
@@ -355,6 +447,27 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_identities_users_user_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.Company", b =>
+                {
+                    b.HasOne("Books.Domain.Access.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_companies_organizations_org_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.Ledger", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Company", null)
+                        .WithOne()
+                        .HasForeignKey("Books.Domain.Ledgers.Ledger", "OrgId", "CompanyId")
+                        .HasPrincipalKey("Books.Domain.Ledgers.Company", "OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ledgers_companies");
                 });
 #pragma warning restore 612, 618
         }

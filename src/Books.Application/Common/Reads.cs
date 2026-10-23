@@ -32,6 +32,32 @@ public class OrgScope(IBooksDb db, Principal principal, Organization? organizati
         var member = RequireMember();
         return member.Role == MembershipRole.Admin ? member : throw BooksProblem.Forbidden();
     }
+
+    /// <summary>
+    /// Every ledger the actor can currently use, with the access level. Administrators get edit on all
+    /// ledgers of the organization; members get only their current grants.
+    /// </summary>
+    public async Task<Dictionary<Guid, LedgerAccess>> VisibleLedgersAsync(CancellationToken ct)
+    {
+        var member = RequireMember();
+        if (member.Role == MembershipRole.Admin)
+        {
+            return await db.Ledgers.AsNoTracking().Where(l => l.OrgId == member.OrgId)
+                .ToDictionaryAsync(l => l.Id, _ => LedgerAccess.Edit, ct);
+        }
+        return [];
+    }
+
+    /// <summary>The actor's current access to one ledger of this organization, or null when it has none.</summary>
+    public async Task<LedgerAccess?> LedgerAccessAsync(Guid ledgerId, CancellationToken ct) =>
+        (await VisibleLedgersAsync(ct)).TryGetValue(ledgerId, out var access) ? access : null;
+
+    /// <summary>404 when the ledger is invisible to the actor; 403 when visible but the access is too low.</summary>
+    public async Task<LedgerAccess> RequireLedgerAsync(Guid ledgerId, LedgerAccess needed, CancellationToken ct)
+    {
+        var access = await LedgerAccessAsync(ledgerId, ct) ?? throw BooksProblem.NotFound();
+        return access >= needed ? access : throw BooksProblem.Forbidden();
+    }
 }
 
 /// <summary>

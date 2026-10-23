@@ -39,6 +39,7 @@ app.MapDevTokenEndpoint();
 var api = app.MapGroup("/api/v1").RequireAuthorization();
 api.MapMeEndpoints();
 api.MapOrganizationEndpoints();
+api.MapLedgerEndpoints();
 
 app.Run();
 
