@@ -39,6 +39,12 @@
 | 2026-10-23 | System purposes are limited by type: Retained Earnings and Opening Balance Clearing are Equity; Rounding Differences is Income or Cost & Expense; Suspense is a balance-sheet account. |
 | 2026-10-23 | An account referenced by any journal line, including drafts, counts as used. Opening balances are entered as journals against Opening Balance Clearing. |
 | 2026-10-23 | Statements: no comparative columns in v1; zero-balance accounts are shown; every group level shows a subtotal; a P&L may span fiscal years (the fiscal year only decides profit carried forward); export to Excel only. |
+| 2026-10-23 | Parties: one record for customers and suppliers, with tax ID, contact, email, phone, address and default payment terms; no party code. |
+| 2026-10-23 | Tax codes are maintained by administrators. VAT 0% and non-VAT are separate categories. Tax is rounded per line to the currency's minor unit, half away from zero (0.005 → 0.01). |
+| 2026-10-23 | A line's tax may be overridden without limit, with an optional reason; the calculated and entered amounts are both kept and differences are flagged for the tax module (replaces P8). |
+| 2026-10-23 | One bank account per ledger account. Exchange rates are entered by hand for now. Documents get a system number; the user's own number goes in Reference. |
+| 2026-10-23 | A simple Item list (category, default account, default tax code) in v1, designed to become inventory items later. |
+| 2026-10-23 | Allocations are derived, never stored as balances: open balance = total − allocations; overpayments stay as unallocated amounts on the payment. |
 | 2026-10-23 | Reopening a Close needs no written reason. Prior years' profit shows as a calculated Retained Earnings line; GL Detail balances are signed. |
 | 2026-10-23 | `docs/16-ledger-accounting-policy.md` dropped; 01–06 are the only current documents. |
 

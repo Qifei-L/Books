@@ -109,6 +109,11 @@ internal sealed class PatchFields
             ? v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : throw BooksProblem.Invalid($"{name} must be true or false.")
             : null;
 
+    public int? Int(string name) =>
+        _body.TryGetProperty(name, out var v)
+            ? v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var n) ? n : throw BooksProblem.Invalid($"{name} must be a whole number.")
+            : null;
+
     public Guid? Guid(string name) =>
         !_body.TryGetProperty(name, out var v) || v.ValueKind == JsonValueKind.Null
             ? null

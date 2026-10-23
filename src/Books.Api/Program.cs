@@ -59,6 +59,7 @@ api.MapLedgerEndpoints();
 api.MapMembershipEndpoints();
 api.MapInvitationEndpoints();
 api.MapAccountEndpoints();
+api.MapPartyEndpoints();
 api.MapJournalEndpoints();
 api.MapReportEndpoints();
 

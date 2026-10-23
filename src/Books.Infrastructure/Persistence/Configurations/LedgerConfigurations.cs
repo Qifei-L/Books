@@ -114,3 +114,22 @@ internal sealed class AccountPurposeConfiguration : IEntityTypeConfiguration<Acc
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class PartyConfiguration : IEntityTypeConfiguration<Party>
+{
+    public void Configure(EntityTypeBuilder<Party> b)
+    {
+        b.ToTable("parties");
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Name).HasMaxLength(200);
+        b.Property(x => x.TaxId).HasMaxLength(50);
+        b.Property(x => x.ContactName).HasMaxLength(200);
+        b.Property(x => x.Email).HasMaxLength(320);
+        b.Property(x => x.Phone).HasMaxLength(50);
+        b.Property(x => x.Address).HasMaxLength(500);
+        b.HasAlternateKey(x => new { x.LedgerId, x.Id });
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}

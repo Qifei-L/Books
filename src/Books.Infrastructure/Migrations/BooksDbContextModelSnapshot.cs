@@ -582,6 +582,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("org_id");
 
+                    b.Property<Guid?>("PartyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("party_id");
+
                     b.HasKey("RevisionId", "LineNo")
                         .HasName("pk_journal_lines");
 
@@ -590,6 +594,9 @@ namespace Books.Infrastructure.Migrations
 
                     b.HasIndex("LedgerId", "AccountId")
                         .HasDatabaseName("ix_journal_lines_ledger_id_account_id");
+
+                    b.HasIndex("LedgerId", "PartyId")
+                        .HasDatabaseName("ix_journal_lines_ledger_id_party_id");
 
                     b.HasIndex("LedgerId", "RevisionId")
                         .HasDatabaseName("ix_journal_lines_ledger_id_revision_id");
@@ -961,6 +968,87 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.Party", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean")
+                        .HasColumnName("active");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("address");
+
+                    b.Property<string>("ContactName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("contact_name");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("email");
+
+                    b.Property<bool>("IsCustomer")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_customer");
+
+                    b.Property<bool>("IsSupplier")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_supplier");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<int?>("PaymentTermsDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("payment_terms_days");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("phone");
+
+                    b.Property<string>("TaxId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("tax_id");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_parties");
+
+                    b.HasAlternateKey("LedgerId", "Id")
+                        .HasName("ak_parties_ledger_id_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_parties_org_id_ledger_id");
+
+                    b.ToTable("parties", (string)null);
+                });
+
             modelBuilder.Entity("Books.Domain.Access.Invitation", b =>
                 {
                     b.HasOne("Books.Domain.Access.User", null)
@@ -1088,6 +1176,13 @@ namespace Books.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_journal_lines_accounts_ledger_id_account_id");
 
+                    b.HasOne("Books.Domain.Ledgers.Party", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "PartyId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_journal_lines_parties_ledger_id_party_id");
+
                     b.HasOne("Books.Domain.Journals.JournalRevision", null)
                         .WithMany()
                         .HasForeignKey("LedgerId", "RevisionId")
@@ -1189,6 +1284,17 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_ledgers_companies");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.Party", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_parties_ledgers_org_id_ledger_id");
                 });
 #pragma warning restore 612, 618
         }
