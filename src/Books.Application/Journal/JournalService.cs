@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Books.Application.Journals;
 
-public sealed record JournalLineDto(Guid LineId, Guid AccountId, Guid? PartyId, string Debit, string Credit, string? Description);
+public sealed record JournalLineDto(Guid LineId, Guid AccountId, Guid? PartyId, Guid? ItemId, string? Quantity, string Debit, string Credit, string? Description);
 
 /// <param name="Status">Status of the revision shown: draft, error, posted or deleted.</param>
 public sealed record JournalDto(
@@ -117,7 +117,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
     /// request is rejected as invalid input (400) and nothing is saved.
     /// </summary>
     private static IReadOnlyList<JournalIssue> RejectUnknownReferences(IReadOnlyList<JournalIssue> issues) =>
-        issues.FirstOrDefault(i => i.Code is "UNKNOWN_ACCOUNT" or "UNKNOWN_PARTY") is { } unknown
+        issues.FirstOrDefault(i => i.Code is "UNKNOWN_ACCOUNT" or "UNKNOWN_PARTY" or "UNKNOWN_ITEM") is { } unknown
             ? throw BooksProblem.Invalid($"Line {unknown.Line}: {unknown.Message}")
             : issues;
 
@@ -201,7 +201,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         for (var i = 0; i < draft.Lines.Count; i++)
         {
             var line = draft.Lines[i];
-            db.JournalLines.Add(new JournalLine(revision, i + 1, line.LineId ?? Guid.CreateVersion7(), line.AccountId, Trim(line.Description), line.Amount, line.PartyId));
+            db.JournalLines.Add(new JournalLine(revision, i + 1, line.LineId ?? Guid.CreateVersion7(), line.AccountId, Trim(line.Description), line.Amount, line.PartyId, line.ItemId, line.Quantity));
         }
         journal.Apply(revision);
         return revision;
@@ -217,7 +217,11 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         var parties = await db.Parties.AsNoTracking()
             .Where(p => p.LedgerId == ledger.Id && partyIds.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id, p => p.Active, ct);
-        return new JournalContext(Currencies.Require(ledger.BaseCurrency).MinorUnits, ledger.ClosedThrough, accounts, previousDate, parties);
+        var itemIds = draft.Lines.Where(l => l.ItemId != null).Select(l => l.ItemId!.Value).Distinct().ToList();
+        var items = await db.Items.AsNoTracking()
+            .Where(i => i.LedgerId == ledger.Id && itemIds.Contains(i.Id))
+            .ToDictionaryAsync(i => i.Id, i => i.Active, ct);
+        return new JournalContext(Currencies.Require(ledger.BaseCurrency).MinorUnits, ledger.ClosedThrough, accounts, previousDate, parties, Items: items);
     }
 
     internal async Task<JournalDto> LoadAsync(Guid journalId, Guid revisionId, Ledger ledger, CancellationToken ct)
@@ -230,7 +234,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         return new JournalDto(
             journal.Id, journal.LedgerId, journal.JournalNo, Text.Of(revision.Status), journal.IsPosted, revision.AccountingDate,
             revision.Reference, revision.Description,
-            lines.Select(l => new JournalLineDto(l.LineId, l.AccountId, l.PartyId, Format(Math.Max(l.Amount, 0), minor), Format(Math.Max(-l.Amount, 0), minor), l.Description)).ToList(),
+            lines.Select(l => new JournalLineDto(l.LineId, l.AccountId, l.PartyId, l.ItemId, l.Quantity?.ToString("0.####", CultureInfo.InvariantCulture), Format(Math.Max(l.Amount, 0), minor), Format(Math.Max(-l.Amount, 0), minor), l.Description)).ToList(),
             issues, revision.RevisionNo, journal.CreatedBy, journal.CreatedAt, journal.Version.ToString());
     }
 

@@ -570,6 +570,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("description");
 
+                    b.Property<Guid?>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
                     b.Property<Guid>("LedgerId")
                         .HasColumnType("uuid")
                         .HasColumnName("ledger_id");
@@ -586,6 +590,11 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("party_id");
 
+                    b.Property<decimal?>("Quantity")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("quantity");
+
                     b.HasKey("RevisionId", "LineNo")
                         .HasName("pk_journal_lines");
 
@@ -594,6 +603,9 @@ namespace Books.Infrastructure.Migrations
 
                     b.HasIndex("LedgerId", "AccountId")
                         .HasDatabaseName("ix_journal_lines_ledger_id_account_id");
+
+                    b.HasIndex("LedgerId", "ItemId")
+                        .HasDatabaseName("ix_journal_lines_ledger_id_item_id");
 
                     b.HasIndex("LedgerId", "PartyId")
                         .HasDatabaseName("ix_journal_lines_ledger_id_party_id");
@@ -1010,6 +1022,121 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.Item", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean")
+                        .HasColumnName("active");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("category_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("DefaultAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_account_id");
+
+                    b.Property<Guid?>("DefaultTaxCodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_tax_code_id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("unit");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_items");
+
+                    b.HasAlternateKey("LedgerId", "Id")
+                        .HasName("ak_items_ledger_id_id");
+
+                    b.HasIndex("LedgerId", "CategoryId")
+                        .HasDatabaseName("ix_items_ledger_id_category_id");
+
+                    b.HasIndex("LedgerId", "DefaultAccountId")
+                        .HasDatabaseName("ix_items_ledger_id_default_account_id");
+
+                    b.HasIndex("LedgerId", "DefaultTaxCodeId")
+                        .HasDatabaseName("ix_items_ledger_id_default_tax_code_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_items_org_id_ledger_id");
+
+                    b.ToTable("items", (string)null);
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.ItemCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_item_categories");
+
+                    b.HasAlternateKey("LedgerId", "Id")
+                        .HasName("ak_item_categories_ledger_id_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_item_categories_org_id_ledger_id");
+
+                    b.ToTable("item_categories", (string)null);
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.Ledger", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1357,6 +1484,13 @@ namespace Books.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_journal_lines_accounts_ledger_id_account_id");
 
+                    b.HasOne("Books.Domain.Ledgers.Item", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "ItemId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_journal_lines_items_ledger_id_item_id");
+
                     b.HasOne("Books.Domain.Ledgers.Party", null)
                         .WithMany()
                         .HasForeignKey("LedgerId", "PartyId")
@@ -1483,6 +1617,49 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_exchange_rates_organizations_org_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.Item", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.ItemCategory", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "CategoryId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_items_item_categories_ledger_id_category_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "DefaultAccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_items_accounts_ledger_id_default_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "DefaultTaxCodeId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_items_tax_codes_ledger_id_default_tax_code_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_items_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.ItemCategory", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_categories_ledgers_org_id_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Ledgers.Ledger", b =>

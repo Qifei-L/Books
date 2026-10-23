@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<PartyService>();
         services.AddScoped<TaxCodeService>();
         services.AddScoped<BankService>();
+        services.AddScoped<ItemService>();
         return services;
     }
 

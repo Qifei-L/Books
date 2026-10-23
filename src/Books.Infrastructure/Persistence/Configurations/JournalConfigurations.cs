@@ -67,5 +67,9 @@ internal sealed class JournalLineConfiguration : IEntityTypeConfiguration<Journa
         b.HasOne<Party>().WithMany()
             .HasForeignKey(x => new { x.LedgerId, x.PartyId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
+        b.Property(x => x.Quantity).HasPrecision(20, 4);
+        b.HasOne<Item>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.ItemId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
