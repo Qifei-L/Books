@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
+jobs:
+  build-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - run: dotnet restore Books.slnx
+      - run: dotnet build Books.slnx --no-restore -c Release
+      # Integration tests start PostgreSQL with Testcontainers (Docker is available on the runner).
+      - run: dotnet test --solution Books.slnx --no-build -c Release
+
+  migrations:
+    name: Migrations apply to an empty database
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: books_ci
+          POSTGRES_USER: books
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U books -d books_ci"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      ConnectionStrings__Books: Host=localhost;Port=5432;Database=books_ci;Username=books;Password=ci-only
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - run: dotnet tool restore
+      - name: Model has no changes missing from migrations
+        run: dotnet ef migrations has-pending-model-changes --project src/Books.Infrastructure
+      - name: Apply all migrations to the empty database
+        run: dotnet ef database update --project src/Books.Infrastructure
+      - name: Idempotent script builds
+        run: dotnet ef migrations script --idempotent --project src/Books.Infrastructure --output migrations.sql

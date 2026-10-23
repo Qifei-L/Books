@@ -1,0 +1,3 @@
+* text=auto eol=lf
+src/Books.Infrastructure/Migrations/*.Designer.cs linguist-generated=true
+src/Books.Infrastructure/Migrations/BooksDbContextModelSnapshot.cs linguist-generated=true
