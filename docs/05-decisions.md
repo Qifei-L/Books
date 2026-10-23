@@ -29,6 +29,11 @@
 | 2026-10-23 | Administrators see member emails in the member list. |
 | 2026-10-23 | Removing a member also invalidates pending invitations addressed to them. |
 | 2026-10-23 | Chart structure as in Manager.io: groups are headings that never take postings; accounts sit under groups and do not nest (rule 15). |
+| 2026-10-23 | M2 journals are in the ledger's base currency only; currency and rate columns come with multi-currency later. |
+| 2026-10-23 | Journal No. is a unique system number per ledger; the user's own numbering goes in the free-text Reference, with no fixed format. |
+| 2026-10-23 | Administrators may move a Close date back (reopen). |
+| 2026-10-23 | Drafts are visible only to their creator. |
+| 2026-10-23 | Journal lines carry no Party or Item until M4. |
 | 2026-10-23 | `docs/16-ledger-accounting-policy.md` dropped; 01–06 are the only current documents. |
 
 ## Proposed defaults (accept or change)
@@ -51,6 +56,6 @@
 
 1. Which banks, and what statement export formats do they provide?
 2. Cambodian adviser review of [Cambodia tax](04-cambodia-tax.md#to-confirm-with-an-adviser).
-3. Who may reopen a Close date?
-4. Is v1 only for our own companies, or open to other teams from the start? Our own companies only lets us simplify invitation and delegation flows.
-5. Which Manager.io modules are actually in use (to finalize the migration scope)?
+3. Is v1 only for our own companies, or open to other teams from the start? Our own companies only lets us simplify invitation and delegation flows.
+4. Which Manager.io modules are actually in use (to finalize the migration scope)?
+5. What is the Suspense account in rule 26, and when may postings go to it?
