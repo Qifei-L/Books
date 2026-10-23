@@ -1,4 +1,5 @@
 using Books.Domain.Access;
+using Books.Domain.Documents;
 using Books.Domain.Journals;
 using Books.Domain.Ledgers;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +30,7 @@ public interface IBooksDb
     DbSet<ExchangeRate> ExchangeRates { get; }
     DbSet<ItemCategory> ItemCategories { get; }
     DbSet<Item> Items { get; }
+    DbSet<BankTransfer> BankTransfers { get; }
     DbSet<Journal> Journals { get; }
     DbSet<JournalRevision> JournalRevisions { get; }
     DbSet<JournalLine> JournalLines { get; }

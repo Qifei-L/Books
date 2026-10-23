@@ -13,6 +13,9 @@ internal sealed class JournalConfiguration : IEntityTypeConfiguration<Journal>
         b.ToTable("journals");
         b.Property(x => x.Id).ValueGeneratedNever();
         b.Ignore(x => x.IsPosted);
+        b.Property(x => x.SourceKind).HasMaxLength(50);
+        // A document has at most one journal.
+        b.HasIndex(x => new { x.SourceKind, x.SourceId }).IsUnique().HasFilter("source_kind IS NOT NULL");
         b.HasAlternateKey(x => new { x.LedgerId, x.Id });
         // Rule 24: Journal No. is unique per ledger.
         b.HasIndex(x => new { x.LedgerId, x.JournalNo }).IsUnique();

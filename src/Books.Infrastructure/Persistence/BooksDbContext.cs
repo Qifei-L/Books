@@ -1,5 +1,6 @@
 using Books.Application.Common;
 using Books.Domain.Access;
+using Books.Domain.Documents;
 using Books.Domain.Journals;
 using Books.Domain.Ledgers;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +29,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
     public DbSet<ItemCategory> ItemCategories => Set<ItemCategory>();
     public DbSet<Item> Items => Set<Item>();
+    public DbSet<BankTransfer> BankTransfers => Set<BankTransfer>();
     public DbSet<Journal> Journals => Set<Journal>();
     public DbSet<JournalRevision> JournalRevisions => Set<JournalRevision>();
     public DbSet<JournalLine> JournalLines => Set<JournalLine>();

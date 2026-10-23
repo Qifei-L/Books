@@ -1,5 +1,6 @@
 using Books.Application.Access;
 using Books.Application.Common;
+using Books.Application.Documents;
 using Books.Application.Journals;
 using Books.Application.Ledgers;
 using Books.Application.Reporting;
@@ -35,6 +36,8 @@ public static class DependencyInjection
         services.AddScoped<TaxCodeService>();
         services.AddScoped<BankService>();
         services.AddScoped<ItemService>();
+        services.AddScoped<DocumentPosting>();
+        services.AddScoped<BankTransferService>();
         return services;
     }
 
