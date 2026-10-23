@@ -629,6 +629,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("invoice_no");
 
+                    b.Property<bool>("IsDebitNote")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_debit_note");
+
                     b.Property<string>("Issues")
                         .HasColumnType("jsonb")
                         .HasColumnName("issues");
@@ -644,6 +648,10 @@ namespace Books.Infrastructure.Migrations
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid")
                         .HasColumnName("org_id");
+
+                    b.Property<Guid?>("OriginalInvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("original_invoice_id");
 
                     b.Property<Guid>("PayableAccountId")
                         .HasColumnType("uuid")
@@ -677,9 +685,8 @@ namespace Books.Infrastructure.Migrations
                     b.HasIndex("CreatedBy")
                         .HasDatabaseName("ix_purchase_invoices_created_by");
 
-                    b.HasIndex("LedgerId", "InvoiceNo")
-                        .IsUnique()
-                        .HasDatabaseName("ix_purchase_invoices_ledger_id_invoice_no");
+                    b.HasIndex("OriginalInvoiceId")
+                        .HasDatabaseName("ix_purchase_invoices_original_invoice_id");
 
                     b.HasIndex("LedgerId", "JournalId")
                         .HasDatabaseName("ix_purchase_invoices_ledger_id_journal_id");
@@ -692,6 +699,10 @@ namespace Books.Infrastructure.Migrations
 
                     b.HasIndex("OrgId", "LedgerId")
                         .HasDatabaseName("ix_purchase_invoices_org_id_ledger_id");
+
+                    b.HasIndex("LedgerId", "IsDebitNote", "InvoiceNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_purchase_invoices_ledger_id_is_debit_note_invoice_no");
 
                     b.ToTable("purchase_invoices", null, t =>
                         {
@@ -1881,6 +1892,12 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_purchase_invoices_users_created_by");
+
+                    b.HasOne("Books.Domain.Documents.PurchaseInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("OriginalInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_purchase_invoices_purchase_invoices_original_invoice_id");
 
                     b.HasOne("Books.Domain.Journals.Journal", null)
                         .WithMany()
