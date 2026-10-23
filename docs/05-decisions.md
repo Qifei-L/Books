@@ -38,6 +38,7 @@
 | 2026-10-23 | AI clients (MCP) may save drafts only; a person posts, edits or deletes posted journals. |
 | 2026-10-23 | System purposes are limited by type: Retained Earnings and Opening Balance Clearing are Equity; Rounding Differences is Income or Cost & Expense; Suspense is a balance-sheet account. |
 | 2026-10-23 | An account referenced by any journal line, including drafts, counts as used. Opening balances are entered as journals against Opening Balance Clearing. |
+| 2026-10-23 | Statements: no comparative columns in v1; zero-balance accounts are shown; every group level shows a subtotal; a P&L may span fiscal years (the fiscal year only decides profit carried forward); export to Excel only. |
 | 2026-10-23 | Reopening a Close needs no written reason. Prior years' profit shows as a calculated Retained Earnings line; GL Detail balances are signed. |
 | 2026-10-23 | `docs/16-ledger-accounting-policy.md` dropped; 01–06 are the only current documents. |
 
