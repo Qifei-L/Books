@@ -92,12 +92,12 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
             if (Closing(SystemPurpose.OpeningBalanceClearing) is var clearing && clearing != 0)
             {
                 warnings.Add(new ReportWarning("OPENING_BALANCE_CLEARING_NOT_ZERO",
-                    $"Opening Balance Clearing should be zero after setup; it is {Format(clearing, minor)}."));
+                    $"Opening Balance Clearing should be zero after setup; it is {Format(Math.Abs(clearing), minor)} {(clearing > 0 ? "Dr" : "Cr")}."));
             }
             if (Closing(SystemPurpose.Suspense) is var suspense && suspense != 0)
             {
                 warnings.Add(new ReportWarning("SUSPENSE_NOT_ZERO",
-                    $"Suspense holds {Format(suspense, minor)} that still needs to be classified."));
+                    $"Suspense holds {Format(Math.Abs(suspense), minor)} {(suspense > 0 ? "Dr" : "Cr")} that still needs to be classified."));
             }
             return new TrialBalance(from, to, ledger.BaseCurrency, rows, totals, balanced, warnings);
         }, ct);
