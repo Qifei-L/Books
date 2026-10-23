@@ -21,6 +21,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<Ledger> Ledgers => Set<Ledger>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<AccountGroup> AccountGroups => Set<AccountGroup>();
+    public DbSet<AccountPurpose> AccountPurposes => Set<AccountPurpose>();
     public DbSet<Journal> Journals => Set<Journal>();
     public DbSet<JournalRevision> JournalRevisions => Set<JournalRevision>();
     public DbSet<JournalLine> JournalLines => Set<JournalLine>();
@@ -41,6 +42,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
         configurationBuilder.Properties<AccountType>().HaveConversion<LowerCaseEnumConverter<AccountType>>().HaveMaxLength(20);
         configurationBuilder.Properties<JournalKind>().HaveConversion<LowerCaseEnumConverter<JournalKind>>().HaveMaxLength(20);
         configurationBuilder.Properties<RevisionStatus>().HaveConversion<LowerCaseEnumConverter<RevisionStatus>>().HaveMaxLength(20);
+        configurationBuilder.Properties<SystemPurpose>().HaveConversion<LowerCaseEnumConverter<SystemPurpose>>().HaveMaxLength(40);
         configurationBuilder.Properties<MembershipStatus>().HaveConversion<LowerCaseEnumConverter<MembershipStatus>>().HaveMaxLength(20);
     }
 }

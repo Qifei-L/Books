@@ -8,7 +8,7 @@ namespace Books.Application.Ledgers;
 
 public sealed record AccountDto(
     Guid Id, Guid LedgerId, Guid? GroupId, string Code, string Name, string Type, bool IsControl, bool IsBank,
-    string? Currency, bool Active, bool Postable, string Version);
+    string? Currency, bool Active, bool Postable, bool Used, IReadOnlyList<string> Purposes, string Version);
 
 /// <param name="GroupChanges">True when group_id was sent; GroupId null then means no group.</param>
 public sealed record UpdateAccount(string? Code, string? Name, AccountType? Type, bool? Active, bool GroupChanges, Guid? GroupId);
@@ -60,6 +60,17 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
             scope.CheckVersion(account.Version);
             var before = (await LoadAsync(ledgerId, account.Id, ct)).Single();
 
+            if (command.Type is { } type && type != account.Type)
+            {
+                if (await IsUsedAsync(account.Id, ct))
+                {
+                    throw BooksProblem.Invalid("The type of an account used by journals cannot change (rule 19).");
+                }
+                if (await db.AccountPurposes.AnyAsync(p => p.AccountId == account.Id && p.Purpose == SystemPurpose.RetainedEarnings, ct))
+                {
+                    throw BooksProblem.Invalid("The Retained Earnings account must stay an Equity account.");
+                }
+            }
             var group = await FindGroupAsync(ledgerId, command.GroupChanges ? command.GroupId : account.GroupId, ct);
             account.Update(command.Code, command.Name, command.Type, command.Active, command.GroupChanges, group);
             await EnsureCodeFreeAsync(ledgerId, account.Code, account.Id, ct);
@@ -80,11 +91,22 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var account = await db.Accounts.SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Id == accountId, ct) ?? throw BooksProblem.NotFound();
             scope.CheckVersion(account.Version);
+            if (await IsUsedAsync(account.Id, ct))
+            {
+                throw BooksProblem.Conflict("ACCOUNT_IN_USE", "Journals use this account; deactivate it instead (rule 19).");
+            }
+            if (await db.AccountPurposes.AnyAsync(p => p.AccountId == account.Id, ct))
+            {
+                throw BooksProblem.Conflict("ACCOUNT_HAS_PURPOSE", "Assign its system purpose to another account first.");
+            }
             var before = (await LoadAsync(ledgerId, account.Id, ct)).Single();
             db.Accounts.Remove(account);
             scope.Audit("account.deleted", "account", account.Id, new { before });
             return WriteResult.Of(200, new { id = account.Id, deleted = true });
         }, ct);
+
+    /// <summary>Used = referenced by any journal line, in any revision, including drafts.</summary>
+    private Task<bool> IsUsedAsync(Guid accountId, CancellationToken ct) => db.JournalLines.AnyAsync(l => l.AccountId == accountId, ct);
 
     private async Task<AccountGroup?> FindGroupAsync(Guid ledgerId, Guid? groupId, CancellationToken ct) =>
         groupId is { } id
@@ -104,12 +126,15 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
 
     private async Task<IReadOnlyList<AccountDto>> LoadAsync(Guid ledgerId, Guid? accountId, CancellationToken ct)
     {
-        var accounts = await db.Accounts.AsNoTracking()
+        var rows = await db.Accounts.AsNoTracking()
             .Where(a => a.LedgerId == ledgerId && (accountId == null || a.Id == accountId))
             .OrderBy(a => a.Code)
+            .Select(a => new { a, Used = db.JournalLines.Any(l => l.AccountId == a.Id) })
             .ToListAsync(ct);
-        return accounts.Select(a => new AccountDto(
-            a.Id, a.LedgerId, a.GroupId, a.Code, a.Name, Text.Of(a.Type), a.IsControl, a.IsBank, a.Currency,
-            a.Active, a.Postable, a.Version.ToString())).ToList();
+        var purposes = (await db.AccountPurposes.AsNoTracking().Where(p => p.LedgerId == ledgerId).ToListAsync(ct))
+            .ToLookup(p => p.AccountId, p => Text.Of(p.Purpose));
+        return rows.Select(x => new AccountDto(
+            x.a.Id, x.a.LedgerId, x.a.GroupId, x.a.Code, x.a.Name, Text.Of(x.a.Type), x.a.IsControl, x.a.IsBank, x.a.Currency,
+            x.a.Active, x.a.Postable, x.Used, purposes[x.a.Id].ToList(), x.a.Version.ToString())).ToList();
     }
 }

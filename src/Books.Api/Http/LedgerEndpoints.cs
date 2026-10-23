@@ -14,6 +14,8 @@ public static class LedgerEndpoints
     /// <param name="ClosedThrough">Inclusive Close date, or null to clear it.</param>
     public sealed record CloseRequest(DateOnly? ClosedThrough);
 
+    public sealed record PurposeRequest(Guid? AccountId);
+
     public static void MapLedgerEndpoints(this RouteGroupBuilder api)
     {
         var org = api.MapGroup("/organizations/{orgId:guid}");
@@ -43,10 +45,24 @@ public static class LedgerEndpoints
         org.MapPut("/ledgers/{ledgerId:guid}/close", async (Guid orgId, Guid ledgerId, CloseRequest body, PrincipalAccessor principals, LedgerSettingsService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.CloseAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, body.ClosedThrough, ct)));
 
+        org.MapGet("/ledgers/{ledgerId:guid}/purposes", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, AccountPurposeService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.ListAsync(await principals.GetAsync(ct), orgId, ledgerId, ct)));
+
+        org.MapPut("/ledgers/{ledgerId:guid}/purposes/{purpose}", async (Guid orgId, Guid ledgerId, string purpose, PurposeRequest body, PrincipalAccessor principals, AccountPurposeService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.AssignAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, ParsePurpose(purpose), body.AccountId, ct)));
+
         org.MapGet("/ledgers/{ledgerId:guid}", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, CompanyService service, HttpContext http, CancellationToken ct) =>
         {
             var ledger = await service.GetLedgerAsync(await principals.GetAsync(ct), orgId, ledgerId, ct);
             return Envelope.Ok(http, ledger, ledger.Version);
         });
     }
+
+    private static Books.Domain.Ledgers.SystemPurpose ParsePurpose(string purpose) => purpose switch
+    {
+        "retained_earnings" => Books.Domain.Ledgers.SystemPurpose.RetainedEarnings,
+        "opening_balance_clearing" => Books.Domain.Ledgers.SystemPurpose.OpeningBalanceClearing,
+        "rounding_differences" => Books.Domain.Ledgers.SystemPurpose.RoundingDifferences,
+        _ => throw Books.Application.Common.BooksProblem.NotFound(),
+    };
 }

@@ -13,7 +13,11 @@ public sealed record TrialBalanceRow(
 
 public sealed record TrialBalanceTotals(string OpeningDebit, string OpeningCredit, string PeriodDebit, string PeriodCredit, string ClosingDebit, string ClosingCredit);
 
-public sealed record TrialBalance(DateOnly From, DateOnly To, string Currency, IReadOnlyList<TrialBalanceRow> Rows, TrialBalanceTotals Totals, bool Balanced);
+public sealed record ReportWarning(string Code, string Message);
+
+public sealed record TrialBalance(
+    DateOnly From, DateOnly To, string Currency, IReadOnlyList<TrialBalanceRow> Rows, TrialBalanceTotals Totals, bool Balanced,
+    IReadOnlyList<ReportWarning> Warnings);
 
 public sealed record GlLine(DateOnly Date, Guid JournalId, long JournalNo, string? Reference, string? Description, string Debit, string Credit, string Balance);
 
@@ -79,7 +83,16 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
                 Format(openingSides.D, minor), Format(openingSides.C, minor), Format(period.Debit, minor), Format(period.Credit, minor),
                 Format(closingSides.D, minor), Format(closingSides.C, minor));
             var balanced = opening == 0 && period.Debit == period.Credit && closingSides.D == closingSides.C;
-            return new TrialBalance(from, to, ledger.BaseCurrency, rows, totals, balanced);
+            var warnings = new List<ReportWarning>();
+            var clearing = await db.AccountPurposes.AsNoTracking()
+                .Where(p => p.LedgerId == ledgerId && p.Purpose == SystemPurpose.OpeningBalanceClearing).Select(p => (Guid?)p.AccountId).SingleOrDefaultAsync(ct);
+            if (clearing is { } clearingId && movements.SingleOrDefault(m => m.AccountId == clearingId) is { } m
+                && m.Opening + m.PeriodDebit - m.PeriodCredit is var left && left != 0)
+            {
+                warnings.Add(new ReportWarning("OPENING_BALANCE_CLEARING_NOT_ZERO",
+                    $"Opening Balance Clearing should be zero after setup; it is {Format(left, minor)}."));
+            }
+            return new TrialBalance(from, to, ledger.BaseCurrency, rows, totals, balanced, warnings);
         }, ct);
 
     public Task<GlDetail> GlDetailAsync(Principal principal, Guid orgId, Guid ledgerId, Guid accountId, DateOnly from, DateOnly to, CancellationToken ct) =>

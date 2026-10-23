@@ -97,3 +97,20 @@ internal sealed class AccountGroupConfiguration : IEntityTypeConfiguration<Accou
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class AccountPurposeConfiguration : IEntityTypeConfiguration<AccountPurpose>
+{
+    public void Configure(EntityTypeBuilder<AccountPurpose> b)
+    {
+        b.ToTable("account_purposes", t => t.HasCheckConstraint(
+            "ck_account_purposes_purpose", "purpose IN ('retained_earnings', 'opening_balance_clearing', 'rounding_differences')"));
+        b.HasKey(x => new { x.LedgerId, x.Purpose });
+        b.HasIndex(x => new { x.LedgerId, x.AccountId });
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.AccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
