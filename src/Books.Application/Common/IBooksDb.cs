@@ -19,6 +19,7 @@ public interface IBooksDb
     DbSet<IdempotencyRecord> IdempotencyRecords { get; }
     DbSet<Company> Companies { get; }
     DbSet<Ledger> Ledgers { get; }
+    DbSet<Account> Accounts { get; }
     DatabaseFacade Database { get; }
     ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

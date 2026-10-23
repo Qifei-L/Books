@@ -42,6 +42,7 @@ api.MapOrganizationEndpoints();
 api.MapLedgerEndpoints();
 api.MapMembershipEndpoints();
 api.MapInvitationEndpoints();
+api.MapAccountEndpoints();
 
 app.Run();
 

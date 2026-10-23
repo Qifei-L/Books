@@ -18,6 +18,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<Ledger> Ledgers => Set<Ledger>();
+    public DbSet<Account> Accounts => Set<Account>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,6 +33,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
         configurationBuilder.Properties<MembershipRole>().HaveConversion<LowerCaseEnumConverter<MembershipRole>>().HaveMaxLength(20);
         configurationBuilder.Properties<LedgerAccess>().HaveConversion<LowerCaseEnumConverter<LedgerAccess>>().HaveMaxLength(10);
         configurationBuilder.Properties<InvitationStatus>().HaveConversion<LowerCaseEnumConverter<InvitationStatus>>().HaveMaxLength(20);
+        configurationBuilder.Properties<AccountType>().HaveConversion<LowerCaseEnumConverter<AccountType>>().HaveMaxLength(20);
         configurationBuilder.Properties<MembershipStatus>().HaveConversion<LowerCaseEnumConverter<MembershipStatus>>().HaveMaxLength(20);
     }
 }
