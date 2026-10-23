@@ -58,7 +58,7 @@ public sealed class AuthenticationTests(TestHost host)
         var second = await client.GetFromJsonAsync<JsonElement>("/api/v1/me", Ct);
 
         Assert.Equal(first.GetProperty("data").GetProperty("id").GetString(), second.GetProperty("data").GetProperty("id").GetString());
-        Assert.Equal("Ann@example.test", first.GetProperty("data").GetProperty("email").GetString());
+        Assert.Equal("ann@example.test", first.GetProperty("data").GetProperty("email").GetString());
         await using var db = host.CreateDbContext();
         Assert.Equal(1, await db.Identities.CountAsync(i => i.Subject == subject, Ct));
     }

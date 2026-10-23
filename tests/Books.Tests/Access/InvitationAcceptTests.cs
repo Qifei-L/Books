@@ -133,6 +133,20 @@ public sealed class InvitationAcceptTests(TestHost host)
         Assert.Equal(accept.Result.IsSuccessStatusCode, joined);
     }
 
+    [Fact]
+    public async Task Emails_match_ignoring_case_and_administrators_see_member_emails()
+    {
+        var (admin, orgId) = await OrgAsync();
+        var subject = Ids.Subject("case");
+        using var member = host.Client(subject, $"{subject}@example.test");
+        var invitation = await InvitationTests.InviteAsync(admin, orgId, $"{subject.ToUpperInvariant()}@EXAMPLE.TEST", "member");
+
+        await (await member.PostAsync(AcceptUrl(invitation.Id()), new { }, ifMatch: 1)).DataAsync();
+
+        var members = await (await admin.GetAsync($"/api/v1/organizations/{orgId}/memberships", Ct)).DataAsync();
+        Assert.Contains(members.EnumerateArray(), m => m.GetProperty("email").GetString() == $"{subject}@example.test");
+    }
+
     private async Task<(HttpClient Admin, Guid OrgId)> OrgAsync()
     {
         var admin = host.Client(Ids.Subject("admin"));

@@ -156,7 +156,7 @@ public sealed class InvitationService(IBooksDb db, WriteRunner writes, ReadRunne
             var displayName = await db.Users.Where(u => u.Id == principal.UserId).Select(u => u.DisplayName).SingleAsync(ct);
             return WriteResult.Of(200, new
             {
-                membership = new MemberDto(membership.Id, principal.UserId, displayName, Text.Of(membership.Role), Text.Of(membership.Status),
+                membership = new MemberDto(membership.Id, principal.UserId, displayName, principal.VerifiedEmail, Text.Of(membership.Role), Text.Of(membership.Status),
                     membership.Generation, grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access))).ToList(), membership.Version.ToString()),
                 organization_id = orgId,
             }, membership.Version);

@@ -6,7 +6,7 @@ namespace Books.Application.Access;
 
 public sealed record GrantDto(Guid LedgerId, string Access);
 
-public sealed record MemberDto(Guid Id, Guid UserId, string DisplayName, string Role, string Status, int Generation, IReadOnlyList<GrantDto> Grants, string Version);
+public sealed record MemberDto(Guid Id, Guid UserId, string DisplayName, string? Email, string Role, string Status, int Generation, IReadOnlyList<GrantDto> Grants, string Version);
 
 public sealed record GrantInput(Guid LedgerId, LedgerAccess Access);
 
@@ -143,14 +143,19 @@ public sealed class MembershipService(IBooksDb db, WriteRunner writes, ReadRunne
     {
         var rows = await db.Memberships.AsNoTracking()
             .Where(m => m.OrgId == orgId && m.Status == MembershipStatus.Active && (membershipId == null || m.Id == membershipId))
-            .Join(db.Users, m => m.UserId, u => u.Id, (m, u) => new { m, u.DisplayName })
+            .Join(db.Users, m => m.UserId, u => u.Id, (m, u) => new
+            {
+                m,
+                u.DisplayName,
+                Email = db.Identities.Where(i => i.UserId == u.Id && i.VerifiedEmail != null).Select(i => i.VerifiedEmail).FirstOrDefault(),
+            })
             .OrderBy(x => x.m.JoinedAt).ThenBy(x => x.m.Id)
             .ToListAsync(ct);
         var result = new List<MemberDto>();
         foreach (var row in rows)
         {
             var m = row.m;
-            result.Add(new MemberDto(m.Id, m.UserId, row.DisplayName, Text.Of(m.Role), Text.Of(m.Status), m.Generation, await GrantsOfAsync(m, ct), m.Version.ToString()));
+            result.Add(new MemberDto(m.Id, m.UserId, row.DisplayName, row.Email, Text.Of(m.Role), Text.Of(m.Status), m.Generation, await GrantsOfAsync(m, ct), m.Version.ToString()));
         }
         return result;
     }
