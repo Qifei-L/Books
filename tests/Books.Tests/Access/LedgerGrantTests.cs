@@ -101,6 +101,34 @@ public sealed class LedgerGrantTests(TestHost host)
         await response.AssertProblemAsync(HttpStatusCode.Conflict, "LAST_ADMIN");
     }
 
+    [Fact]
+    public async Task A_removed_member_loses_access_immediately()
+    {
+        var (admin, member, orgId, membershipId) = await SetUpAsync();
+        var ledger = await admin.CreateLedgerAsync(orgId);
+        await SetAccessAsync(admin, orgId, membershipId, "member", [new { ledger_id = ledger, access = "read" }], version: 1);
+
+        await (await admin.PostAsync($"/api/v1/organizations/{orgId}/memberships/{membershipId}/remove", null, ifMatch: 2)).DataAsync();
+
+        await (await member.GetAsync($"/api/v1/organizations/{orgId}", Ct)).AssertProblemAsync(HttpStatusCode.NotFound, "NOT_FOUND");
+        await (await member.GetAsync($"/api/v1/organizations/{orgId}/ledgers/{ledger}", Ct)).AssertProblemAsync(HttpStatusCode.NotFound, "NOT_FOUND");
+        await using var db = host.CreateDbContext();
+        Assert.Equal(0, await db.LedgerGrants.CountAsync(g => g.MembershipId == membershipId, Ct));
+    }
+
+    [Fact]
+    public async Task Leaving_replays_its_receipt_after_access_is_gone()
+    {
+        var (_, member, orgId, _) = await SetUpAsync();
+        var key = Guid.NewGuid();
+
+        var first = await (await member.PostAsync($"/api/v1/organizations/{orgId}/memberships/me/leave", null, key, ifMatch: 1)).DataAsync();
+        var replay = await (await member.PostAsync($"/api/v1/organizations/{orgId}/memberships/me/leave", null, key, ifMatch: 1)).DataAsync();
+
+        Assert.Equal("removed", replay.GetProperty("status").GetString());
+        Assert.Equal(first.Id(), replay.Id());
+    }
+
     private async Task<(HttpClient Admin, HttpClient Member, Guid OrgId, Guid MembershipId)> SetUpAsync()
     {
         var admin = host.Client(Ids.Subject("admin"));

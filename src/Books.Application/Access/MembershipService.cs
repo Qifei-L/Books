@@ -65,6 +65,31 @@ public sealed class MembershipService(IBooksDb db, WriteRunner writes, ReadRunne
             return WriteResult.Of(200, (await LoadAsync(orgId, target.Id, ct)).Single(), target.Version);
         }, ct);
 
+    public Task<WriteResult> RemoveAsync(Principal principal, WriteMeta meta, Guid orgId, Guid membershipId, CancellationToken ct) =>
+        writes.RunAsync(principal, new WriteRequest("membership.remove", orgId, meta), async scope =>
+        {
+            scope.RequireAdmin();
+            return await RemoveTargetAsync(scope, await FindActiveAsync(orgId, membershipId, ct), "membership.removed", ct);
+        }, ct);
+
+    /// <summary>The caller leaves the organization. A replay returns only the receipt, even after access is gone.</summary>
+    public Task<WriteResult> LeaveAsync(Principal principal, WriteMeta meta, Guid orgId, CancellationToken ct) =>
+        writes.RunAsync(principal, new WriteRequest("membership.leave", orgId, meta, ReplayRequiresMembership: false), async scope =>
+            await RemoveTargetAsync(scope, scope.RequireMember(), "membership.left", ct), ct);
+
+    private async Task<WriteResult> RemoveTargetAsync(WriteScope scope, Membership target, string action, CancellationToken ct)
+    {
+        scope.CheckVersion(target.Version);
+        if (target.IsActiveAdmin)
+        {
+            await EnsureAnotherAdminAsync(target.OrgId, target.Id, ct);
+        }
+        await db.LedgerGrants.Where(g => g.MembershipId == target.Id).ExecuteDeleteAsync(ct);
+        target.Remove(scope.Now);
+        scope.Audit(action, "membership", target.Id, new { user_id = target.UserId, role = Text.Of(target.Role) });
+        return WriteResult.Of(200, new { id = target.Id, status = Text.Of(target.Status), removed_at = target.RemovedAt }, target.Version);
+    }
+
     /// <summary>Rule 8: counted under the organization lock, so two concurrent changes cannot both pass.</summary>
     private async Task EnsureAnotherAdminAsync(Guid orgId, Guid changing, CancellationToken ct)
     {
