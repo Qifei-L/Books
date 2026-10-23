@@ -1,4 +1,5 @@
 using Books.Api.Auth;
+using Books.Application.Ledgers;
 using Books.Application.Reporting;
 
 namespace Books.Api.Http;
@@ -20,5 +21,39 @@ public static class ReportEndpoints
 
         reports.MapGet("/gl-detail", async (Guid orgId, Guid ledgerId, Guid accountId, DateOnly from, DateOnly to, PrincipalAccessor principals, ReportService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.GlDetailAsync(await principals.GetAsync(ct), orgId, ledgerId, accountId, from, to, ct)));
+
+        // Excel versions of the same reports (owner decision: Excel is the only export format for now).
+        reports.MapGet("/trial-balance.xlsx", async (Guid orgId, Guid ledgerId, DateOnly from, DateOnly to, PrincipalAccessor principals, ReportService service, CompanyService ledgers, CancellationToken ct) =>
+        {
+            var principal = await principals.GetAsync(ct);
+            var tb = await service.TrialBalanceAsync(principal, orgId, ledgerId, from, to, ct);
+            return Xlsx(ExcelExport.TrialBalance(tb, await NameAsync(ledgers, principal, orgId, ledgerId, ct)), $"trial-balance-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}");
+        });
+
+        reports.MapGet("/profit-and-loss.xlsx", async (Guid orgId, Guid ledgerId, DateOnly from, DateOnly to, PrincipalAccessor principals, StatementService service, CompanyService ledgers, CancellationToken ct) =>
+        {
+            var principal = await principals.GetAsync(ct);
+            var pl = await service.ProfitAndLossAsync(principal, orgId, ledgerId, from, to, ct);
+            return Xlsx(ExcelExport.ProfitAndLoss(pl, await NameAsync(ledgers, principal, orgId, ledgerId, ct)), $"profit-and-loss-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}");
+        });
+
+        reports.MapGet("/balance-sheet.xlsx", async (Guid orgId, Guid ledgerId, DateOnly asOf, PrincipalAccessor principals, StatementService service, CompanyService ledgers, CancellationToken ct) =>
+        {
+            var principal = await principals.GetAsync(ct);
+            var bs = await service.BalanceSheetAsync(principal, orgId, ledgerId, asOf, ct);
+            return Xlsx(ExcelExport.BalanceSheet(bs, await NameAsync(ledgers, principal, orgId, ledgerId, ct)), $"balance-sheet-{asOf:yyyy-MM-dd}");
+        });
+
+        reports.MapGet("/gl-detail.xlsx", async (Guid orgId, Guid ledgerId, Guid accountId, DateOnly from, DateOnly to, PrincipalAccessor principals, ReportService service, CompanyService ledgers, CancellationToken ct) =>
+        {
+            var principal = await principals.GetAsync(ct);
+            var gl = await service.GlDetailAsync(principal, orgId, ledgerId, accountId, from, to, ct);
+            return Xlsx(ExcelExport.GlDetail(gl, await NameAsync(ledgers, principal, orgId, ledgerId, ct)), $"gl-detail-{gl.Code}-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}");
+        });
     }
+
+    private static async Task<string> NameAsync(CompanyService ledgers, Books.Application.Access.Principal principal, Guid orgId, Guid ledgerId, CancellationToken ct) =>
+        (await ledgers.GetLedgerAsync(principal, orgId, ledgerId, ct)).CompanyName;
+
+    private static IResult Xlsx(byte[] content, string name) => Results.File(content, ExcelExport.ContentType, $"{name}.xlsx");
 }
