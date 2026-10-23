@@ -73,12 +73,31 @@ public sealed class ReadRunner(IBooksDb db)
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
         var organization = (await db.Organizations.FromSql($"SELECT * FROM organizations WHERE id = {orgId} FOR SHARE")
             .AsNoTracking().ToListAsync(ct)).SingleOrDefault();
+        var result = await read(await ScopeAsync(principal, orgId, organization, ct));
+        await tx.CommitAsync(ct);
+        return result;
+    }
+
+    /// <summary>
+    /// Runs a report in one REPEATABLE READ, read-only transaction, so totals and drilldown come from the same
+    /// snapshot (rule 42). Access is checked against that same snapshot.
+    /// </summary>
+    public async Task<T> SnapshotAsync<T>(Principal principal, Guid orgId, Func<OrgScope, Task<T>> read, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+        await db.Database.ExecuteSqlRawAsync("SET TRANSACTION READ ONLY", ct);
+        var organization = await db.Organizations.AsNoTracking().SingleOrDefaultAsync(o => o.Id == orgId, ct);
+        var result = await read(await ScopeAsync(principal, orgId, organization, ct));
+        await tx.CommitAsync(ct);
+        return result;
+    }
+
+    private async Task<OrgScope> ScopeAsync(Principal principal, Guid orgId, Organization? organization, CancellationToken ct)
+    {
         var actor = organization is null
             ? null
             : await db.Memberships.AsNoTracking().SingleOrDefaultAsync(
                 m => m.OrgId == orgId && m.UserId == principal.UserId && m.Status == MembershipStatus.Active, ct);
-        var result = await read(new OrgScope(db, principal, organization, actor));
-        await tx.CommitAsync(ct);
-        return result;
+        return new OrgScope(db, principal, organization, actor);
     }
 }

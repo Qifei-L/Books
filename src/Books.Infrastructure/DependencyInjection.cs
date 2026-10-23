@@ -2,6 +2,7 @@ using Books.Application.Access;
 using Books.Application.Common;
 using Books.Application.Journals;
 using Books.Application.Ledgers;
+using Books.Application.Reporting;
 using Books.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<AccountGroupService>();
         services.AddScoped<JournalService>();
         services.AddScoped<LedgerSettingsService>();
+        services.AddScoped<ReportService>();
         return services;
     }
 

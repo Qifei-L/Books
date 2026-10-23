@@ -50,6 +50,7 @@ api.MapMembershipEndpoints();
 api.MapInvitationEndpoints();
 api.MapAccountEndpoints();
 api.MapJournalEndpoints();
+api.MapReportEndpoints();
 
 app.Run();
 
