@@ -51,9 +51,10 @@ jobs:
         with:
           global-json-file: global.json
       - run: dotnet tool restore
+      - run: dotnet build src/Books.Infrastructure
       - name: Model has no changes missing from migrations
-        run: dotnet ef migrations has-pending-model-changes --project src/Books.Infrastructure
+        run: dotnet ef migrations has-pending-model-changes --project src/Books.Infrastructure --no-build
       - name: Apply all migrations to the empty database
-        run: dotnet ef database update --project src/Books.Infrastructure
+        run: dotnet ef database update --project src/Books.Infrastructure --no-build
       - name: Idempotent script builds
-        run: dotnet ef migrations script --idempotent --project src/Books.Infrastructure --output migrations.sql
+        run: dotnet ef migrations script --idempotent --project src/Books.Infrastructure --no-build --output migrations.sql
