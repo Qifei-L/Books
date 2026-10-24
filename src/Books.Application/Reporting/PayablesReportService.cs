@@ -81,12 +81,13 @@ public sealed class PayablesReportService(IBooksDb db, ReadRunner reads)
         var documents = await db.PurchaseInvoices.AsNoTracking().Include(i => i.Lines)
             .Where(i => i.LedgerId == ledgerId && i.Status == DocumentStatus.Posted && i.Date <= to).ToListAsync(ct);
         var payments = await db.Payments.AsNoTracking().Include(p => p.Lines)
-            .Where(p => p.LedgerId == ledgerId && !p.IsReceipt && p.Status == DocumentStatus.Posted && p.Date <= to && p.PartyId != null).ToListAsync(ct);
+            .Where(p => p.LedgerId == ledgerId && p.Status == DocumentStatus.Posted && p.Date <= to && p.PartyId != null).ToListAsync(ct);
+        var payables = await db.AccountUsages.Where(u => u.LedgerId == ledgerId && u.Usage == Usage.Payable).Select(u => u.AccountId).ToListAsync(ct);
         var charges = documents.Where(i => !i.IsDebitNote)
             .Select(i => new Charge(i.Id, i.SupplierId, i.Date, i.DueDate, "invoice", i.InvoiceNo, i.Reference, i.PayableTotal)).ToList();
         var credits = documents.Where(i => i.IsDebitNote)
             .Select(i => new Credit(i.SupplierId, i.Date, "debit_note", i.InvoiceNo, i.Reference, i.OriginalInvoiceId, i.PayableTotal))
-            .Concat(OpenItems.PaymentCredits(payments, "payment")).ToList();
+            .Concat(OpenItems.PaymentCredits(payments, payables.ToHashSet(), receiptsReduce: false)).ToList();
         return (charges, credits);
     }
 
@@ -161,10 +162,15 @@ internal static class OpenItems
                 .Select(g => new OpenItem(g.Key.PartyId, g.First().Date, g.First().Date, g.Key.Type, g.Key.Number, g.First().Reference, -g.Sum(c => c.Amount))))
             .ToList();
 
-    /// <summary>Invoice and party-balance lines of posted payments or receipts, as credits of the document's party.</summary>
-    public static IEnumerable<Credit> PaymentCredits(IEnumerable<Payment> payments, string type) =>
-        payments.SelectMany(p => p.Lines.Where(l => l.Kind != PaymentLineKind.Account)
-            .Select(l => new Credit(p.PartyId!.Value, p.Date, type, p.PaymentNo, p.Reference, l.InvoiceId, l.NetAmount)));
+    /// <summary>
+    /// Lines of posted payments and receipts on the given control accounts, as credits of the document's party. A
+    /// payment reduces what is owed to a supplier and a receipt what a customer owes; the other direction (a refund)
+    /// adds to it.
+    /// </summary>
+    public static IEnumerable<Credit> PaymentCredits(IEnumerable<Payment> payments, IReadOnlySet<Guid> controlAccounts, bool receiptsReduce) =>
+        payments.SelectMany(p => p.Lines.Where(l => l.Kind != PaymentLineKind.Account && controlAccounts.Contains(l.ControlAccountId!.Value))
+            .Select(l => new Credit(p.PartyId!.Value, p.Date, p.IsReceipt ? "receipt" : "payment", p.PaymentNo, p.Reference, l.InvoiceId,
+                p.IsReceipt == receiptsReduce ? l.NetAmount : -l.NetAmount)));
 
     /// <summary>Not due, 1–30, 31–60, 61–90 and over 90 days past the due date.</summary>
     public static decimal[] Buckets(DateOnly asOf, IEnumerable<OpenItem> open)

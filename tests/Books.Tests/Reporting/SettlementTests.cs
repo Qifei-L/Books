@@ -34,6 +34,26 @@ public sealed class SettlementTests(TestHost host)
     }
 
     [Fact]
+    public async Task A_line_on_the_payable_account_settles_and_a_supplier_refund_comes_back_as_a_receipt()
+    {
+        var s = await new PurchaseInvoiceTests(host).SetUpAsync();
+        var bank = await PaymentTests.BankAsync(s.Books);
+        var payable = s.Account("2000");
+        var invoice = await InvoiceAsync(s, "2026-10-01", "100.00");                                  // 110
+        await PayAsync(s, bank, "2026-10-05", new { account_id = payable, invoice_id = invoice, amount = "110.00" }, new { account_id = payable, amount = "40.00" });
+        var overpaid = await GetAsync(s, "ap-aging?asOf=2026-10-31");
+
+        await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/receipts", new
+        {
+            bank_account_id = bank, party_id = s.Supplier, date = "2026-10-20", lines = new[] { new { account_id = payable, description = "Refund of overpayment", amount = "40.00" } },
+        })).DataAsync(HttpStatusCode.Created);
+        var refunded = await GetAsync(s, "ap-aging?asOf=2026-10-31");
+
+        Assert.Equal(("-40.00", true), (Get(overpaid.GetProperty("totals"), "total"), overpaid.GetProperty("matches_control").GetBoolean()));
+        Assert.Equal(("0.00", true), (Get(refunded.GetProperty("totals"), "total"), refunded.GetProperty("matches_control").GetBoolean()));
+    }
+
+    [Fact]
     public async Task An_invoice_a_payment_names_cannot_be_deleted()
     {
         var s = await new PurchaseInvoiceTests(host).SetUpAsync();

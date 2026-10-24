@@ -2,6 +2,7 @@ using Books.Application.Access;
 using Books.Application.Common;
 using Books.Domain.Access;
 using Books.Domain.Documents;
+using Books.Domain.Ledgers;
 using Microsoft.EntityFrameworkCore;
 
 namespace Books.Application.Reporting;
@@ -74,12 +75,13 @@ public sealed class ReceivablesReportService(IBooksDb db, ReadRunner reads)
         var documents = await db.SalesInvoices.AsNoTracking().Include(i => i.Lines)
             .Where(i => i.LedgerId == ledgerId && i.Status == DocumentStatus.Posted && i.Date <= to).ToListAsync(ct);
         var receipts = await db.Payments.AsNoTracking().Include(p => p.Lines)
-            .Where(p => p.LedgerId == ledgerId && p.IsReceipt && p.Status == DocumentStatus.Posted && p.Date <= to && p.PartyId != null).ToListAsync(ct);
+            .Where(p => p.LedgerId == ledgerId && p.Status == DocumentStatus.Posted && p.Date <= to && p.PartyId != null).ToListAsync(ct);
+        var receivables = await db.AccountUsages.Where(u => u.LedgerId == ledgerId && u.Usage == Usage.Receivable).Select(u => u.AccountId).ToListAsync(ct);
         var charges = documents.Where(i => !i.IsCreditNote)
             .Select(i => new Charge(i.Id, i.CustomerId, i.Date, i.DueDate, "invoice", i.InvoiceNo, i.Reference, i.GrossTotal)).ToList();
         var credits = documents.Where(i => i.IsCreditNote)
             .Select(i => new Credit(i.CustomerId, i.Date, "credit_note", i.InvoiceNo, i.Reference, i.OriginalInvoiceId, i.GrossTotal))
-            .Concat(OpenItems.PaymentCredits(receipts, "receipt")).ToList();
+            .Concat(OpenItems.PaymentCredits(receipts, receivables.ToHashSet(), receiptsReduce: true)).ToList();
         return (charges, credits);
     }
 }

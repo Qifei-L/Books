@@ -157,41 +157,53 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
         {
             throw BooksProblem.Invalid("bank_account_id must be an account with the Bank usage.");
         }
-        if (input.PartyId is { } partyId)
-        {
-            var party = await db.Parties.SingleOrDefaultAsync(p => p.LedgerId == ledger.Id && p.Id == partyId, ct)
-                ?? throw BooksProblem.Invalid("party_id must be a party of this ledger.");
-            if (!(receipt ? party.IsCustomer : party.IsSupplier) || !party.Active)
-            {
-                issues.Add(receipt
-                    ? new JournalIssue("NOT_AN_ACTIVE_CUSTOMER", "The party is not an active customer.")
-                    : new JournalIssue("NOT_AN_ACTIVE_SUPPLIER", "The party is not an active supplier."));
-            }
-        }
+        var party = input.PartyId is { } partyId
+            ? await db.Parties.SingleOrDefaultAsync(p => p.LedgerId == ledger.Id && p.Id == partyId, ct)
+                ?? throw BooksProblem.Invalid("party_id must be a party of this ledger.")
+            : null;
+        var controls = await db.AccountUsages.Where(u => u.LedgerId == ledger.Id && (u.Usage == Usage.Payable || u.Usage == Usage.Receivable))
+            .ToDictionaryAsync(u => u.AccountId, u => u.Usage, ct);
+        var usedUsages = new HashSet<Usage>();
 
         var codes = await db.TaxCodes.AsNoTracking().Where(t => t.LedgerId == ledger.Id).ToDictionaryAsync(t => t.Id, ct);
         Guid? partyControl = null;
         var lines = new List<PaymentLine>();
         foreach (var (line, i) in (input.Lines ?? throw BooksProblem.Invalid("lines is required.")).Select((l, i) => (l, i + 1)))
         {
-            if (line.InvoiceId is { } invoiceId)
+            // Manager.io style: a line on an account with the Payable or Receivable usage settles with the party; it may
+            // name the invoice. Without an account, a line naming an invoice or nothing settles on this document's side.
+            if (line.InvoiceId is not null || line.AccountId is null || controls.ContainsKey(line.AccountId.Value))
             {
                 var amount = line.Amount ?? throw BooksProblem.Invalid($"Line {i}: amount is required.");
-                var control = receipt
-                    ? await db.SalesInvoices.Where(s => s.LedgerId == ledger.Id && s.Id == invoiceId && !s.IsCreditNote && s.Status == DocumentStatus.Posted && s.CustomerId == input.PartyId)
-                        .Select(s => (Guid?)s.ReceivableAccountId).SingleOrDefaultAsync(ct)
-                    : await db.PurchaseInvoices.Where(p => p.LedgerId == ledger.Id && p.Id == invoiceId && !p.IsDebitNote && p.Status == DocumentStatus.Posted && p.SupplierId == input.PartyId)
-                        .Select(p => (Guid?)p.PayableAccountId).SingleOrDefaultAsync(ct);
-                lines.Add(PaymentLine.ForInvoice(invoiceId, control
-                    ?? throw BooksProblem.Invalid($"Line {i}: invoice_id must be a posted {(receipt ? "sales" : "purchase")} invoice of the document's party."), line.Description, amount));
+                var usage = line.AccountId is { } chosen ? controls[chosen] : receipt ? Usage.Receivable : Usage.Payable;
+                usedUsages.Add(usage);
+                if (line.InvoiceId is { } invoiceId)
+                {
+                    var control = usage == Usage.Receivable
+                        ? await db.SalesInvoices.Where(x => x.LedgerId == ledger.Id && x.Id == invoiceId && !x.IsCreditNote && x.Status == DocumentStatus.Posted && x.CustomerId == input.PartyId)
+                            .Select(x => (Guid?)x.ReceivableAccountId).SingleOrDefaultAsync(ct)
+                        : await db.PurchaseInvoices.Where(x => x.LedgerId == ledger.Id && x.Id == invoiceId && !x.IsDebitNote && x.Status == DocumentStatus.Posted && x.SupplierId == input.PartyId)
+                            .Select(x => (Guid?)x.PayableAccountId).SingleOrDefaultAsync(ct);
+                    if (control is null || (line.AccountId is { } given && given != control))
+                    {
+                        throw BooksProblem.Invalid($"Line {i}: invoice_id must be a posted {(usage == Usage.Receivable ? "sales" : "purchase")} invoice of the document's party, on that account.");
+                    }
+                    lines.Add(PaymentLine.ForInvoice(invoiceId, control.Value, line.Description, amount));
+                }
+                else
+                {
+                    var control = line.AccountId ?? (partyControl ??= await ControlAccountAsync(ledger.Id, usage, input.ControlAccountId, ct));
+                    lines.Add(PaymentLine.ForParty(control, line.Description, amount));
+                }
             }
-            else if (line.AccountId is { } accountId)
+            else
             {
+                var accountId = line.AccountId.Value;
                 var account = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(a => a.LedgerId == ledger.Id && a.Id == accountId, ct)
                     ?? throw BooksProblem.Invalid($"Line {i}: account_id must be an account of this ledger.");
                 if (account.IsControl)
                 {
-                    throw BooksProblem.Invalid($"Line {i}: {account.Code} is a control account; settle an invoice or leave account_id out to use the party's balance.");
+                    throw BooksProblem.Invalid($"Line {i}: {account.Code} is a control account without the Payable or Receivable usage.");
                 }
                 if (line.ItemId is { } itemId && !await db.Items.AnyAsync(x => x.LedgerId == ledger.Id && x.Id == itemId, ct))
                 {
@@ -240,12 +252,14 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
                 lines.Add(PaymentLine.ForAccount(accountId, line.Description, line.ItemId, line.Quantity, line.UnitPrice, net,
                     line.TaxCodeId, tax, line.ValidTaxInvoice, line.WithholdingCodeId, withholding));
             }
-            else
-            {
-                var amount = line.Amount ?? throw BooksProblem.Invalid($"Line {i}: amount is required.");
-                partyControl ??= await ControlAccountAsync(ledger.Id, receipt ? Usage.Receivable : Usage.Payable, input.ControlAccountId, ct);
-                lines.Add(PaymentLine.ForParty(partyControl.Value, line.Description, amount));
-            }
+        }
+        if (party is not null && (!party.Active
+                || (usedUsages.Contains(Usage.Payable) && !party.IsSupplier) || (usedUsages.Contains(Usage.Receivable) && !party.IsCustomer)
+                || (usedUsages.Count == 0 && !(receipt ? party.IsCustomer : party.IsSupplier))))
+        {
+            issues.Add(usedUsages.Contains(Usage.Payable) || (usedUsages.Count == 0 && !receipt)
+                ? new JournalIssue("NOT_AN_ACTIVE_SUPPLIER", "The party is not an active supplier.")
+                : new JournalIssue("NOT_AN_ACTIVE_CUSTOMER", "The party is not an active customer."));
         }
         payment.Set(input.BankAccountId, input.PartyId, input.Date, input.Reference, input.Description, lines, isNew);
         return issues;
