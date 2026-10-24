@@ -42,6 +42,9 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<BankStatement> BankStatements => Set<BankStatement>();
     public DbSet<PayRun> PayRuns => Set<PayRun>();
     public DbSet<PayRunLine> PayRunLines => Set<PayRunLine>();
+    public DbSet<FixedAsset> FixedAssets => Set<FixedAsset>();
+    public DbSet<DepreciationRun> DepreciationRuns => Set<DepreciationRun>();
+    public DbSet<DepreciationLine> DepreciationLines => Set<DepreciationLine>();
     public DbSet<FiledTaxReturn> FiledTaxReturns => Set<FiledTaxReturn>();
     public DbSet<ReturnDefinitionVersion> ReturnDefinitionVersions => Set<ReturnDefinitionVersion>();
     public DbSet<Journal> Journals => Set<Journal>();

@@ -388,3 +388,50 @@ internal sealed class PayRunLineConfiguration : IEntityTypeConfiguration<PayRunL
         }
     }
 }
+
+internal sealed class FixedAssetConfiguration : IEntityTypeConfiguration<FixedAsset>
+{
+    public void Configure(EntityTypeBuilder<FixedAsset> b)
+    {
+        b.ToTable("fixed_assets");
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Code).HasMaxLength(200);
+        b.Property(x => x.Name).HasMaxLength(200);
+        b.Property(x => x.Cost).HasPrecision(20, 4);
+        b.Property(x => x.ResidualValue).HasPrecision(20, 4);
+        b.Ignore(x => x.Monthly);
+        b.HasIndex(x => new { x.LedgerId, x.Code }).IsUnique();
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.AssetAccountId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccumulatedDepreciationAccountId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.DepreciationExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class DepreciationRunConfiguration : IEntityTypeConfiguration<DepreciationRun>
+{
+    public void Configure(EntityTypeBuilder<DepreciationRun> b)
+    {
+        b.ToTable("depreciation_runs", t => t.HasCheckConstraint("ck_depreciation_runs_status", "status IN ('draft', 'posted', 'deleted') AND EXTRACT(DAY FROM period) = 1"));
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.HasIndex(x => new { x.LedgerId, x.Period }).IsUnique().HasFilter("status = 'posted'");
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.RunId).OnDelete(DeleteBehavior.Restrict);
+        b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class DepreciationLineConfiguration : IEntityTypeConfiguration<DepreciationLine>
+{
+    public void Configure(EntityTypeBuilder<DepreciationLine> b)
+    {
+        b.ToTable("depreciation_lines");
+        b.HasKey(x => new { x.RunId, x.LineNo });
+        b.Property(x => x.Amount).HasPrecision(20, 4);
+        b.HasOne<FixedAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
