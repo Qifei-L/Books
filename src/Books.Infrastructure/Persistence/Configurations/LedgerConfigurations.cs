@@ -241,7 +241,7 @@ internal sealed class AccountUsageConfiguration : IEntityTypeConfiguration<Accou
     {
         b.ToTable("account_usages", t => t.HasCheckConstraint("ck_account_usages_usage",
             "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', "
-            + "'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable')"));
+            + "'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable', 'inventory', 'cost_of_sales')"));
         b.HasKey(x => new { x.AccountId, x.Usage });
         b.HasIndex(x => new { x.LedgerId, x.Usage });
         b.HasOne<Account>().WithMany()

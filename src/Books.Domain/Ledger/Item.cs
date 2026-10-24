@@ -60,12 +60,21 @@ public sealed class Item
     public Guid? DefaultAccountId { get; private set; }
     public Guid? DefaultTaxCodeId { get; private set; }
     public bool Active { get; private set; } = true;
+
+    /// <summary>
+    /// An inventory item (Manager.io style): purchases go to the inventory account, sales take their cost at the
+    /// average cost into cost of sales, and quantities are tracked.
+    /// </summary>
+    public bool TrackInventory { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
 
     /// <summary>Replaces all details. References are checked against the same ledger by the caller and the database.</summary>
-    public void Set(string name, string? description, string? unit, ItemCategory? category, Account? defaultAccount, TaxCode? defaultTaxCode, bool active, bool isNew = false)
+    public void Set(string name, string? description, string? unit, ItemCategory? category, Account? defaultAccount, TaxCode? defaultTaxCode, bool active, bool isNew = false,
+        bool trackInventory = false)
     {
+        TrackInventory = trackInventory;
         if ((category is not null && category.LedgerId != LedgerId)
             || (defaultAccount is not null && defaultAccount.LedgerId != LedgerId)
             || (defaultTaxCode is not null && defaultTaxCode.LedgerId != LedgerId))

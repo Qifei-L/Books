@@ -34,6 +34,9 @@ public static class ReportEndpoints
         reports.MapGet("/customer-statement", async (Guid orgId, Guid ledgerId, Guid customerId, DateOnly from, DateOnly to, PrincipalAccessor principals, ReceivablesReportService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.StatementAsync(await principals.GetAsync(ct), orgId, ledgerId, customerId, from, to, ct)));
 
+        reports.MapGet("/inventory", async (Guid orgId, Guid ledgerId, DateOnly asOf, PrincipalAccessor principals, Books.Application.Documents.InventoryReportService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.ReportAsync(await principals.GetAsync(ct), orgId, ledgerId, asOf, ct)));
+
         // Excel versions of the same reports (owner decision: Excel is the only export format for now).
         reports.MapGet("/trial-balance.xlsx", async (Guid orgId, Guid ledgerId, DateOnly from, DateOnly to, PrincipalAccessor principals, ReportService service, CompanyService ledgers, CancellationToken ct) =>
         {

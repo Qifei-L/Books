@@ -178,9 +178,16 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             {
                 throw BooksProblem.Invalid($"Line {i}: account_id must be an account of this ledger.");
             }
-            if (line.ItemId is { } itemId && !await db.Items.AnyAsync(x => x.LedgerId == ledger.Id && x.Id == itemId, ct))
+            var tracked = false;
+            if (line.ItemId is { } itemId)
             {
-                throw BooksProblem.Invalid($"Line {i}: item_id must be an item of this ledger.");
+                var item = await db.Items.AsNoTracking().SingleOrDefaultAsync(x => x.LedgerId == ledger.Id && x.Id == itemId, ct)
+                    ?? throw BooksProblem.Invalid($"Line {i}: item_id must be an item of this ledger.");
+                tracked = item.TrackInventory;
+                if (tracked && line.Quantity is null or 0)
+                {
+                    throw BooksProblem.Invalid($"Line {i}: {item.Name} is an inventory item; give its quantity.");
+                }
             }
             var net = line.Amount ?? (line is { Quantity: { } q, UnitPrice: { } p }
                 ? decimal.Round(q * p, minor, MidpointRounding.AwayFromZero)
@@ -218,8 +225,16 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
                 }
                 tax = TaxCalculator.ForLine(net + otherTax, code.Rate, minor, line.TaxOverride, line.TaxReason);
             }
-            lines.Add(new SalesInvoiceLine(line.AccountId, line.Description, line.ItemId, line.Quantity, line.UnitPrice, net, line.TaxCodeId, tax,
-                line.OtherTaxCodeId, otherTax));
+            var salesLine = new SalesInvoiceLine(line.AccountId, line.Description, line.ItemId, line.Quantity, line.UnitPrice, net, line.TaxCodeId, tax,
+                line.OtherTaxCodeId, otherTax);
+            if (tracked)
+            {
+                // Average cost (owner default, Manager.io style) of the stock before this document, on its date.
+                var average = await Inventory.AverageCostAsync(db, ledger.Id, line.ItemId!.Value, input.Date, invoice.Id, ct);
+                salesLine.Costed(Math.Round(line.Quantity!.Value * average, minor, MidpointRounding.AwayFromZero),
+                    await Inventory.AccountAsync(db, ledger.Id, Usage.Inventory, ct), await Inventory.AccountAsync(db, ledger.Id, Usage.CostOfSales, ct));
+            }
+            lines.Add(salesLine);
         }
 
         if (input.OriginalInvoiceId is { } original

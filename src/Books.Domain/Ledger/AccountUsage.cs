@@ -16,6 +16,9 @@ public enum Usage
 
     // Other monthly taxes charged on sales (specific, accommodation, public lighting).
     OtherTaxPayable,
+
+    // Inventory items: stock on hand and what it cost when sold.
+    Inventory, CostOfSales,
 }
 
 public static class Usages
@@ -25,8 +28,8 @@ public static class Usages
     {
         Usage.Payable or Usage.OutputVat or Usage.WithholdingPayable or Usage.SalariesPayable or Usage.SalaryTaxPayable or Usage.NssfPayable
             or Usage.OtherTaxPayable => [AccountType.Liabilities],
-        Usage.Receivable or Usage.Bank or Usage.InputVat => [AccountType.Assets],
-        Usage.NonDeductibleVat or Usage.SalaryExpense or Usage.NssfExpense => [AccountType.CostAndExpense],
+        Usage.Receivable or Usage.Bank or Usage.InputVat or Usage.Inventory => [AccountType.Assets],
+        Usage.NonDeductibleVat or Usage.SalaryExpense or Usage.NssfExpense or Usage.CostOfSales => [AccountType.CostAndExpense],
         _ => throw new ArgumentOutOfRangeException(nameof(usage)),
     };
 

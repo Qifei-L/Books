@@ -10,9 +10,10 @@ public sealed record ItemCategoryDto(Guid Id, string Name, string Version);
 
 public sealed record ItemDto(
     Guid Id, Guid? CategoryId, string Name, string? Description, string? Unit,
-    Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool Active, bool Used, string Version);
+    Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool Active, bool Used, string Version, bool TrackInventory = false);
 
-public sealed record ItemInput(string Name, string? Description, string? Unit, Guid? CategoryId, Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool Active = true);
+public sealed record ItemInput(string Name, string? Description, string? Unit, Guid? CategoryId, Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool Active = true,
+    bool TrackInventory = false);
 
 /// <summary>Item categories and items of a ledger. Reading needs read access; changes need edit access.</summary>
 public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner reads)
@@ -80,7 +81,7 @@ public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner read
         var taxCode = input.DefaultTaxCodeId is { } t
             ? await db.TaxCodes.SingleOrDefaultAsync(x => x.LedgerId == ledgerId && x.Id == t, ct) ?? throw BooksProblem.Invalid("default_tax_code_id must be a tax code in this ledger.")
             : null;
-        item.Set(input.Name, input.Description, input.Unit, category, account, taxCode, input.Active, isNew);
+        item.Set(input.Name, input.Description, input.Unit, category, account, taxCode, input.Active, isNew, input.TrackInventory);
     }
 
     private async Task<IReadOnlyList<ItemDto>> LoadAsync(Guid ledgerId, Guid? itemId, CancellationToken ct) =>
@@ -88,6 +89,6 @@ public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner read
             .OrderBy(i => i.Name).ThenBy(i => i.Id)
             .Select(i => new { i, Used = db.JournalLines.Any(l => l.ItemId == i.Id) })
             .ToListAsync(ct))
-        .Select(x => new ItemDto(x.i.Id, x.i.CategoryId, x.i.Name, x.i.Description, x.i.Unit, x.i.DefaultAccountId, x.i.DefaultTaxCodeId, x.i.Active, x.Used, x.i.Version.ToString()))
+        .Select(x => new ItemDto(x.i.Id, x.i.CategoryId, x.i.Name, x.i.Description, x.i.Unit, x.i.DefaultAccountId, x.i.DefaultTaxCodeId, x.i.Active, x.Used, x.i.Version.ToString(), x.i.TrackInventory))
         .ToList();
 }

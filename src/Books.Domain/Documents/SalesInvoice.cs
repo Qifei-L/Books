@@ -129,6 +129,11 @@ public sealed class SalesInvoice
         {
             lines.Add(new DraftLine(vat.Key, -sign * vat.Sum(l => l.TaxAmount), text));
         }
+        foreach (var cost in _lines.Where(l => l.CostAmount != 0))
+        {
+            lines.Add(new DraftLine(cost.CostOfSalesAccountId!.Value, sign * cost.CostAmount, $"{text} (cost of sales)", ItemId: cost.ItemId, Quantity: cost.Quantity));
+            lines.Add(new DraftLine(cost.InventoryAccountId!.Value, -sign * cost.CostAmount, $"{text} (inventory)", ItemId: cost.ItemId, Quantity: cost.Quantity));
+        }
         foreach (var other in _lines.Where(l => l.OtherTaxAmount != 0).GroupBy(l => taxCodes[l.OtherTaxCodeId!.Value].AccountId!.Value))
         {
             lines.Add(new DraftLine(other.Key, -sign * other.Sum(l => l.OtherTaxAmount), $"{text} (other tax)"));
@@ -179,6 +184,19 @@ public sealed class SalesInvoiceLine
     public Guid? OtherTaxCodeId { get; private set; }
 
     public decimal OtherTaxAmount { get; private set; }
+
+    /// <summary>Inventory items: the quantity at average cost, moved from inventory to cost of sales.</summary>
+    public decimal CostAmount { get; private set; }
+
+    public Guid? InventoryAccountId { get; private set; }
+    public Guid? CostOfSalesAccountId { get; private set; }
+
+    public void Costed(decimal cost, Guid inventoryAccountId, Guid costOfSalesAccountId)
+    {
+        CostAmount = cost;
+        InventoryAccountId = inventoryAccountId;
+        CostOfSalesAccountId = costOfSalesAccountId;
+    }
 
     public bool TaxAdjusted => TaxAmount != TaxCalculated;
 
