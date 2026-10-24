@@ -278,3 +278,23 @@ internal sealed class PaymentLineConfiguration : IEntityTypeConfiguration<Paymen
         b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class BankClearingConfiguration : IEntityTypeConfiguration<BankClearing>
+{
+    public void Configure(EntityTypeBuilder<BankClearing> b)
+    {
+        b.ToTable("bank_clearings");
+        b.HasKey(x => new { x.AccountId, x.JournalId });
+        b.HasIndex(x => x.JournalId);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.AccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Journal>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.JournalId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.ClearedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}

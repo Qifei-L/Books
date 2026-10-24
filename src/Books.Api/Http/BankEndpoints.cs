@@ -1,5 +1,6 @@
 using System.Globalization;
 using Books.Api.Auth;
+using Books.Application.Documents;
 using Books.Application.Common;
 using Books.Application.Ledgers;
 
@@ -7,6 +8,10 @@ namespace Books.Api.Http;
 
 public static class BankEndpoints
 {
+    public sealed record ClearRequest(DateOnly ClearedOn, IReadOnlyList<Guid>? JournalIds);
+
+    public sealed record UnclearRequest(IReadOnlyList<Guid>? JournalIds);
+
     public sealed record BankAccountRequest(Guid AccountId, string BankName, string? AccountNumber);
 
     public sealed record BankAccountUpdate(string BankName, string? AccountNumber);
@@ -16,6 +21,20 @@ public static class BankEndpoints
 
     public static void MapBankEndpoints(this RouteGroupBuilder api)
     {
+        var reconciliation = api.MapGroup("/organizations/{orgId:guid}/ledgers/{ledgerId:guid}/bank-accounts/{accountId:guid}");
+
+        // Manager.io style: the statement balance against the cleared balance, with the postings still pending.
+        reconciliation.MapGet("/reconciliation", async (Guid orgId, Guid ledgerId, Guid accountId, DateOnly asOf, string? statementBalance,
+            PrincipalAccessor principals, BankReconciliationService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.ReconciliationAsync(await principals.GetAsync(ct), orgId, ledgerId, accountId, asOf,
+                PurchaseEndpoints.Number(statementBalance, 0, "statementBalance", signed: true), ct)));
+
+        reconciliation.MapPost("/clearings", async (Guid orgId, Guid ledgerId, Guid accountId, ClearRequest body, PrincipalAccessor principals, BankReconciliationService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.ClearAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, accountId, body.ClearedOn, body.JournalIds ?? [], ct)));
+
+        reconciliation.MapPost("/clearings/remove", async (Guid orgId, Guid ledgerId, Guid accountId, UnclearRequest body, PrincipalAccessor principals, BankReconciliationService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.UnclearAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, accountId, body.JournalIds ?? [], ct)));
+
         var banks = api.MapGroup("/organizations/{orgId:guid}/ledgers/{ledgerId:guid}/bank-accounts");
 
         banks.MapGet("", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, BankService service, HttpContext http, CancellationToken ct) =>

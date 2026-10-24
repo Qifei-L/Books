@@ -485,6 +485,57 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("identities", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.BankClearing", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<Guid>("JournalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("journal_id");
+
+                    b.Property<DateTimeOffset>("ClearedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cleared_at");
+
+                    b.Property<Guid>("ClearedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cleared_by");
+
+                    b.Property<DateOnly>("ClearedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("cleared_on");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.HasKey("AccountId", "JournalId")
+                        .HasName("pk_bank_clearings");
+
+                    b.HasIndex("ClearedBy")
+                        .HasDatabaseName("ix_bank_clearings_cleared_by");
+
+                    b.HasIndex("JournalId")
+                        .HasDatabaseName("ix_bank_clearings_journal_id");
+
+                    b.HasIndex("LedgerId", "AccountId")
+                        .HasDatabaseName("ix_bank_clearings_ledger_id_account_id");
+
+                    b.HasIndex("LedgerId", "JournalId")
+                        .HasDatabaseName("ix_bank_clearings_ledger_id_journal_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_bank_clearings_org_id_ledger_id");
+
+                    b.ToTable("bank_clearings", (string)null);
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.BankTransfer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2435,6 +2486,40 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_identities_users_user_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.BankClearing", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("ClearedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_clearings_users_cleared_by");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "AccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_clearings_accounts_ledger_id_account_id");
+
+                    b.HasOne("Books.Domain.Journals.Journal", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "JournalId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_clearings_journals_ledger_id_journal_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_clearings_ledgers_org_id_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.BankTransfer", b =>

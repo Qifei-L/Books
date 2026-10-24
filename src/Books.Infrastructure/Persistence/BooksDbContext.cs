@@ -38,6 +38,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<SalesInvoiceLine> SalesInvoiceLines => Set<SalesInvoiceLine>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentLine> PaymentLines => Set<PaymentLine>();
+    public DbSet<BankClearing> BankClearings => Set<BankClearing>();
     public DbSet<FiledTaxReturn> FiledTaxReturns => Set<FiledTaxReturn>();
     public DbSet<ReturnDefinitionVersion> ReturnDefinitionVersions => Set<ReturnDefinitionVersion>();
     public DbSet<Journal> Journals => Set<Journal>();
