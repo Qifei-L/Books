@@ -106,6 +106,7 @@ async function chooseLedger(ledger) {
   await renderChart();
   await renderJournals();
   await renderSetup();
+  await renderPurchases();
   for (const id of ["tb-out", "gl-out", "pl-out", "bs-out"]) $(id).innerHTML = "";
 }
 
@@ -232,6 +233,43 @@ async function renderSetup() {
     <h3 style="margin-top:16px">Items</h3>
     <table><tr><th>Item</th><th>Unit</th><th>Suggests account</th><th>Suggests tax</th></tr>
     ${items.map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.unit)}</td><td>${i.default_account_id ? esc(accountName(i.default_account_id)) : ""}</td><td>${esc(taxName(i.default_tax_code_id))}</td></tr>`).join("")}</table>`;
+}
+
+async function renderPurchases() {
+  const [invoices, notes, parties, aging] = await Promise.all([
+    api(`${ledgerUrl()}/purchase-invoices`), api(`${ledgerUrl()}/debit-notes`), api(`${ledgerUrl()}/parties`),
+    api(`${ledgerUrl()}/reports/ap-aging?asOf=2026-10-31`),
+  ]);
+  const party = (id) => parties.find((p) => p.id === id)?.name ?? "";
+  const docRows = (docs) => docs.map((d) => `<tr class="click" data-id="${d.id}"><td>${d.type === "debit_note" ? "DN" : "PI"} ${d.invoice_no}</td><td>${d.date}</td>
+    <td>${esc(party(d.supplier_id))}</td><td>${esc(d.reference)}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td>
+    <td class="num">${d.withholding_total}</td><td class="num">${d.payable_total}</td>
+    <td>${d.status === "posted" ? `<span class="pill posted">posted</span> No. ${d.journal_no}` : `<span class="pill draft">${d.status}</span> ${d.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("");
+  const a = aging.totals;
+  $("tab-purchases").innerHTML = `
+    <h3>Purchase invoices and debit notes</h3>
+    <table><tr><th>No.</th><th>Date</th><th>Supplier</th><th>Reference</th><th class="num">Net</th><th class="num">VAT</th><th class="num">WHT</th><th class="num">Payable</th><th>Status</th></tr>
+    ${docRows([...invoices, ...notes])}</table>
+    <h3 style="margin-top:16px">AP aging at ${aging.as_of}</h3>
+    <p>${aging.matches_control ? `<span class="ok">Equals the payable balance ${aging.control_balance}</span>` : `<span class="error">Does not equal the payable balance ${aging.control_balance}</span>`}</p>
+    <table><tr><th>Supplier</th><th class="num">Not due</th><th class="num">1–30</th><th class="num">31–60</th><th class="num">61–90</th><th class="num">Over 90</th><th class="num">Total</th></tr>
+    ${[...aging.rows, a].map((r) => `<tr class="${r === a ? "total" : ""}"><td>${esc(r.supplier)}</td><td class="num">${r.not_due}</td><td class="num">${r.days1_to30}</td>
+      <td class="num">${r.days31_to60}</td><td class="num">${r.days61_to90}</td><td class="num">${r.over90}</td><td class="num">${r.total}</td></tr>`).join("")}</table>`;
+  for (const tr of $("tab-purchases").querySelectorAll("tr[data-id]")) {
+    tr.onclick = () => showPurchase([...invoices, ...notes].find((d) => d.id === tr.dataset.id), party);
+  }
+}
+
+function showPurchase(d, party) {
+  $("journal-body").innerHTML = `<h3>${d.type === "debit_note" ? "Debit note" : "Purchase invoice"} ${d.invoice_no} <span class="pill ${d.status}">${d.status}</span></h3>
+    <p class="muted">${esc(party(d.supplier_id))} · ${d.date} · due ${d.due_date} · ${esc(d.reference ?? "")}</p>
+    <table><tr><th>Account</th><th>Description</th><th class="num">Net</th><th class="num">VAT</th><th>Tax invoice</th><th class="num">WHT</th></tr>
+    ${d.lines.map((l) => `<tr><td>${esc(accountName(l.account_id))}</td><td>${esc(l.description)}</td><td class="num">${l.net_amount}</td>
+      <td class="num">${l.tax_amount}${l.tax_adjusted ? ` <span class="pill draft" title="${esc(l.tax_reason)}">adjusted</span>` : ""}</td>
+      <td>${l.tax_code_id ? (l.valid_tax_invoice ? "valid" : "missing: non-deductible") : ""}</td><td class="num">${l.withholding_amount}</td></tr>`).join("")}
+    <tr class="total"><td colspan="2">Totals · gross ${d.gross_total} · payable ${d.payable_total}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td><td></td><td class="num">${d.withholding_total}</td></tr></table>
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}`;
+  $("journal-dialog").showModal();
 }
 
 // Statements: nested groups with a subtotal at every level.
