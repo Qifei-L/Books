@@ -82,6 +82,7 @@
 | 2026-10-24 | Multi-currency part 2 (M12.2): bank accounts may be kept in KHR (balance in KHR and its USD value; payments, receipts, transfers and statements in the bank's currency); settling a foreign-currency invoice settles it in the invoice's currency, and the difference from the invoice's rate is realized exchange gain or loss; realized and unrealized exchange differences have separate accounts; revaluation of foreign balances is yearly, at year end (M12.2b). |
 | 2026-10-24 | M12.2 follow-up: where another currency is involved (a payment in a foreign-currency bank account, or a party with invoices in another currency), settlement lines must name the invoice, so the difference is always realized; the exchange accounts are Cost & Expense; ledgers set up before this apply the template again to get them; a transfer out of a foreign-currency account converts at the rate of the date (or the one given), the simple way. |
 | 2026-10-24 | Year-end revaluation (M12.2b): the balance sheet shows receivables and payables as one line each (the revaluation accounts are added into them); credits left over from settling a foreign-currency invoice (overpayments) stay in that currency and are revalued too. |
+| 2026-10-24 | Year-end revaluation (M12.2b): the revaluation reverses on the next day, so settling later realizes the full difference from the invoice's rate and nothing counts twice; closing past a fiscal year-end with balances in another currency not revalued warns but still closes. |
 
 ## Proposed defaults (accept or change)
 

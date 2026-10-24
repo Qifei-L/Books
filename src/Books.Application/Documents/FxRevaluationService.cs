@@ -104,6 +104,26 @@ public sealed class FxRevaluationService(
         }, ct);
 
     /// <summary>
+    /// Whether balances in another currency would change at the date and no revaluation is posted for it. A missing
+    /// closing rate counts as needing one when there are such balances.
+    /// </summary>
+    internal async Task<bool> NeedsRevaluationAsync(Ledger ledger, DateOnly date, CancellationToken ct)
+    {
+        if (await db.FxRevaluations.AnyAsync(r => r.LedgerId == ledger.Id && r.Date == date && r.Status != DocumentStatus.Deleted, ct))
+        {
+            return false;
+        }
+        try
+        {
+            return (await LinesAsync(ledger, date, null, ct)).Lines.Count > 0;
+        }
+        catch (BooksProblem)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
     /// The lines at the closing rates: each bank account in another currency, and each open invoice in another
     /// currency. An invoice's open amount in its own currency is its open value at its own rate (settlements leave
     /// the control account at the invoice's rate, so the two stay in step); payables are credits, so negative.

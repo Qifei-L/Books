@@ -109,6 +109,25 @@ public sealed class FxRevaluationTests(TestHost host)
         Assert.True(sheet.GetProperty("balanced").GetBoolean());
     }
 
+    [Fact]
+    public async Task Closing_the_year_with_khr_balances_not_revalued_warns_but_closes()
+    {
+        var (s, khr, bank) = await SetUpAsync();
+        await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/transfers", new
+        {
+            date = "2026-10-02", from_account_id = bank, to_account_id = khr, amount = "1000.00", to_amount = "4000000",
+        })).DataAsync(HttpStatusCode.Created);
+        var closeUrl = $"/api/v1/organizations/{s.Books.OrgId}/ledgers/{s.Books.LedgerId}/close";
+        async Task<long> VersionAsync() => long.Parse(Get(await (await s.Books.Admin.GetAsync($"/api/v1/organizations/{s.Books.OrgId}/ledgers/{s.Books.LedgerId}", Ct)).DataAsync(), "version"));
+
+        var monthEnd = await (await s.Books.Admin.WriteAsync(HttpMethod.Put, closeUrl, new { closed_through = "2026-10-31" }, ifMatch: await VersionAsync())).DataAsync();
+        var yearEnd = await (await s.Books.Admin.WriteAsync(HttpMethod.Put, closeUrl, new { closed_through = "2026-12-31" }, ifMatch: await VersionAsync())).DataAsync();
+
+        Assert.Equal(JsonValueKind.Null, monthEnd.GetProperty("warnings").ValueKind);
+        Assert.Equal("2026-12-31", Get(yearEnd, "closed_through"));
+        Assert.Contains("not revalued at the year end 2026-12-31", Assert.Single(yearEnd.GetProperty("warnings").EnumerateArray()).GetString());
+    }
+
     private static IEnumerable<(string? Code, string Amount)> Flatten(JsonElement lines) =>
         lines.EnumerateArray().SelectMany(l => new[] { (l.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null, Get(l, "amount")) }
             .Concat(Flatten(l.GetProperty("children"))));

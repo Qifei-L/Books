@@ -1,12 +1,13 @@
 using Books.Application.Access;
 using Books.Application.Common;
+using Books.Application.Documents;
 using Books.Domain.Access;
 using Microsoft.EntityFrameworkCore;
 
 namespace Books.Application.Ledgers;
 
 /// <summary>Ledger setup and Close. Only administrators change them (rule 13 and owner decisions).</summary>
-public sealed class LedgerSettingsService(IBooksDb db, WriteRunner writes)
+public sealed class LedgerSettingsService(IBooksDb db, WriteRunner writes, FxRevaluationService revaluations)
 {
     public Task<WriteResult> ChangeSettingsAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, string? baseCurrency, int? fyStartMonth, CancellationToken ct) =>
         writes.RunAsync(principal, new WriteRequest("ledger.settings", orgId, meta, LedgerId: ledgerId), async scope =>
@@ -31,9 +32,23 @@ public sealed class LedgerSettingsService(IBooksDb db, WriteRunner writes)
             var before = ledger.ClosedThrough;
             ledger.CloseThrough(closedThrough);
             var action = before is not null && (closedThrough is null || closedThrough < before) ? "ledger.reopened" : "ledger.closed";
-            scope.Audit(action, "ledger", ledger.Id, new { before, after = closedThrough });
+            // Owner decision (M12.2b): closing past a fiscal year-end with balances in another currency not revalued
+            // warns but does not stop the close.
+            var warnings = new List<string>();
+            if (action == "ledger.closed" && closedThrough is { } through)
+            {
+                // The latest fiscal year-end on or before the close date: the day before a fiscal year starts.
+                var start = new DateOnly(through.Year, ledger.FyStartMonth, 1);
+                var next = start > through ? start : start.AddYears(1);
+                var yearEnd = next.AddDays(-1) <= through ? next.AddDays(-1) : next.AddYears(-1).AddDays(-1);
+                if ((before is null || yearEnd > before) && await revaluations.NeedsRevaluationAsync(ledger, yearEnd, ct))
+                {
+                    warnings.Add($"Balances in another currency are not revalued at the year end {yearEnd:yyyy-MM-dd}; reopen the year to revalue them.");
+                }
+            }
+            scope.Audit(action, "ledger", ledger.Id, new { before, after = closedThrough, warnings });
             await db.SaveChangesAsync(ct);
-            return WriteResult.Of(200, await LedgerAsync(ledgerId, ct), ledger.Version);
+            return WriteResult.Of(200, (await LedgerAsync(ledgerId, ct)) with { Warnings = warnings.Count == 0 ? null : warnings }, ledger.Version);
         }, ct);
 
     private async Task<LedgerDto> LedgerAsync(Guid ledgerId, CancellationToken ct)
