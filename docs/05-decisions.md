@@ -65,6 +65,8 @@
 | 2026-10-24 | Purchase withholding tax is reported in the month of the invoice date (accrual, matching DFDL Instruction 37705). |
 | 2026-10-24 | The prepayment of tax on income is still paid: the return calculates 1% of turnover excluding VAT, not just the base. |
 | 2026-10-24 | Roadmap after M8: payments and receipts (M7), invoice printing as PDF with the KHR total, inventory, and other monthly taxes. Not planned: annual tax return, fixed assets, a full editing frontend (work goes through the API and MCP) and a parallel run. Moving data from Manager.io is AI work through the MCP batch tools, not a separate import feature: AI-native import and human import screens are different designs. |
+| 2026-10-24 | Tax return boxes are versioned data, not code: each ledger's definition has versions that take effect from a month; anyone who edits the ledger (AI clients too) drafts a version and previews it on real months, administrators publish it, published versions never change, and filed months keep the version they were filed with. Tax rates were already data (tax codes with effective dates). |
+| 2026-10-24 | Payroll sheets differ by company: when salary tax is built (M11), the payroll layout (earnings, allowances, deductions, which items are taxable) is per-company data in the same versioned way, not one fixed form. |
 
 ## Proposed defaults (accept or change)
 

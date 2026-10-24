@@ -11,7 +11,7 @@ namespace Books.Application.Documents;
 
 public sealed record ReturnBoxDto(string Key, string Section, string Label, string Kind, bool Information);
 
-public sealed record TaxPackDto(string TaxPack, string ReturnName, string? TaxCurrency, IReadOnlyList<WithholdingCategory> WithholdingCategories, IReadOnlyList<ReturnBoxDto> Boxes);
+public sealed record TaxPackDto(string TaxPack, int DefinitionVersion, string ReturnName, string? TaxCurrency, IReadOnlyList<WithholdingCategory> WithholdingCategories, IReadOnlyList<ReturnBoxDto> Boxes);
 
 /// <summary>A rate for the whole month instead of the documents' snapshots; the reason is required.</summary>
 public sealed record ReturnRateOverride(decimal Rate, string Reason);
@@ -20,7 +20,7 @@ public sealed record ReturnBoxAmount(string Key, string Section, string Label, b
 
 /// <param name="TaxCurrencyBasis">document_snapshots, or override when a month rate was entered.</param>
 public sealed record TaxReturnDto(
-    string Period, DateOnly From, DateOnly To, string TaxPack, string ReturnName, string Currency, string? TaxCurrency,
+    string Period, DateOnly From, DateOnly To, string TaxPack, int DefinitionVersion, string ReturnName, string Currency, string? TaxCurrency,
     string TaxCurrencyBasis, string? OverrideRate, string? OverrideReason,
     IReadOnlyList<ReturnBoxAmount> Boxes, IReadOnlyList<ReconciliationRow> Reconciliation, IReadOnlyList<TaxLineDto> AdjustedLines, IReadOnlyList<JournalIssue> Issues,
     FiledInfo? Filed = null);
@@ -52,23 +52,24 @@ public sealed record ReturnBoxLines(string Period, string Key, string Label, str
 /// documents dated in the month, so people and AI clients (through MCP) read the same definition and figures.
 /// KHR amounts use each document's tax currency snapshot, or one rate for the month when overridden.
 /// </summary>
-public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner writes)
+public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner writes, ReturnDefinitionService definitions)
 {
     public Task<TaxPackDto> PackAsync(Principal principal, Guid orgId, Guid ledgerId, CancellationToken ct) =>
         reads.RunAsync(principal, orgId, async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Read, ct);
             var ledger = await db.Ledgers.AsNoTracking().SingleAsync(l => l.Id == ledgerId, ct);
-            var definition = Definition(ledger.TaxPack);
-            return new TaxPackDto(definition.TaxPack, definition.Name, TaxPacks.TaxCurrency(ledger.TaxPack)?.Currency, definition.WithholdingCategories,
+            var definition = await definitions.EffectiveAsync(ledger, DateOnly.MaxValue, null, ct);
+            return new TaxPackDto(definition.TaxPack, definition.Version, definition.Name, TaxPacks.TaxCurrency(ledger.TaxPack)?.Currency, definition.WithholdingCategories,
                 definition.Boxes.Select(b => new ReturnBoxDto(b.Key, b.Section, b.Label, b.Formula is null ? "lines" : "formula", b.Information)).ToList());
         }, ct);
 
-    public Task<TaxReturnDto> ReturnAsync(Principal principal, Guid orgId, Guid ledgerId, string period, ReturnRateOverride? rate, CancellationToken ct) =>
+    public Task<TaxReturnDto> ReturnAsync(Principal principal, Guid orgId, Guid ledgerId, string period, ReturnRateOverride? rate, CancellationToken ct,
+        int? definitionVersion = null) =>
         reads.SnapshotAsync(principal, orgId, async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Read, ct);
-            var calculation = await CalculateAsync(ledgerId, period, rate, ct);
+            var calculation = await CalculateAsync(ledgerId, period, rate, ct, definitionVersion);
             var current = calculation.ToDto();
             var filed = await db.FiledTaxReturns.AsNoTracking().SingleOrDefaultAsync(f => f.LedgerId == ledgerId && f.Period == calculation.From, ct);
             if (filed is null)
@@ -126,18 +127,19 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
             return WriteResult.Of(201, dto with { Filed = new FiledInfo(filed.FiledAt, filed.FiledBy, []) }, ledger.Version);
         }, ct);
 
-    public Task<ReturnBoxLines> BoxLinesAsync(Principal principal, Guid orgId, Guid ledgerId, string period, string key, ReturnRateOverride? rate, CancellationToken ct) =>
+    public Task<ReturnBoxLines> BoxLinesAsync(Principal principal, Guid orgId, Guid ledgerId, string period, string key, ReturnRateOverride? rate, CancellationToken ct,
+        int? definitionVersion = null) =>
         reads.SnapshotAsync(principal, orgId, async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Read, ct);
-            var calculation = await CalculateAsync(ledgerId, period, rate, ct);
+            var calculation = await CalculateAsync(ledgerId, period, rate, ct, definitionVersion);
             var box = calculation.Definition.Boxes.SingleOrDefault(b => b.Key == key) ?? throw BooksProblem.NotFound();
             var amount = calculation.Boxes.Single(b => b.Key == key);
             var lines = box.Line is null ? [] : calculation.Lines.Where(l => box.Line(l) is not null).Select(l => calculation.LineDto(l, box.Line(l)!.Value)).ToList();
             return new ReturnBoxLines(calculation.Period, key, box.Label, amount.Amount, amount.TaxCurrencyAmount, lines);
         }, ct);
 
-    internal async Task<ReturnCalculation> CalculateAsync(Guid ledgerId, string period, ReturnRateOverride? rate, CancellationToken ct)
+    internal async Task<ReturnCalculation> CalculateAsync(Guid ledgerId, string period, ReturnRateOverride? rate, CancellationToken ct, int? definitionVersion = null)
     {
         if (!DateOnly.TryParseExact(period + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var from))
         {
@@ -149,7 +151,7 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
             throw BooksProblem.Invalid("An override rate must be positive and needs a reason.");
         }
         var ledger = await db.Ledgers.AsNoTracking().SingleAsync(l => l.Id == ledgerId, ct);
-        var definition = Definition(ledger.TaxPack);
+        var definition = await definitions.EffectiveAsync(ledger, from, definitionVersion, ct);
         var slot = TaxPacks.TaxCurrency(ledger.TaxPack);
         var codes = await db.TaxCodes.AsNoTracking().Where(t => t.LedgerId == ledgerId).ToDictionaryAsync(t => t.Id, ct);
         var parties = await db.Parties.AsNoTracking().Where(p => p.LedgerId == ledgerId).ToDictionaryAsync(p => p.Id, p => p.Name, ct);
@@ -262,9 +264,6 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         }).ToList();
     }
 
-    private static TaxReturnDefinition Definition(string? taxPack) =>
-        TaxReturns.For(taxPack) ?? throw BooksProblem.Conflict("NO_TAX_PACK", "This ledger has no tax pack; apply the Cambodia template first.");
-
     internal static string F(decimal amount, int minor) => amount.ToString("F" + minor, CultureInfo.InvariantCulture);
 }
 
@@ -276,7 +275,7 @@ internal sealed record ReturnCalculation(
     List<JournalIssue> Issues, IReadOnlyDictionary<Guid, string> Parties)
 {
     public TaxReturnDto ToDto() => new(
-        Period, From, To, Definition.TaxPack, Definition.Name, Currency.Code, TaxCurrency?.Code,
+        Period, From, To, Definition.TaxPack, Definition.Version, Definition.Name, Currency.Code, TaxCurrency?.Code,
         Override is null ? "document_snapshots" : "override", Override?.Rate.ToString("0.##########", CultureInfo.InvariantCulture), Override?.Reason,
         Boxes, Reconciliation, Lines.Where(l => l.TaxAdjusted).Select(l => LineDto(l, l.Tax)).ToList(), Issues);
 

@@ -38,6 +38,7 @@ public interface IBooksDb
     DbSet<SalesInvoice> SalesInvoices { get; }
     DbSet<SalesInvoiceLine> SalesInvoiceLines { get; }
     DbSet<FiledTaxReturn> FiledTaxReturns { get; }
+    DbSet<ReturnDefinitionVersion> ReturnDefinitionVersions { get; }
     DbSet<Journal> Journals { get; }
     DbSet<JournalRevision> JournalRevisions { get; }
     DbSet<JournalLine> JournalLines { get; }

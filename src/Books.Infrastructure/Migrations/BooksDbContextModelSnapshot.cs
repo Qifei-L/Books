@@ -915,6 +915,85 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("purchase_invoice_lines", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.ReturnDefinitionVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Definition")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("definition");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<Guid?>("PublishedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_by");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.Property<int>("VersionNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("version_no");
+
+                    b.HasKey("Id")
+                        .HasName("pk_return_definition_versions");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_return_definition_versions_created_by");
+
+                    b.HasIndex("LedgerId", "EffectiveFrom")
+                        .IsUnique()
+                        .HasDatabaseName("ix_return_definition_versions_ledger_id_effective_from")
+                        .HasFilter("status = 'published'");
+
+                    b.HasIndex("LedgerId", "VersionNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_return_definition_versions_ledger_id_version_no");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_return_definition_versions_org_id_ledger_id");
+
+                    b.ToTable("return_definition_versions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_return_definition_versions_month", "EXTRACT(DAY FROM effective_from) = 1");
+
+                            t.HasCheckConstraint("ck_return_definition_versions_status", "status IN ('draft', 'published') AND (status = 'draft' OR published_at IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.SalesInvoice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2298,6 +2377,24 @@ namespace Books.Infrastructure.Migrations
                         .HasForeignKey("WithholdingCodeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_purchase_invoice_lines_tax_codes_withholding_code_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.ReturnDefinitionVersion", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_return_definition_versions_users_created_by");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_return_definition_versions_ledgers_org_id_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.SalesInvoice", b =>

@@ -1,3 +1,4 @@
+using Books.Domain.Access;
 using Books.Domain.Ledgers;
 
 namespace Books.Domain.Documents;
@@ -19,19 +20,155 @@ public sealed record TaxLine(
 public sealed record WithholdingCategory(string Key, string Label);
 
 /// <summary>
-/// A box of the monthly return. A line box adds up what each document line contributes (null: not in the box);
+/// A tax pack's monthly return as data (owner decision): versions take effect from a month, administrators publish
+/// them, AI clients may draft them. Only this fixed vocabulary is allowed, so a definition can be checked before use.
+/// </summary>
+public sealed record ReturnDefinitionSpec(string Name, IReadOnlyList<WithholdingCategory> WithholdingCategories, IReadOnlyList<BoxSpec> Boxes);
+
+/// <summary>A box adds up document lines (Lines) or is calculated from earlier boxes (Formula).</summary>
+public sealed record BoxSpec(string Key, string Section, string Label, LineRule? Lines = null, FormulaRule? Formula = null, bool Information = false);
+
+/// <param name="Side">sale or purchase.</param>
+/// <param name="TaxKinds">vat_output, vat_input, vat_zero_rated, non_vat or none (no tax code); omit for any.</param>
+/// <param name="ValidTaxInvoice">Purchases: only lines with (true) or without (false) a valid tax invoice; omit for both.</param>
+/// <param name="WithholdingCategory">Only lines whose withholding code has this category; omit for any.</param>
+/// <param name="Amount">net, tax or withholding.</param>
+public sealed record LineRule(string Side, IReadOnlyList<string>? TaxKinds = null, bool? ValidTaxInvoice = null, string? WithholdingCategory = null, string Amount = "net");
+
+/// <summary>The sum of earlier boxes, each added or subtracted, optionally times a percent and rounded to the currency.</summary>
+public sealed record FormulaRule(IReadOnlyList<FormulaTerm> Terms, decimal? Percent = null);
+
+public sealed record FormulaTerm(string Box, int Sign = 1);
+
+/// <summary>
+/// A box of a compiled definition. A line box adds up what each document line contributes (null: not in the box);
 /// a formula box is calculated from other boxes, separately in USD and KHR.
 /// </summary>
 public sealed record ReturnBox(
     string Key, string Section, string Label, Func<TaxLine, decimal?>? Line = null, Func<Func<string, decimal>, int, decimal>? Formula = null,
     bool Information = false);
 
-/// <summary>A tax pack's monthly return: its boxes and the categories withholding codes are reported under.</summary>
-public sealed record TaxReturnDefinition(string TaxPack, string Name, IReadOnlyList<WithholdingCategory> WithholdingCategories, IReadOnlyList<ReturnBox> Boxes);
+/// <param name="Version">0 for the tax pack's built-in definition.</param>
+/// <param name="EffectiveFrom">First month the version applies to; null for the built-in one.</param>
+public sealed record TaxReturnDefinition(
+    string TaxPack, int Version, DateOnly? EffectiveFrom, string Name, IReadOnlyList<WithholdingCategory> WithholdingCategories, IReadOnlyList<ReturnBox> Boxes);
 
 public static class TaxReturns
 {
-    public static TaxReturnDefinition? For(string? taxPack) => taxPack == TaxPacks.Cambodia2026 ? Cambodia : null;
+    private static readonly Dictionary<string, TaxKind?> Kinds = new()
+    {
+        ["vat_output"] = TaxKind.VatOutput, ["vat_input"] = TaxKind.VatInput, ["vat_zero_rated"] = TaxKind.VatZeroRated,
+        ["non_vat"] = TaxKind.NonVat, ["none"] = null,
+    };
+
+    /// <summary>The tax pack's built-in definition, used until a ledger publishes its own version.</summary>
+    public static ReturnDefinitionSpec? Builtin(string? taxPack) => taxPack == TaxPacks.Cambodia2026 ? Cambodia : null;
+
+    /// <summary>Checks a definition and turns it into boxes; every problem is reported at once.</summary>
+    public static TaxReturnDefinition Compile(string taxPack, int version, DateOnly? effectiveFrom, ReturnDefinitionSpec spec)
+    {
+        var errors = new List<string>();
+        var categories = (spec.WithholdingCategories ?? []).ToList();
+        if (string.IsNullOrWhiteSpace(spec.Name))
+        {
+            errors.Add("name is required.");
+        }
+        foreach (var dup in categories.GroupBy(c => c.Key).Where(g => g.Count() > 1))
+        {
+            errors.Add($"Withholding category {dup.Key} appears more than once.");
+        }
+        var categoryKeys = categories.Select(c => c.Key).ToHashSet();
+        var seen = new HashSet<string>();
+        var boxes = new List<ReturnBox>();
+        foreach (var (box, i) in (spec.Boxes ?? []).Select((b, i) => (b, i + 1)))
+        {
+            var at = $"Box {i} ({box.Key})";
+            if (string.IsNullOrWhiteSpace(box.Key) || !box.Key.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '_'))
+            {
+                errors.Add($"{at}: key must use lowercase letters, digits and underscores.");
+            }
+            else if (!seen.Add(box.Key))
+            {
+                errors.Add($"{at}: key appears more than once.");
+            }
+            if (string.IsNullOrWhiteSpace(box.Label) || string.IsNullOrWhiteSpace(box.Section))
+            {
+                errors.Add($"{at}: section and label are required.");
+            }
+            if ((box.Lines is null) == (box.Formula is null))
+            {
+                errors.Add($"{at}: give either lines or formula.");
+                continue;
+            }
+            if (box.Lines is { } rule)
+            {
+                if (rule.Side is not ("sale" or "purchase"))
+                {
+                    errors.Add($"{at}: side must be sale or purchase.");
+                }
+                var unknown = (rule.TaxKinds ?? []).Where(k => !Kinds.ContainsKey(k)).ToList();
+                if (unknown.Count > 0)
+                {
+                    errors.Add($"{at}: unknown tax kinds {string.Join(", ", unknown)}; use {string.Join(", ", Kinds.Keys)}.");
+                }
+                if (rule.WithholdingCategory is { } category && !categoryKeys.Contains(category))
+                {
+                    errors.Add($"{at}: withholding category {category} is not defined.");
+                }
+                if (rule.Amount is not ("net" or "tax" or "withholding"))
+                {
+                    errors.Add($"{at}: amount must be net, tax or withholding.");
+                }
+                boxes.Add(new ReturnBox(box.Key, box.Section, box.Label, Line(rule), Information: box.Information));
+            }
+            else if (box.Formula is { } formula)
+            {
+                if (formula.Terms is not { Count: > 0 })
+                {
+                    errors.Add($"{at}: a formula needs at least one term.");
+                    continue;
+                }
+                foreach (var term in formula.Terms.Where(t => !boxes.Any(b => b.Key == t.Box)))
+                {
+                    errors.Add($"{at}: the formula uses {term.Box}, which must be a box defined before it.");
+                }
+                if (formula.Terms.Any(t => t.Sign is not (1 or -1)))
+                {
+                    errors.Add($"{at}: each term's sign must be 1 or -1.");
+                }
+                if (formula.Percent is { } p && (p <= 0 || p > 100))
+                {
+                    errors.Add($"{at}: percent must be above 0 and at most 100.");
+                }
+                var terms = formula.Terms.ToList();
+                var percent = formula.Percent;
+                boxes.Add(new ReturnBox(box.Key, box.Section, box.Label, Formula: (value, minor) =>
+                {
+                    var sum = terms.Sum(t => t.Sign * value(t.Box));
+                    return percent is { } pc ? Math.Round(sum * pc / 100m, minor, MidpointRounding.AwayFromZero) : sum;
+                }, Information: box.Information));
+            }
+        }
+        if (boxes.Count == 0 && errors.Count == 0)
+        {
+            errors.Add("A definition needs at least one box.");
+        }
+        return errors.Count == 0
+            ? new TaxReturnDefinition(taxPack, version, effectiveFrom, spec.Name!, categories, boxes)
+            : throw new DomainException(string.Join(" ", errors));
+    }
+
+    private static Func<TaxLine, decimal?> Line(LineRule rule)
+    {
+        var kinds = rule.TaxKinds?.Where(Kinds.ContainsKey).Select(k => Kinds[k]).ToList();
+        return l =>
+            (rule.Side == "sale") == l.IsSale
+            && (kinds is null || kinds.Contains(l.TaxKind))
+            && (rule.ValidTaxInvoice is not { } valid || l.ValidTaxInvoice == valid)
+            && (rule.WithholdingCategory is null || l.WithholdingCategory == rule.WithholdingCategory)
+                ? rule.Amount switch { "tax" => l.Tax, "withholding" => l.Withholding, _ => l.Net }
+                : null;
+    }
 
     private static readonly WithholdingCategory[] CambodiaWithholding =
     [
@@ -48,28 +185,100 @@ public static class TaxReturns
     /// Drafted from 04-cambodia-tax; the boxes and their wording are to be confirmed with an adviser against the
     /// current monthly return form. Keys are stable so a filed return can be compared with a later recalculation.
     /// </summary>
-    private static readonly TaxReturnDefinition Cambodia = new(TaxPacks.Cambodia2026, "Cambodia monthly tax return (draft boxes)", CambodiaWithholding,
+    private static readonly ReturnDefinitionSpec Cambodia = new("Cambodia monthly tax return (draft boxes)", CambodiaWithholding,
     [
-        new("taxable_sales", Vat, "Taxable sales, excluding VAT", l => l.IsSale && l.TaxKind == TaxKind.VatOutput ? l.Net : null),
-        new("output_vat", Vat, "Output VAT", l => l.IsSale && l.TaxKind == TaxKind.VatOutput ? l.Tax : null),
-        new("zero_rated_sales", Vat, "Zero-rated sales", l => l.IsSale && l.TaxKind == TaxKind.VatZeroRated ? l.Net : null),
-        new("non_vat_sales", Vat, "Sales outside VAT", l => l.IsSale && l.TaxKind is null or TaxKind.NonVat ? l.Net : null),
-        new("taxable_purchases", Vat, "Purchases with a valid tax invoice, excluding VAT", l => l.IsPurchase && l.TaxKind == TaxKind.VatInput && l.ValidTaxInvoice ? l.Net : null),
-        new("input_vat", Vat, "Deductible input VAT", l => l.IsPurchase && l.TaxKind == TaxKind.VatInput && l.ValidTaxInvoice ? l.Tax : null),
-        new("net_vat", Vat, "VAT payable (negative: credit)", Formula: (box, _) => box("output_vat") - box("input_vat")),
+        new("taxable_sales", Vat, "Taxable sales, excluding VAT", new LineRule("sale", ["vat_output"])),
+        new("output_vat", Vat, "Output VAT", new LineRule("sale", ["vat_output"], Amount: "tax")),
+        new("zero_rated_sales", Vat, "Zero-rated sales", new LineRule("sale", ["vat_zero_rated"])),
+        new("non_vat_sales", Vat, "Sales outside VAT", new LineRule("sale", ["non_vat", "none"])),
+        new("taxable_purchases", Vat, "Purchases with a valid tax invoice, excluding VAT", new LineRule("purchase", ["vat_input"], true)),
+        new("input_vat", Vat, "Deductible input VAT", new LineRule("purchase", ["vat_input"], true, Amount: "tax")),
+        new("net_vat", Vat, "VAT payable (negative: credit)", Formula: new FormulaRule([new("output_vat"), new("input_vat", -1)])),
         new("non_deductible_vat", Vat, "Input VAT without a valid tax invoice (not deductible)",
-            l => l.IsPurchase && l.TaxKind == TaxKind.VatInput && !l.ValidTaxInvoice ? l.Tax : null, Information: true),
-        new("turnover", Prepayment, "Turnover, excluding VAT", l => l.IsSale ? l.Net : null),
-        new("prepayment", Prepayment, "Prepayment of tax on income (1% of turnover)",
-            Formula: (box, minor) => Math.Round(box("turnover") * 0.01m, minor, MidpointRounding.AwayFromZero)),
-        .. CambodiaWithholding.SelectMany(c => new ReturnBox[]
+            new LineRule("purchase", ["vat_input"], false, Amount: "tax"), Information: true),
+        new("turnover", Prepayment, "Turnover, excluding VAT", new LineRule("sale")),
+        new("prepayment", Prepayment, "Prepayment of tax on income (1% of turnover)", Formula: new FormulaRule([new("turnover")], 1m)),
+        .. CambodiaWithholding.SelectMany(c => new BoxSpec[]
         {
-            new($"wht_{c.Key}_base", Withholding, $"{c.Label}: amounts paid or accrued", l => l.IsPurchase && l.WithholdingCategory == c.Key ? l.Net : null),
-            new($"wht_{c.Key}", Withholding, $"{c.Label}: tax withheld", l => l.IsPurchase && l.WithholdingCategory == c.Key ? l.Withholding : null),
+            new($"wht_{c.Key}_base", Withholding, $"{c.Label}: amounts paid or accrued", new LineRule("purchase", WithholdingCategory: c.Key)),
+            new($"wht_{c.Key}", Withholding, $"{c.Label}: tax withheld", new LineRule("purchase", WithholdingCategory: c.Key, Amount: "withholding")),
         }),
         new("wht_total", Withholding, "Withholding tax payable",
-            Formula: (box, _) => CambodiaWithholding.Sum(c => box($"wht_{c.Key}"))),
+            Formula: new FormulaRule([.. CambodiaWithholding.Select(c => new FormulaTerm($"wht_{c.Key}"))])),
     ]);
+}
+
+public enum DefinitionStatus { Draft, Published }
+
+/// <summary>
+/// A ledger's version of its return definition. Drafts can change; a published version never does and applies from
+/// its effective month until a later version starts (owner decision).
+/// </summary>
+public sealed class ReturnDefinitionVersion
+{
+    private ReturnDefinitionVersion() { }
+
+    public ReturnDefinitionVersion(Guid id, Guid orgId, Guid ledgerId, int versionNo, DateOnly effectiveFrom, string definition, Guid createdBy, DateTimeOffset createdAt)
+    {
+        Id = id;
+        OrgId = orgId;
+        LedgerId = ledgerId;
+        VersionNo = versionNo;
+        CreatedBy = createdBy;
+        CreatedAt = createdAt;
+        Set(effectiveFrom, definition);
+    }
+
+    public Guid Id { get; private set; }
+    public Guid OrgId { get; private set; }
+    public Guid LedgerId { get; private set; }
+    public int VersionNo { get; private set; }
+
+    /// <summary>The first day of the first month the version applies to.</summary>
+    public DateOnly EffectiveFrom { get; private set; }
+
+    public DefinitionStatus Status { get; private set; } = DefinitionStatus.Draft;
+
+    /// <summary>The definition's JSON (ReturnDefinitionSpec).</summary>
+    public string Definition { get; private set; } = "";
+
+    public Guid CreatedBy { get; private set; }
+    public DateTimeOffset CreatedAt { get; private set; }
+    public Guid? PublishedBy { get; private set; }
+    public DateTimeOffset? PublishedAt { get; private set; }
+    public long Version { get; private set; } = 1;
+
+    public void Update(DateOnly effectiveFrom, string definition)
+    {
+        if (Status != DefinitionStatus.Draft)
+        {
+            throw new DomainException("A published definition cannot change; draft a new version instead.");
+        }
+        Set(effectiveFrom, definition);
+        Version++;
+    }
+
+    public void Publish(Guid by, DateTimeOffset at)
+    {
+        if (Status != DefinitionStatus.Draft)
+        {
+            throw new DomainException("This version is already published.");
+        }
+        Status = DefinitionStatus.Published;
+        PublishedBy = by;
+        PublishedAt = at;
+        Version++;
+    }
+
+    private void Set(DateOnly effectiveFrom, string definition)
+    {
+        if (effectiveFrom.Day != 1)
+        {
+            throw new DomainException("effective_from must be a month.");
+        }
+        EffectiveFrom = effectiveFrom;
+        Definition = definition;
+    }
 }
 
 /// <summary>
