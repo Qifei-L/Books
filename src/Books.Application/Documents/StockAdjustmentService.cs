@@ -139,8 +139,6 @@ public sealed class StockAdjustmentService(IBooksDb db, WriteRunner writes, Read
         var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
         var itemIds = lines.Select(l => l.ItemId).ToList();
         var items = await db.Items.Where(i => i.LedgerId == ledger.Id && itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, ct);
-        var inventoryAccount = await Inventory.AccountAsync(db, ledger.Id, Usage.Inventory, ct);
-        Guid? costOfSales = null;
         var built = new List<StockAdjustmentLine>();
         for (var i = 0; i < lines.Count; i++)
         {
@@ -174,7 +172,9 @@ public sealed class StockAdjustmentService(IBooksDb db, WriteRunner writes, Read
             var average = onHand > 0 ? onHandValue / onHand : 0;
             var value = change < 0 && onHand + change == 0 ? -onHandValue
                 : Math.Round(change * (change > 0 ? line.UnitCost ?? average : average), minor, MidpointRounding.AwayFromZero);
-            var account = line.AccountId ?? (costOfSales ??= await Inventory.AccountAsync(db, ledger.Id, Usage.CostOfSales, ct));
+            // The item's own accounts, Manager.io style; the other side defaults to its cost of sales account.
+            var (inventoryAccount, costOfSales) = await Inventory.ItemAccountsAsync(db, ledger.Id, item, ct);
+            var account = line.AccountId ?? costOfSales;
             await CheckAccountAsync(ledger.Id, account, inventoryAccount, i, ct);
             try
             {

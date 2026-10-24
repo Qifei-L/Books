@@ -32,6 +32,11 @@ public static class Inventory
             : throw BooksProblem.Invalid($"Inventory items need exactly one account with the {Text.Of(usage)} usage; apply the Cambodia template or set one.");
     }
 
+    /// <summary>The item's inventory and cost of sales accounts, or the ledger's when the item has none.</summary>
+    internal static async Task<(Guid Inventory, Guid CostOfSales)> ItemAccountsAsync(IBooksDb db, Guid ledgerId, Item item, CancellationToken ct) =>
+        (item.InventoryAccountId ?? await AccountAsync(db, ledgerId, Usage.Inventory, ct),
+         item.CostOfSalesAccountId ?? await AccountAsync(db, ledgerId, Usage.CostOfSales, ct));
+
     /// <summary>Average cost of the item's stock on the date, leaving out one document (the one being saved).</summary>
     internal static async Task<decimal> AverageCostAsync(IBooksDb db, Guid ledgerId, Guid itemId, DateOnly date, Guid excludeDocument, CancellationToken ct)
     {

@@ -10,10 +10,14 @@ public sealed record ItemCategoryDto(Guid Id, string Name, string Version);
 
 public sealed record ItemDto(
     Guid Id, Guid? CategoryId, string Name, string? Description, string? Unit,
-    Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool Active, bool Used, string Version, bool TrackInventory = false);
+    Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool Active, bool Used, string Version, bool TrackInventory = false,
+    Guid? InventoryAccountId = null, Guid? IncomeAccountId = null, Guid? CostOfSalesAccountId = null);
 
+/// <param name="InventoryAccountId">Inventory items: the asset account (with the Inventory usage) holding the stock; omit for the ledger's.</param>
+/// <param name="IncomeAccountId">Inventory items: where sales of the item post; omit to use each sales line's account.</param>
+/// <param name="CostOfSalesAccountId">Inventory items: where the cost of its sales posts; omit for the ledger's cost of sales account.</param>
 public sealed record ItemInput(string Name, string? Description, string? Unit, Guid? CategoryId, Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool Active = true,
-    bool TrackInventory = false);
+    bool TrackInventory = false, Guid? InventoryAccountId = null, Guid? IncomeAccountId = null, Guid? CostOfSalesAccountId = null);
 
 /// <summary>Item categories and items of a ledger. Reading needs read access; changes need edit access.</summary>
 public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner reads)
@@ -81,7 +85,45 @@ public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner read
         var taxCode = input.DefaultTaxCodeId is { } t
             ? await db.TaxCodes.SingleOrDefaultAsync(x => x.LedgerId == ledgerId && x.Id == t, ct) ?? throw BooksProblem.Invalid("default_tax_code_id must be a tax code in this ledger.")
             : null;
-        item.Set(input.Name, input.Description, input.Unit, category, account, taxCode, input.Active, isNew, input.TrackInventory);
+        async Task<Account?> AccountAsync(Guid? id, string field) => id is { } value
+            ? await db.Accounts.SingleOrDefaultAsync(x => x.LedgerId == ledgerId && x.Id == value, ct) ?? throw BooksProblem.Invalid($"{field} must be an account in this ledger.")
+            : null;
+        var inventory = await AccountAsync(input.InventoryAccountId, "inventory_account_id");
+        if (inventory is not null && !await db.AccountUsages.AnyAsync(u => u.AccountId == inventory.Id && u.Usage == Usage.Inventory, ct))
+        {
+            throw BooksProblem.Invalid("inventory_account_id must be an account with the Inventory usage, so the stock report checks it.");
+        }
+        // Owner decision: an item's stock stays in one asset account. Once the item has postings, its inventory account
+        // (its own, or the ledger's it used) and whether it is tracked cannot change; income and cost of sales accounts
+        // may change, for documents saved from then on.
+        if (!isNew && await db.JournalLines.AnyAsync(l => l.LedgerId == ledgerId && l.ItemId == item.Id, ct))
+        {
+            if (input.TrackInventory != item.TrackInventory)
+            {
+                throw BooksProblem.Conflict("ITEM_IN_USE", "This item has postings; whether it tracks inventory cannot change.");
+            }
+            if (item.TrackInventory && (input.InventoryAccountId ?? await DefaultInventoryAsync(ledgerId, ct)) != (item.InventoryAccountId ?? await DefaultInventoryAsync(ledgerId, ct)))
+            {
+                throw BooksProblem.Conflict("INVENTORY_ACCOUNT_LOCKED",
+                    "This item has postings, so its stock stays in its inventory account; record a journal moving the stock value if it must move.");
+            }
+        }
+        try
+        {
+            item.Set(input.Name, input.Description, input.Unit, category, account, taxCode, input.Active, isNew, input.TrackInventory,
+                inventory, await AccountAsync(input.IncomeAccountId, "income_account_id"), await AccountAsync(input.CostOfSalesAccountId, "cost_of_sales_account_id"));
+        }
+        catch (DomainException e)
+        {
+            throw BooksProblem.Invalid(e.Message);
+        }
+    }
+
+    /// <summary>The ledger's only account with the Inventory usage, or null when there is not exactly one.</summary>
+    private async Task<Guid?> DefaultInventoryAsync(Guid ledgerId, CancellationToken ct)
+    {
+        var accounts = await db.AccountUsages.Where(u => u.LedgerId == ledgerId && u.Usage == Usage.Inventory).Select(u => u.AccountId).Take(2).ToListAsync(ct);
+        return accounts.Count == 1 ? accounts[0] : null;
     }
 
     private async Task<IReadOnlyList<ItemDto>> LoadAsync(Guid ledgerId, Guid? itemId, CancellationToken ct) =>
@@ -89,6 +131,7 @@ public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner read
             .OrderBy(i => i.Name).ThenBy(i => i.Id)
             .Select(i => new { i, Used = db.JournalLines.Any(l => l.ItemId == i.Id) })
             .ToListAsync(ct))
-        .Select(x => new ItemDto(x.i.Id, x.i.CategoryId, x.i.Name, x.i.Description, x.i.Unit, x.i.DefaultAccountId, x.i.DefaultTaxCodeId, x.i.Active, x.Used, x.i.Version.ToString(), x.i.TrackInventory))
+        .Select(x => new ItemDto(x.i.Id, x.i.CategoryId, x.i.Name, x.i.Description, x.i.Unit, x.i.DefaultAccountId, x.i.DefaultTaxCodeId, x.i.Active, x.Used, x.i.Version.ToString(), x.i.TrackInventory,
+            x.i.InventoryAccountId, x.i.IncomeAccountId, x.i.CostOfSalesAccountId))
         .ToList();
 }
