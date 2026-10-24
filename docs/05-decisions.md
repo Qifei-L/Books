@@ -59,6 +59,11 @@
 | 2026-10-24 | Bulk work is done by AI through MCP, not by people through import screens. M7 has no bank file parsers, import wizard or manual matching screen; it keeps statement lines, de-duplication, balance checks, matching rules and reconciliation on the server, behind MCP batch tools. Original statement files are not stored for now. |
 | 2026-10-24 | MCP batch tools succeed or fail as a whole: one transaction and one Idempotency-Key per batch; a rejected batch lists every error (document, line, reason); batches have a size limit. Business problems that keep a document a draft are not errors. |
 | 2026-10-24 | Writes inside a ledger lock that ledger and only share the organization, so ledgers do not block each other; organization changes (members, access, rates) still wait for writes in flight. |
+| 2026-10-24 | Monthly tax return (M8): the tax pack defines the return's boxes and the categories withholding codes are reported under; the return is calculated from posted documents by document date, so the API, the preview and MCP show the same figures, and AI clients read both the definition and the figures through MCP. Boxes are drafted from 04-cambodia-tax and marked to confirm with an adviser. |
+| 2026-10-24 | Return KHR amounts start from each document's tax currency snapshot; the month's rate may be overridden on the return, with a reason. |
+| 2026-10-24 | Filing a month's return keeps a snapshot of it and closes the ledger through the month end, so filed months cannot change. |
+| 2026-10-24 | Purchase withholding tax is reported in the month of the invoice date (accrual, matching DFDL Instruction 37705). |
+| 2026-10-24 | The prepayment of tax on income is still paid: the return calculates 1% of turnover excluding VAT, not just the base. |
 
 ## Proposed defaults (accept or change)
 
