@@ -13,9 +13,10 @@ public static class TaxReturnEndpoints
             Envelope.Ok(http, await service.PackAsync(await principals.GetAsync(ct), orgId, ledgerId, ct)));
 
         // A month's return, yyyy-MM. khrRate with khrReason recalculates the tax currency at one rate for the month.
-        ledger.MapGet("/tax-returns/{period}", async (Guid orgId, Guid ledgerId, string period, string? khrRate, string? khrReason,
+        // definitionVersion previews the month with a specific (for example draft) definition version.
+        ledger.MapGet("/tax-returns/{period}", async (Guid orgId, Guid ledgerId, string period, string? khrRate, string? khrReason, int? definitionVersion,
             PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
-            Envelope.Ok(http, await service.ReturnAsync(await principals.GetAsync(ct), orgId, ledgerId, period, Override(khrRate, khrReason), ct)));
+            Envelope.Ok(http, await service.ReturnAsync(await principals.GetAsync(ct), orgId, ledgerId, period, Override(khrRate, khrReason), ct, definitionVersion)));
 
         ledger.MapGet("/tax-returns", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.FiledAsync(await principals.GetAsync(ct), orgId, ledgerId, ct)));
@@ -26,12 +27,27 @@ public static class TaxReturnEndpoints
             WriteHttp.Result(http, await service.FileAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, period,
                 Override(body?.KhrRate, body?.KhrReason), ct)));
 
-        ledger.MapGet("/tax-returns/{period}/boxes/{key}", async (Guid orgId, Guid ledgerId, string period, string key, string? khrRate, string? khrReason,
+        ledger.MapGet("/tax-returns/{period}/boxes/{key}", async (Guid orgId, Guid ledgerId, string period, string key, string? khrRate, string? khrReason, int? definitionVersion,
             PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
-            Envelope.Ok(http, await service.BoxLinesAsync(await principals.GetAsync(ct), orgId, ledgerId, period, key, Override(khrRate, khrReason), ct)));
+            Envelope.Ok(http, await service.BoxLinesAsync(await principals.GetAsync(ct), orgId, ledgerId, period, key, Override(khrRate, khrReason), ct, definitionVersion)));
+
+        // Versions of the return definition: drafts by anyone who edits the ledger (AI clients too), published by administrators.
+        var definitions = ledger.MapGroup("/tax-return-definitions");
+        definitions.MapGet("", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, ReturnDefinitionService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.ListAsync(await principals.GetAsync(ct), orgId, ledgerId, ct)));
+        definitions.MapGet("/{number:int}", async (Guid orgId, Guid ledgerId, int number, PrincipalAccessor principals, ReturnDefinitionService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.GetAsync(await principals.GetAsync(ct), orgId, ledgerId, number, ct)));
+        definitions.MapPost("", async (Guid orgId, Guid ledgerId, DefinitionRequest body, PrincipalAccessor principals, ReturnDefinitionService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.CreateDraftAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, body.EffectiveFrom, body.Definition, ct)));
+        definitions.MapPut("/{number:int}", async (Guid orgId, Guid ledgerId, int number, DefinitionRequest body, PrincipalAccessor principals, ReturnDefinitionService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.UpdateDraftAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, number, body.EffectiveFrom, body.Definition, ct)));
+        definitions.MapPost("/{number:int}/publish", async (Guid orgId, Guid ledgerId, int number, PrincipalAccessor principals, ReturnDefinitionService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.PublishAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), orgId, ledgerId, number, ct)));
     }
 
     public sealed record FileRequest(string? KhrRate, string? KhrReason);
+
+    public sealed record DefinitionRequest(string EffectiveFrom, Books.Domain.Documents.ReturnDefinitionSpec Definition);
 
     internal static ReturnRateOverride? Override(string? rate, string? reason) =>
         rate is null && reason is null ? null

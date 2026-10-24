@@ -91,7 +91,7 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
                 var account = spec.AccountCode is null ? null : byCode[spec.AccountCode];
                 var nonDeductible = spec.NonDeductibleCode is null ? null : byCode[spec.NonDeductibleCode];
                 var code = new TaxCode(Guid.CreateVersion7(), ledger, spec.Name, spec.Kind, spec.Rate, account, nonDeductible, spec.From, null, scope.Now);
-                code.SetReturnCategory(spec.Category, [.. Books.Domain.Documents.TaxReturns.For(Key)!.WithholdingCategories.Select(c => c.Key)]);
+                code.SetReturnCategory(spec.Category, [.. Books.Domain.Documents.TaxReturns.Builtin(Key)!.WithholdingCategories.Select(c => c.Key)]);
                 db.TaxCodes.Add(code);
                 created.Add($"tax code {spec.Name}");
             }

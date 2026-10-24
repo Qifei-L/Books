@@ -194,3 +194,23 @@ internal sealed class FiledTaxReturnConfiguration : IEntityTypeConfiguration<Fil
         b.HasOne<User>().WithMany().HasForeignKey(x => x.FiledBy).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class ReturnDefinitionVersionConfiguration : IEntityTypeConfiguration<ReturnDefinitionVersion>
+{
+    public void Configure(EntityTypeBuilder<ReturnDefinitionVersion> b)
+    {
+        b.ToTable("return_definition_versions", t =>
+        {
+            t.HasCheckConstraint("ck_return_definition_versions_status", "status IN ('draft', 'published') AND (status = 'draft' OR published_at IS NOT NULL)");
+            t.HasCheckConstraint("ck_return_definition_versions_month", "EXTRACT(DAY FROM effective_from) = 1");
+        });
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Definition).HasColumnType("text");
+        b.HasIndex(x => new { x.LedgerId, x.VersionNo }).IsUnique();
+        b.HasIndex(x => new { x.LedgerId, x.EffectiveFrom }).IsUnique().HasFilter("status = 'published'");
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
