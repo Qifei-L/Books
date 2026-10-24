@@ -120,3 +120,62 @@ internal sealed class DocumentTaxCurrencyConfiguration : IEntityTypeConfiguratio
         b.HasOne<Ledger>().WithMany().HasForeignKey(x => x.LedgerId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<SalesInvoice>
+{
+    public void Configure(EntityTypeBuilder<SalesInvoice> b)
+    {
+        b.ToTable("sales_invoices", t => t.HasCheckConstraint(
+            "ck_sales_invoices_status", "status IN ('draft', 'posted', 'deleted') AND (status <> 'posted' OR journal_id IS NOT NULL) AND due_date >= date"));
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Reference).HasMaxLength(200);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.Property(x => x.Issues).HasColumnType("jsonb");
+        b.Ignore(x => x.NetTotal);
+        b.Ignore(x => x.TaxTotal);
+        b.Ignore(x => x.GrossTotal);
+        b.Ignore(x => x.SourceKind);
+        b.HasAlternateKey(x => new { x.LedgerId, x.Id });
+        // Invoices and credit notes are numbered in separate series.
+        b.HasIndex(x => new { x.LedgerId, x.IsCreditNote, x.InvoiceNo }).IsUnique();
+        b.HasIndex(x => new { x.LedgerId, x.CustomerId });
+        b.HasOne<SalesInvoice>().WithMany().HasForeignKey(x => x.OriginalInvoiceId).OnDelete(DeleteBehavior.Restrict);
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+        b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Party>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.CustomerId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.ReceivableAccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Journal>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.JournalId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class SalesInvoiceLineConfiguration : IEntityTypeConfiguration<SalesInvoiceLine>
+{
+    public void Configure(EntityTypeBuilder<SalesInvoiceLine> b)
+    {
+        b.ToTable("sales_invoice_lines");
+        b.HasKey(x => new { x.InvoiceId, x.LineNo });
+        b.Ignore(x => x.TaxAdjusted);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.Property(x => x.TaxReason).HasMaxLength(500);
+        foreach (var amount in new[] { nameof(SalesInvoiceLine.NetAmount), nameof(SalesInvoiceLine.TaxCalculated), nameof(SalesInvoiceLine.TaxAmount),
+                     nameof(SalesInvoiceLine.Quantity), nameof(SalesInvoiceLine.UnitPrice) })
+        {
+            b.Property(amount).HasPrecision(20, 4);
+        }
+        b.HasIndex(x => x.AccountId);
+        b.HasIndex(x => x.TaxCodeId);
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<TaxCode>().WithMany().HasForeignKey(x => x.TaxCodeId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
