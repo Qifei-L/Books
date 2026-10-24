@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Books (read-only preview)</title>
+  <title>Books (preview)</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
   <header>
     <strong>Books</strong>
-    <span class="tag">read-only preview · development only</span>
+    <span class="tag">preview · development only</span>
     <span id="who" class="who"></span>
   </header>
 
@@ -105,9 +105,12 @@
       <form method="dialog"><button>Close</button></form>
     </dialog>
 
+    <dialog id="form-dialog" class="wide"></dialog>
+
     <p id="error" class="error hidden"></p>
   </main>
 
   <script src="app.js"></script>
+  <script src="forms.js"></script>
 </body>
 </html>

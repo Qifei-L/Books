@@ -41,3 +41,21 @@ tr.click:hover td { background: #f3f6fe; }
 .error { color: var(--bad); }
 .ok { color: #1e6b3a; font-weight: 600; }
 dialog { border: 1px solid var(--line); border-radius: 8px; max-width: 720px; width: 92vw; }
+dialog.wide { max-width: 1100px; }
+button.danger { background: #fff; color: var(--bad); border-color: var(--bad); }
+button.link { background: none; border: none; color: var(--muted); padding: 2px 6px; font-size: 16px; }
+button.small { padding: 2px 8px; font-size: 12px; }
+button:disabled { opacity: .5; cursor: default; }
+textarea { font: inherit; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); resize: vertical; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.grid label { margin: 0; }
+.grid .wide { grid-column: span 2; }
+label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--ink); font-size: 14px; }
+table.lines td { padding: 3px 4px; }
+table.lines input, table.lines select { width: 100%; }
+table.lines select[name=account_id] { min-width: 150px; }
+dialog.wide form { overflow-x: auto; }
+table.lines input.num { text-align: right; min-width: 70px; }
+.actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+.actions .spacer { flex: 1; }
+.totals { text-align: right; }

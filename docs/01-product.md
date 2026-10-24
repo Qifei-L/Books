@@ -52,11 +52,12 @@ Replace our Manager.io bookkeeping with a system that:
 | M7 Cash and bank | Payments and receipts (Manager.io style), settlement by party, statement import through MCP, clearing and reconciliation | Done |
 | M8 Tax reporting | Monthly return on GDT forms (T7 01, WT 03), versioned definitions, reconciliation, filing | Done |
 | M9 Invoice printing | Sales invoices and credit notes as PDF in Khmer and English, three styles, KHR total | Part 1 done (PDF, settings) |
-| M10 Inventory and fixed assets | Inventory items, stock movements from purchases and sales, cost of sales; fixed asset register and depreciation | Planned |
-| M11 Other monthly taxes | Tax on salary from imported payroll results (TOS 01) is done; specific, accommodation and public lighting tax (T7 01) | Part done |
-| M12 Multi-currency | Foreign-currency bank accounts, documents and parties; exchange differences | Planned |
+| M10 Inventory and fixed assets | Inventory items, stock movements from purchases and sales, cost of sales; fixed asset register and depreciation | Done |
+| M11 Other monthly taxes | Tax on salary from imported payroll results (TOS 01) is done; specific, accommodation and public lighting tax (T7 01) | Done |
+| M12 Multi-currency | Foreign-currency bank accounts, documents and parties; exchange differences | Part 1 done (invoices and notes in another currency) |
 | M13 Attachments | Files attached to documents and journals, shared by every document type | Planned |
 | M14 Organization-shared information | Information kept once per organization and used by every company (ledger) in it: customers and suppliers, items, tax codes, return definitions and templates; exchange rates are already shared. Each ledger still keeps its own balances and documents | Planned (scope to confirm) |
-| Later | Annual income tax return; import VAT (T7 01 boxes 05–06); CamInvoice | Planned |
+| M15 Data entry for people | Forms in the app for the work people do by hand: customers and suppliers, sales, purchases, payments and receipts, journals; same API, rules and audit as AI clients | In progress |
+| Later | Annual income tax return; CamInvoice | Planned |
 
 MCP tools ship with each milestone, not at the end.
