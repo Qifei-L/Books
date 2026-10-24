@@ -13,7 +13,8 @@ async function write(method, path, body, version) {
   if (response.ok || (response.status === 422 && json?.data)) return { status: response.status, data: json?.data };
   if (response.status === 401) signOut();
   if (response.status === 412) throw new Error("Someone else changed this record. Close the form and open it again.");
-  throw new Error(json?.detail ?? json?.title ?? `HTTP ${response.status}`);
+  const reasons = (json?.issues ?? []).map((i) => i.message).join(" ");
+  throw new Error([json?.detail ?? json?.title ?? `HTTP ${response.status}`, reasons].filter(Boolean).join(" "));
 }
 
 /** Opens the form dialog with the given title and inner HTML; returns the form element. */
@@ -49,7 +50,7 @@ const options = (rows, selected, label, empty) =>
   + rows.map((r) => `<option value="${r.id}" ${r.id === selected ? "selected" : ""}>${esc(label(r))}</option>`).join("");
 
 async function refreshLedger() {
-  await Promise.all([renderSales(), renderPurchases(), renderBank(), renderInventory(), renderSetup(), renderJournals()]);
+  await Promise.all([renderSales(), renderPurchases(), renderBank(), renderInventory(), renderAssets(), renderSetup(), renderJournals()]);
 }
 
 // ---- Customers and suppliers ----
