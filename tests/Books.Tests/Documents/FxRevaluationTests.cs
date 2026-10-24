@@ -81,6 +81,38 @@ public sealed class FxRevaluationTests(TestHost host)
         Assert.Equal(["posted", "deleted"], list.EnumerateArray().Select(r => Get(r, "status")));
     }
 
+    [Fact]
+    public async Task A_khr_overpayment_stays_in_khr_and_is_revalued_while_the_balance_sheet_shows_one_receivables_line()
+    {
+        var (s, khr, _) = await SetUpAsync();
+        var invoice = await (await s.Books.Admin.PostAsync(s.Url, new
+        {
+            customer_id = s.Customer, date = "2026-10-01", currency = "KHR", exchange_rate = "4000",
+            lines = new[] { new { account_id = s.Books.Sales, amount = "400000", tax_code_id = s.Taxes["VAT 10% (sales)"] } },
+        })).DataAsync(HttpStatusCode.Created);                                                   // 440,000 KHR = 110.00
+        await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/receipts", new
+        {
+            bank_account_id = khr, party_id = s.Customer, date = "2026-10-20", exchange_rate = "4100", lines = new[] { new { invoice_id = invoice.Id(), amount = "500000" } },
+        })).DataAsync(HttpStatusCode.Created);                                                   // 60,000 KHR overpaid: a 15.00 credit at 4,000
+
+        var preview = await (await s.Books.Admin.GetAsync($"{s.LedgerUrl}/fx-revaluations/preview?date=2026-12-31&khrRate=4400", Ct)).DataAsync();
+        await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/fx-revaluations", new { date = "2026-12-31", rates = new Dictionary<string, string> { ["KHR"] = "4400" } }))
+            .DataAsync(HttpStatusCode.Created);
+        var sheet = await (await s.Books.Admin.GetAsync($"{s.LedgerUrl}/reports/balance-sheet?asOf=2026-12-31", Ct)).DataAsync();
+
+        var credit = preview.GetProperty("lines").EnumerateArray().Single(l => Get(l, "kind") == "receivable");
+        Assert.Equal(("Credit balance in KHR", "-60000", "-15.00", "-13.64", "1.36"),
+            (Get(credit, "description"), Get(credit, "foreign_amount"), Get(credit, "before"), Get(credit, "after"), Get(credit, "adjustment")));
+        var accounts = Flatten(sheet.GetProperty("sections")[0].GetProperty("lines")).ToList();
+        Assert.DoesNotContain(accounts, l => l.Code == "1290");
+        Assert.Equal("-13.64", accounts.Single(l => l.Code == "1200").Amount);                  // -15.00 control + 1.36 revaluation
+        Assert.True(sheet.GetProperty("balanced").GetBoolean());
+    }
+
+    private static IEnumerable<(string? Code, string Amount)> Flatten(JsonElement lines) =>
+        lines.EnumerateArray().SelectMany(l => new[] { (l.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null, Get(l, "amount")) }
+            .Concat(Flatten(l.GetProperty("children"))));
+
     private async Task<(SalesInvoiceTests.Setup, Guid Khr, Guid Bank)> SetUpAsync()
     {
         var s = await new SalesInvoiceTests(host).SetUpAsync();

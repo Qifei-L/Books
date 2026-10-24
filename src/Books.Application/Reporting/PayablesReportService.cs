@@ -84,7 +84,7 @@ public sealed class PayablesReportService(IBooksDb db, ReadRunner reads)
             .Where(p => p.LedgerId == ledgerId && p.Status == DocumentStatus.Posted && p.Date <= to && p.PartyId != null).ToListAsync(ct);
         var payables = await db.AccountUsages.Where(u => u.LedgerId == ledgerId && u.Usage == Usage.Payable).Select(u => u.AccountId).ToListAsync(ct);
         var charges = documents.Where(i => !i.IsDebitNote)
-            .Select(i => new Charge(i.Id, i.SupplierId, i.Date, i.DueDate, "invoice", i.InvoiceNo, i.Reference, i.BaseTotal)).ToList();
+            .Select(i => new Charge(i.Id, i.SupplierId, i.Date, i.DueDate, "invoice", i.InvoiceNo, i.Reference, i.BaseTotal, i.ExchangeRate is null ? null : i.Currency, i.ExchangeRate)).ToList();
         var credits = documents.Where(i => i.IsDebitNote)
             .Select(i => new Credit(i.SupplierId, i.Date, "debit_note", i.InvoiceNo, i.Reference, i.OriginalInvoiceId, i.BaseTotal))
             .Concat(OpenItems.PaymentCredits(payments, payables.ToHashSet(), receiptsReduce: false)).ToList();
@@ -98,10 +98,13 @@ public sealed class PayablesReportService(IBooksDb db, ReadRunner reads)
 
 /// <summary>An amount still open for a party: positive when owed, negative for a credit.</summary>
 /// <param name="InvoiceId">The invoice still open; null for a party's credit.</param>
-internal sealed record OpenItem(Guid PartyId, DateOnly Date, DateOnly DueDate, string Type, long Number, string? Reference, decimal Amount, Guid? InvoiceId = null);
+/// <param name="Currency">An invoice in another currency, or a credit left over from settling one: that currency and its rate (M12.2b).</param>
+internal sealed record OpenItem(Guid PartyId, DateOnly Date, DateOnly DueDate, string Type, long Number, string? Reference, decimal Amount, Guid? InvoiceId = null,
+    string? Currency = null, decimal? Rate = null);
 
-/// <summary>An invoice: what the party owes (payables) or is owed (receivables).</summary>
-internal sealed record Charge(Guid Id, Guid PartyId, DateOnly Date, DateOnly DueDate, string Type, long Number, string? Reference, decimal Amount);
+/// <summary>An invoice: what the party owes (payables) or is owed (receivables); in another currency, with that currency and its rate.</summary>
+internal sealed record Charge(Guid Id, Guid PartyId, DateOnly Date, DateOnly DueDate, string Type, long Number, string? Reference, decimal Amount,
+    string? Currency = null, decimal? Rate = null);
 
 /// <summary>A debit or credit note, or one line of a payment or receipt, reducing the party's balance; it may name the invoice it settles.</summary>
 internal sealed record Credit(Guid PartyId, DateOnly Date, string Type, long Number, string? Reference, Guid? InvoiceId, decimal Amount);
@@ -115,6 +118,8 @@ internal static class OpenItems
     /// Settles each party's invoices (owner decision: by party, Manager.io style). Credits naming an invoice settle it
     /// first; the rest, and any excess, settle the oldest open invoices by due date; what is left is the party's
     /// credit, shown as not due. The open amounts always add up to invoices less credits, so aging equals the control balance.
+    /// What is left over from a credit naming an invoice in another currency stays in that currency at the invoice's
+    /// rate, so year-end revaluation can restate it (M12.2b); leftovers are used oldest first.
     /// </summary>
     public static List<OpenItem> Settle(IEnumerable<Charge> charges, IEnumerable<Credit> credits, DateOnly asOf)
     {
@@ -123,34 +128,45 @@ internal static class OpenItems
         foreach (var party in charges.GroupBy(c => c.PartyId).Select(g => g.Key).Union(byParty.Keys))
         {
             var invoices = charges.Where(c => c.PartyId == party).OrderBy(c => c.DueDate).ThenBy(c => c.Date).ThenBy(c => c.Number).ToList();
+            var byId = invoices.ToDictionary(c => c.Id);
             var remaining = invoices.ToDictionary(c => c.Id, c => c.Amount);
-            var pool = 0m;
+            var pool = new List<(decimal Amount, string? Currency, decimal? Rate)>();
             foreach (var credit in byParty.GetValueOrDefault(party, []).OrderBy(c => c.Date).ThenBy(c => c.Number))
             {
                 if (credit.InvoiceId is { } id && remaining.TryGetValue(id, out var left) && credit.Amount > 0)
                 {
                     var take = Math.Min(Math.Max(left, 0), credit.Amount);
                     remaining[id] = left - take;
-                    pool += credit.Amount - take;
+                    if (credit.Amount != take)
+                    {
+                        pool.Add((credit.Amount - take, byId[id].Currency, byId[id].Rate));
+                    }
                 }
-                else
+                else if (credit.Amount != 0)
                 {
-                    pool += credit.Amount;
+                    pool.Add((credit.Amount, null, null));
                 }
             }
             foreach (var invoice in invoices)
             {
-                var take = Math.Min(Math.Max(remaining[invoice.Id], 0), Math.Max(pool, 0));
+                var take = Math.Min(Math.Max(remaining[invoice.Id], 0), Math.Max(pool.Sum(p => p.Amount), 0));
                 remaining[invoice.Id] -= take;
-                pool -= take;
+                for (var i = 0; i < pool.Count && take > 0; i++)
+                {
+                    var used = Math.Min(Math.Max(pool[i].Amount, 0), take);
+                    pool[i] = pool[i] with { Amount = pool[i].Amount - used };
+                    take -= used;
+                }
                 if (remaining[invoice.Id] != 0)
                 {
-                    open.Add(new OpenItem(party, invoice.Date, invoice.DueDate, invoice.Type, invoice.Number, invoice.Reference, remaining[invoice.Id], invoice.Id));
+                    open.Add(new OpenItem(party, invoice.Date, invoice.DueDate, invoice.Type, invoice.Number, invoice.Reference, remaining[invoice.Id], invoice.Id,
+                        invoice.Currency, invoice.Rate));
                 }
             }
-            if (pool != 0)
+            if (pool.Sum(p => p.Amount) != 0)
             {
-                open.Add(new OpenItem(party, asOf, asOf, "credit", 0, null, -pool));
+                open.AddRange(pool.GroupBy(p => (p.Currency, p.Rate)).Where(g => g.Sum(p => p.Amount) != 0)
+                    .Select(g => new OpenItem(party, asOf, asOf, "credit", 0, null, -g.Sum(p => p.Amount), null, g.Key.Currency, g.Key.Rate)));
             }
         }
         return open;

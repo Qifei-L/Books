@@ -150,13 +150,17 @@ public sealed class FxRevaluationService(
             }
         }
 
+        // Open invoices in another currency, and credits left over from settling one (overpayments, owner decision).
         async Task InvoicesAsync(RevaluationLineKind kind, IEnumerable<OpenItem> open, Dictionary<Guid, (string Currency, decimal Rate, string Label)> foreign, Usage usage)
         {
             Guid? account = null;
             var sign = kind == RevaluationLineKind.Receivable ? 1 : -1;
-            foreach (var item in open.Where(i => i.InvoiceId is { } id && foreign.ContainsKey(id) && i.Amount != 0).OrderBy(i => i.Date).ThenBy(i => i.Number))
+            foreach (var item in open.Where(i => i.Currency is not null && i.Rate is not null && i.Currency != ledger.BaseCurrency && i.Amount != 0
+                         && i.Date <= date).OrderBy(i => i.Date).ThenBy(i => i.Number))
             {
-                var (currency, rate, label) = foreign[item.InvoiceId!.Value];
+                var currency = item.Currency!;
+                var rate = item.Rate!.Value;
+                var label = item.InvoiceId is { } id && foreign.TryGetValue(id, out var invoice) ? invoice.Label : $"Credit balance in {currency}";
                 var own = Math.Round(item.Amount * rate, Currencies.Require(currency).MinorUnits, MidpointRounding.AwayFromZero);
                 var after = At(own, await RateAsync(currency));
                 if (after != item.Amount)
