@@ -53,15 +53,33 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
-            var series = debitNote ? PurchaseInvoice.DebitNoteKind : PurchaseInvoice.Kind;
-            var invoice = new PurchaseInvoice(Guid.CreateVersion7(), orgId, ledgerId, await posting.NextNumberAsync(ledgerId, series, ct), principal.UserId, scope.Now, debitNote);
-            var issues = await SetAsync(invoice, ledger, input, isNew: true, ct);
-            db.PurchaseInvoices.Add(invoice);
-            var status = await SaveAsync(scope, ledger, invoice, issues, post, ct);
-            scope.Audit($"purchase_invoice.{status}", "purchase_invoice", invoice.Id, new { invoice_no = invoice.InvoiceNo, journal_id = invoice.JournalId, issues = invoice.Issues });
-            await db.SaveChangesAsync(ct);
+            var (status, invoice) = await CreateOneAsync(scope, ledger, input, post, debitNote, ct);
             return WriteResult.Of(status == "not_posted" ? 422 : 201, (await LoadAsync(ledgerId, invoice.Id, ct)).Single(), invoice.Version);
         }, ct);
+
+    /// <summary>Saves several invoices and debit notes as drafts in one transaction, all or none (MCP batches).</summary>
+    public Task<WriteResult> CreateDraftsAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId,
+        IReadOnlyList<(PurchaseInvoiceInput Input, bool DebitNote)> documents, CancellationToken ct) =>
+        writes.RunAsync(principal, new WriteRequest("purchase_invoice.save_drafts", orgId, meta, LedgerId: ledgerId), async scope =>
+        {
+            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
+            var saved = await Batch.RunAllAsync(documents, d => CreateOneAsync(scope, ledger, d.Input, post: false, d.DebitNote, ct));
+            var dtos = (await LoadAsync(ledgerId, null, ct)).ToDictionary(d => d.Id);
+            return WriteResult.Of(201, saved.Select(s => dtos[s.Invoice.Id]).ToList());
+        }, ct);
+
+    private async Task<(string Status, PurchaseInvoice Invoice)> CreateOneAsync(WriteScope scope, Ledger ledger, PurchaseInvoiceInput input, bool post, bool debitNote, CancellationToken ct)
+    {
+        var series = debitNote ? PurchaseInvoice.DebitNoteKind : PurchaseInvoice.Kind;
+        var invoice = new PurchaseInvoice(Guid.CreateVersion7(), ledger.OrgId, ledger.Id, await posting.NextNumberAsync(ledger.Id, series, ct), scope.Principal.UserId, scope.Now, debitNote);
+        var issues = await SetAsync(invoice, ledger, input, isNew: true, ct);
+        db.PurchaseInvoices.Add(invoice);
+        var status = await SaveAsync(scope, ledger, invoice, issues, post, ct);
+        scope.Audit($"purchase_invoice.{status}", "purchase_invoice", invoice.Id, new { invoice_no = invoice.InvoiceNo, journal_id = invoice.JournalId, issues = invoice.Issues });
+        await db.SaveChangesAsync(ct);
+        return (status, invoice);
+    }
 
     public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid invoiceId, PurchaseInvoiceInput input, bool post, CancellationToken ct) =>
         writes.RunAsync(principal, new WriteRequest(post ? "purchase_invoice.save" : "purchase_invoice.save_draft", orgId, meta, LedgerId: ledgerId), async scope =>
