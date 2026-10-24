@@ -47,6 +47,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<FxRevaluation> FxRevaluations => Set<FxRevaluation>();
     public DbSet<FxRevaluationLine> FxRevaluationLines => Set<FxRevaluationLine>();
     public DbSet<StockAdjustmentLine> StockAdjustmentLines => Set<StockAdjustmentLine>();
+    public DbSet<StockAdjustmentEntry> StockAdjustmentEntries => Set<StockAdjustmentEntry>();
     public DbSet<FixedAsset> FixedAssets => Set<FixedAsset>();
     public DbSet<DepreciationRun> DepreciationRuns => Set<DepreciationRun>();
     public DbSet<DepreciationLine> DepreciationLines => Set<DepreciationLine>();

@@ -2328,7 +2328,7 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Books.Domain.Documents.StockAdjustmentLine", b =>
+            modelBuilder.Entity("Books.Domain.Documents.StockAdjustmentEntry", b =>
                 {
                     b.Property<Guid>("AdjustmentId")
                         .HasColumnType("uuid")
@@ -2339,6 +2339,42 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnName("line_no");
 
                     b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.HasKey("AdjustmentId", "LineNo")
+                        .HasName("pk_stock_adjustment_entries");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_stock_adjustment_entries_account_id");
+
+                    b.ToTable("stock_adjustment_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_adjustment_entries_amount", "amount <> 0");
+                        });
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.StockAdjustmentLine", b =>
+                {
+                    b.Property<Guid>("AdjustmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("adjustment_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_no");
+
+                    b.Property<Guid?>("AccountId")
                         .HasColumnType("uuid")
                         .HasColumnName("account_id");
 
@@ -2394,7 +2430,7 @@ namespace Books.Infrastructure.Migrations
 
                     b.ToTable("stock_adjustment_lines", null, t =>
                         {
-                            t.HasCheckConstraint("ck_stock_adjustment_lines_quantity", "quantity <> 0");
+                            t.HasCheckConstraint("ck_stock_adjustment_lines_quantity", "quantity <> 0 OR value <> 0");
                         });
                 });
 
@@ -4104,13 +4140,29 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_stock_adjustments_ledgers_org_id_ledger_id");
                 });
 
-            modelBuilder.Entity("Books.Domain.Documents.StockAdjustmentLine", b =>
+            modelBuilder.Entity("Books.Domain.Documents.StockAdjustmentEntry", b =>
                 {
                     b.HasOne("Books.Domain.Ledgers.Account", null)
                         .WithMany()
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
+                        .HasConstraintName("fk_stock_adjustment_entries_accounts_account_id");
+
+                    b.HasOne("Books.Domain.Documents.StockAdjustment", null)
+                        .WithMany("Entries")
+                        .HasForeignKey("AdjustmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_adjustment_entries_stock_adjustments_adjustment_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.StockAdjustmentLine", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_stock_adjustment_lines_accounts_account_id");
 
                     b.HasOne("Books.Domain.Documents.StockAdjustment", null)
@@ -4479,6 +4531,8 @@ namespace Books.Infrastructure.Migrations
 
             modelBuilder.Entity("Books.Domain.Documents.StockAdjustment", b =>
                 {
+                    b.Navigation("Entries");
+
                     b.Navigation("Lines");
                 });
 #pragma warning restore 612, 618

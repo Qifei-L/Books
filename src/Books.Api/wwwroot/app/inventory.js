@@ -43,14 +43,28 @@ async function renderInventory(asOf = state.inventoryAsOf ?? today()) {
 function showAdjustment(a, itemName) {
   $("journal-body").innerHTML = `<h3>Stock adjustment ${a.adjustment_no} <span class="pill ${a.status}">${a.status}</span></h3>
     <p class="muted">${a.date} · ${esc(a.reference ?? "")} · ${esc(a.description ?? "")}</p>
-    <table><tr><th>Item</th><th class="num">Book</th><th class="num">Counted</th><th class="num">Change</th><th class="num">Unit cost</th><th class="num">Value</th><th>Account</th></tr>
+    <table><tr><th>Item</th><th class="num">Book</th><th class="num">Counted</th><th class="num">Change</th><th class="num">Unit cost</th><th class="num">Value</th><th>Other side</th></tr>
     ${a.lines.map((l) => `<tr><td>${esc(itemName(l.item_id))}${l.description ? ` · ${esc(l.description)}` : ""}</td><td class="num">${l.book_quantity}</td>
-      <td class="num">${l.counted_quantity ?? ""}</td><td class="num">${l.quantity}</td><td class="num">${l.unit_cost ?? ""}</td><td class="num">${l.value}</td>
-      <td>${esc(accountName(l.account_id))}</td></tr>`).join("")}
+      <td class="num">${l.counted_quantity ?? ""}</td><td class="num">${l.quantity === "0" ? "value only" : l.quantity}</td><td class="num">${l.unit_cost ?? ""}</td><td class="num">${l.value}</td>
+      <td>${l.account_id ? esc(accountName(l.account_id)) : "entries"}</td></tr>`).join("")}
     <tr class="total"><td colspan="5">Total</td><td class="num">${a.total_value}</td><td></td></tr></table>
+    ${postingHtml(a.posting)}
     ${a.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(a)}
     ${canEdit() ? `<p><button class="secondary" onclick="editAdjustment('${a.id}')">Edit</button></p>` : ""}`;
   $("journal-dialog").showModal();
+}
+
+/** The journal an adjustment posts, and a sentence on where the value went. */
+function postingHtml(posting) {
+  if (!posting?.length) return "";
+  const total = posting.reduce((sum, p) => sum + Number(p.debit), 0);
+  const row = (p) => `${esc(accountName(p.account_id))} ${Number(p.debit) ? `Dr ${p.debit}` : `Cr ${p.credit}`}`;
+  return `<h4>Posting</h4>
+    <table><tr><th>Account</th><th>Text</th><th class="num">Debit</th><th class="num">Credit</th></tr>
+    ${posting.map((p) => `<tr><td>${esc(accountName(p.account_id))}${p.stock ? ` <span class="pill">stock</span>` : ""}</td><td>${esc(p.description ?? "")}</td>
+      <td class="num">${blank(p.debit)}</td><td class="num">${blank(p.credit)}</td></tr>`).join("")}
+    <tr class="total"><td colspan="2">Debits equal credits</td><td class="num">${total.toFixed(2)}</td><td class="num">${total.toFixed(2)}</td></tr></table>
+    <p class="muted small">Stock: ${posting.filter((p) => p.stock).map(row).join(", ")}. Other side: ${posting.filter((p) => !p.stock).map(row).join(", ")}.</p>`;
 }
 
 async function editAdjustment(id) {
@@ -60,9 +74,10 @@ async function editAdjustment(id) {
 }
 
 /**
- * Write-offs and counts in one form. A line gives either the counted quantity (Books takes the difference from the
- * book quantity on the date) or the change itself. A count starts with every inventory item listed; lines left
- * empty, or counted at the book quantity, are not saved.
+ * Stock adjustments, Manager.io style, like a journal. Each item line changes the quantity and/or the value: a
+ * counted quantity (Books takes the difference), a change of quantity (valued at the average cost unless an
+ * amount is given), or an amount alone (a revaluation). The other side is each line's account (default the item's
+ * cost of sales), or entries on one or more accounts that balance the lines. The posting is previewed as you type.
  */
 async function adjustmentForm(doc, count = false) {
   try {
@@ -74,11 +89,16 @@ async function adjustmentForm(doc, count = false) {
       <div class="grid">
         <label>Date <input type="date" name="date" value="${doc?.date ?? today()}" required></label>
         <label>Reference <input name="reference" value="${esc(doc?.reference ?? "")}"></label>
-        <label class="wide">Description <input name="description" value="${esc(doc?.description ?? "")}" placeholder="${count ? "Month-end count" : "Damaged, expired, found…"}"></label>
+        <label class="wide">Description <input name="doc_description" value="${esc(doc?.description ?? "")}" placeholder="${count ? "Month-end count" : "Damaged, expired, found, written down…"}"></label>
       </div>
-      <p class="muted small">Give the counted quantity, or the change (negative writes off). Stock going out is valued at the average cost; stock coming in at the unit cost, or the average cost if left empty. The account defaults to cost of sales.</p>
-      <table class="lines"></table>
-      <p><button type="button" class="secondary" data-add>Add line</button></p>
+      <p class="muted small">Each line: a counted quantity, or a change of quantity, and/or an amount (the change of value; an amount alone revalues the stock).
+        Without an amount, stock going out is valued at the average cost and stock coming in at the unit cost or the average cost.</p>
+      <table class="lines" data-items></table>
+      <p><button type="button" class="secondary" data-add>Add item line</button></p>
+      <h4>Other side <span class="muted small">— leave empty to post each line to its account (default the item's cost of sales), or split it over accounts like a journal</span></h4>
+      <table class="lines" data-entries></table>
+      <p><button type="button" class="secondary" data-add-entry>Add account line</button></p>
+      <div id="adjustment-posting" class="muted small"></div>
       <p class="actions">
         ${doc ? `<button type="button" class="danger" data-delete>Delete</button>` : ""}
         <span class="spacer"></span>
@@ -87,47 +107,80 @@ async function adjustmentForm(doc, count = false) {
         <button type="submit" data-post="true">Save and post</button>
       </p>`);
     let onHand = {};
+    let timer;
     const columns = [
-      { name: "item_id", head: "Item", cell: (l) => `<select name="item_id">${options(tracked, l?.item_id, (i) => i.name, "Choose")}</select>` },
+      { name: "item_id", head: "Item", cell: (l) => `<select name="item_id">${options(tracked, l?.item_id, (i) => `${i.code ? `${i.code} ` : ""}${i.name}`, "Choose")}</select>` },
       { name: "on_hand", head: "On hand", num: true, cell: () => `<span data-on-hand></span>` },
       { name: "counted_quantity", head: "Counted", num: true, cell: (l) => `<input name="counted_quantity" class="num" inputmode="decimal" value="${l?.counted_quantity ?? ""}">` },
-      { name: "quantity", head: "Change", num: true, cell: (l) => `<input name="quantity" class="num" inputmode="decimal" value="${l?.counted_quantity == null ? l?.quantity ?? "" : ""}">` },
+      { name: "quantity", head: "Change", num: true, cell: (l) => `<input name="quantity" class="num" inputmode="decimal" value="${l?.counted_quantity == null && l?.quantity && l.quantity !== "0" ? l.quantity : ""}">` },
+      { name: "amount", head: "Amount", num: true, cell: (l) => `<input name="amount" class="num" inputmode="decimal" value="${l?.quantity === "0" ? l.value : ""}" placeholder="average cost">` },
       { name: "unit_cost", head: "Unit cost", num: true, cell: (l) => `<input name="unit_cost" class="num" inputmode="decimal" value="${l?.unit_cost ?? ""}">` },
-      { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(others, l?.account_id, (a) => `${a.code} ${a.name}`, "Cost of sales")}</select>` },
+      { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(others, l?.account_id, (a) => `${a.code} ${a.name}`, "Item's cost of sales")}</select>` },
       { name: "description", head: "Note", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },
     ];
-    const showOnHand = () => {
+    const entryColumns = [
+      { name: "account_id", head: "Account", cell: (e) => `<select name="account_id">${options(others, e?.account_id, (a) => `${a.code} ${a.name}`, "Choose")}</select>` },
+      { name: "description", head: "Text", cell: (e) => `<input name="description" value="${esc(e?.description ?? "")}">` },
+      { name: "debit", head: "Debit", num: true, cell: (e) => `<input name="debit" class="num" inputmode="decimal" value="${e && e.debit !== "0.00" ? e.debit : ""}">` },
+      { name: "credit", head: "Credit", num: true, cell: (e) => `<input name="credit" class="num" inputmode="decimal" value="${e && e.credit !== "0.00" ? e.credit : ""}">` },
+    ];
+    const body = (post) => {
+      const f = form.elements;
+      const text = (v) => (v.trim() === "" ? null : v.trim());
+      const entries = entryGrid.rows().map((tr) => ({ account_id: value(tr, "account_id"), description: value(tr, "description"), debit: value(tr, "debit"), credit: value(tr, "credit") }))
+        .filter((e) => e.account_id && (e.debit || e.credit));
+      const lines = grid.rows().map((tr) => ({
+        item_id: value(tr, "item_id"), counted_quantity: value(tr, "counted_quantity"), quantity: value(tr, "quantity"), amount: value(tr, "amount"),
+        unit_cost: value(tr, "unit_cost"), account_id: entries.length ? null : value(tr, "account_id"), description: value(tr, "description"),
+      })).filter((l) => l.item_id && (l.quantity !== null || l.counted_quantity !== null || l.amount !== null))
+        .filter((l) => l.counted_quantity === null || l.amount !== null || Number(l.counted_quantity) !== Number(onHand[l.item_id]?.on_hand ?? 0));
+      return { date: f.date.value, reference: text(f.reference.value), description: text(f.doc_description.value), lines, ...(entries.length ? { entries } : {}), post };
+    };
+    // Shows what would post, worked out by the server exactly as saving would.
+    const preview = () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const b = body(false);
+        if (!b.lines.length) { $("adjustment-posting").innerHTML = ""; return; }
+        try {
+          const p = await write("POST", `${ledgerUrl()}/stock-adjustments/preview${doc ? `?adjustmentId=${doc.id}` : ""}`, b);
+          $("adjustment-posting").innerHTML = postingHtml(p.data.posting);
+        } catch (error) {
+          $("adjustment-posting").innerHTML = `<p class="error">${esc(error.message)}</p>`;
+        }
+      }, 400);
+    };
+    const refresh = () => {
       for (const tr of grid.rows()) {
         const row = onHand[value(tr, "item_id")];
         tr.querySelector("[data-on-hand]").textContent = row ? row.on_hand : "";
         field(tr, "quantity").disabled = value(tr, "counted_quantity") !== null;
         field(tr, "counted_quantity").disabled = value(tr, "quantity") !== null;
+        field(tr, "unit_cost").disabled = value(tr, "amount") !== null;
+        field(tr, "account_id").disabled = entryGrid.rows().some((e) => value(e, "account_id"));
       }
+      preview();
     };
-    // Book quantities on the date, for the person counting; the server works out the change itself when saving.
     const loadOnHand = async () => {
       const report = await api(`${ledgerUrl()}/reports/inventory?asOf=${form.elements.date.value}`);
       onHand = Object.fromEntries(report.items.map((r) => [r.item_id, r]));
-      showOnHand();
+      refresh();
     };
-    const grid = lineGrid(form.querySelector("table.lines"), columns, showOnHand);
+    const grid = lineGrid(form.querySelector("table[data-items]"), columns, refresh);
+    const entryGrid = lineGrid(form.querySelector("table[data-entries]"), entryColumns, refresh);
     form.elements.date.onchange = loadOnHand;
-    form.querySelector("[data-add]").onclick = () => { grid.add(); showOnHand(); };
+    form.elements.doc_description.oninput = preview;
+    form.querySelector("[data-add]").onclick = () => { grid.add(); refresh(); };
+    form.querySelector("[data-add-entry]").onclick = () => { entryGrid.add(); refresh(); };
     for (const l of doc?.lines ?? (count ? tracked.map((i) => ({ item_id: i.id })) : [null])) grid.add(l);
+    for (const e of doc?.entries ?? []) entryGrid.add(e);
     await loadOnHand();
 
     const url = `${ledgerUrl()}/stock-adjustments`;
     onSave(form, async (post) => {
-      const f = form.elements;
-      const text = (v) => (v.trim() === "" ? null : v.trim());
-      const lines = grid.rows().map((tr) => ({
-        item_id: value(tr, "item_id"), counted_quantity: value(tr, "counted_quantity"), quantity: value(tr, "quantity"),
-        unit_cost: value(tr, "unit_cost"), account_id: value(tr, "account_id"), description: value(tr, "description"),
-      })).filter((l) => l.item_id && (l.quantity !== null || l.counted_quantity !== null))
-        .filter((l) => l.counted_quantity === null || Number(l.counted_quantity) !== Number(onHand[l.item_id]?.on_hand ?? 0));
-      if (!lines.length) throw new Error("Nothing to adjust: every counted quantity equals the book quantity.");
-      const body = { date: f.date.value, reference: text(f.reference.value), description: text(f.description.value), lines, post };
-      const result = await (doc ? write("PUT", `${url}/${doc.id}`, body, doc.version) : write("POST", url, body));
+      const b = body(post);
+      if (!b.lines.length) throw new Error("Nothing to adjust: give a quantity, a count or an amount.");
+      const result = await (doc ? write("PUT", `${url}/${doc.id}`, b, doc.version) : write("POST", url, b));
       $("form-dialog").close();
       await refreshLedger();
       const items2 = await api(`${ledgerUrl()}/items`);

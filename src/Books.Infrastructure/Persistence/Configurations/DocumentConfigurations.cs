@@ -433,6 +433,8 @@ internal sealed class StockAdjustmentConfiguration : IEntityTypeConfiguration<St
         b.HasIndex(x => new { x.LedgerId, x.Date });
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.AdjustmentId).OnDelete(DeleteBehavior.Restrict);
         b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        b.HasMany(x => x.Entries).WithOne().HasForeignKey(x => x.AdjustmentId).OnDelete(DeleteBehavior.Restrict);
+        b.Navigation(x => x.Entries).UsePropertyAccessMode(PropertyAccessMode.Field);
         b.HasOne<Ledger>().WithMany()
             .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
@@ -447,7 +449,7 @@ internal sealed class StockAdjustmentLineConfiguration : IEntityTypeConfiguratio
 {
     public void Configure(EntityTypeBuilder<StockAdjustmentLine> b)
     {
-        b.ToTable("stock_adjustment_lines", t => t.HasCheckConstraint("ck_stock_adjustment_lines_quantity", "quantity <> 0"));
+        b.ToTable("stock_adjustment_lines", t => t.HasCheckConstraint("ck_stock_adjustment_lines_quantity", "quantity <> 0 OR value <> 0"));
         b.HasKey(x => new { x.AdjustmentId, x.LineNo });
         b.Property(x => x.Description).HasMaxLength(1000);
         b.Property(x => x.Quantity).HasPrecision(20, 4);
@@ -499,6 +501,18 @@ internal sealed class FxRevaluationLineConfiguration : IEntityTypeConfiguration<
         b.Property(x => x.ForeignAmount).HasPrecision(20, 4);
         b.Property(x => x.Before).HasPrecision(20, 4);
         b.Property(x => x.After).HasPrecision(20, 4);
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class StockAdjustmentEntryConfiguration : IEntityTypeConfiguration<StockAdjustmentEntry>
+{
+    public void Configure(EntityTypeBuilder<StockAdjustmentEntry> b)
+    {
+        b.ToTable("stock_adjustment_entries", t => t.HasCheckConstraint("ck_stock_adjustment_entries_amount", "amount <> 0"));
+        b.HasKey(x => new { x.AdjustmentId, x.LineNo });
+        b.Property(x => x.Amount).HasPrecision(20, 4);
+        b.Property(x => x.Description).HasMaxLength(1000);
         b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -43,8 +43,9 @@ public sealed class BooksBankTools(
         [property: JsonPropertyName("quantity"), Description("Signed change as a decimal string: negative writes off, positive adds. Give this or counted_quantity.")] string? Quantity = null,
         [property: JsonPropertyName("counted_quantity"), Description("The quantity counted on the date; Books works out the difference from the book quantity.")] string? CountedQuantity = null,
         [property: JsonPropertyName("unit_cost"), Description("Stock coming in only: its cost per unit; omit for the average cost.")] string? UnitCost = null,
-        [property: JsonPropertyName("account_id"), Description("The other side; omit for the cost of sales account.")] Guid? AccountId = null,
-        [property: JsonPropertyName("description")] string? Description = null);
+        [property: JsonPropertyName("account_id"), Description("The other side; omit for the item's cost of sales account. Not used with entries.")] Guid? AccountId = null,
+        [property: JsonPropertyName("description")] string? Description = null,
+        [property: JsonPropertyName("amount"), Description("Signed change of value as a decimal string; alone (no quantity) it revalues the stock, for example writing it down.")] string? Amount = null);
 
     public sealed record StatementLine(
         [property: JsonPropertyName("date"), Description("yyyy-MM-dd")] DateOnly Date,
@@ -91,12 +92,15 @@ public sealed class BooksBankTools(
     public Task<CallToolResult> SaveStockAdjustment(Guid org_id, Guid ledger_id,
         [Description("A new UUID per adjustment; reuse it to retry safely.")] Guid idempotency_key,
         [Description("yyyy-MM-dd")] DateOnly date, AdjustmentLine[] lines, string? reference = null, string? description = null,
+        [Description("Optional: the other side on one or more accounts, like journal lines (debit or credit decimal strings), balancing the item lines.")]
+        StockAdjustmentEndpoints.EntryRequest[]? entries = null,
         CancellationToken ct = default) =>
         McpWrites.RunAsync(async () =>
         {
             var input = StockAdjustmentEndpoints.Input(new StockAdjustmentEndpoints.AdjustmentRequest(date, reference, description,
-                lines.Select(l => new StockAdjustmentEndpoints.LineRequest(l.ItemId, l.Description, l.Quantity, l.CountedQuantity, l.UnitCost, l.AccountId)).ToList(), Post: false));
-            var meta = McpWrites.Meta(http, "save_stock_adjustment_draft", idempotency_key, new { org_id, ledger_id, date, lines, reference, description });
+                lines.Select(l => new StockAdjustmentEndpoints.LineRequest(l.ItemId, l.Description, l.Quantity, l.CountedQuantity, l.UnitCost, l.AccountId, l.Amount)).ToList(),
+                Post: false, Entries: entries));
+            var meta = McpWrites.Meta(http, "save_stock_adjustment_draft", idempotency_key, new { org_id, ledger_id, date, lines, reference, description, entries });
             return await adjustments.CreateAsync(await principals.GetAsync(ct), meta, org_id, ledger_id, input, post: false, ct);
         });
 
