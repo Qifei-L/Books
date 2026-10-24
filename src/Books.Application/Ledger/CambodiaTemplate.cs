@@ -13,7 +13,7 @@ namespace Books.Application.Ledgers;
 /// </summary>
 public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsageService usages)
 {
-    public const string Key = "cambodia-2026";
+    public const string Key = Books.Domain.Documents.TaxPacks.Cambodia2026;
 
     private sealed record AccountSpec(string Code, string Name, AccountType Type, string Group, Usage[] Usages, SystemPurpose? Purpose = null);
 

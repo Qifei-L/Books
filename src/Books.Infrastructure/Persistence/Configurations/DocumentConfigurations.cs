@@ -103,3 +103,20 @@ internal sealed class PurchaseInvoiceLineConfiguration : IEntityTypeConfiguratio
         b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class DocumentTaxCurrencyConfiguration : IEntityTypeConfiguration<DocumentTaxCurrency>
+{
+    public void Configure(EntityTypeBuilder<DocumentTaxCurrency> b)
+    {
+        b.ToTable("document_tax_currencies");
+        b.HasKey(x => x.DocumentId);
+        b.Property(x => x.DocumentKind).HasMaxLength(40);
+        b.Property(x => x.Currency).HasMaxLength(3).IsFixedLength();
+        b.Property(x => x.Rate).HasPrecision(20, 10);
+        b.Property(x => x.RateSource).HasMaxLength(40);
+        b.Property(x => x.Reason).HasMaxLength(500);
+        b.Property(x => x.GrossTotal).HasPrecision(20, 4);
+        b.Property(x => x.TaxTotal).HasPrecision(20, 4);
+        b.HasOne<Ledger>().WithMany().HasForeignKey(x => x.LedgerId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
