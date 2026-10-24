@@ -71,11 +71,12 @@ public sealed class TaxReturnPropertyTests(TestHost host)
             // KHR is rounded once per box from the unrounded line amounts at 4100.
             Assert.Equal(Math.Round(Usd(key) * 4100m, 0, MidpointRounding.AwayFromZero), Khr(key));
         }
-        Assert.Equal(Usd("output_vat") - Usd("input_vat"), Usd("net_vat"));
-        Assert.Equal(Khr("output_vat") - Khr("input_vat"), Khr("net_vat"));
-        Assert.Equal(Usd("taxable_sales") + Usd("zero_rated_sales") + Usd("non_vat_sales"), Usd("turnover"));
-        Assert.Equal(Math.Round(Usd("turnover") / 100m, 2, MidpointRounding.AwayFromZero), Usd("prepayment"));
-        Assert.Equal(Usd("wht_services") + Usd("wht_rent") + Usd("wht_non_resident"), Usd("wht_total"));
+        Assert.Equal(Usd("t701_13") + Usd("t701_15"), Usd("t701_19"));
+        Assert.Equal(Usd("t701_19") - Usd("t701_11"), Usd("t701_vat_payable"));
+        Assert.Equal(Khr("t701_19") - Khr("t701_11"), Khr("t701_vat_payable"));
+        Assert.Equal(new[] { "t701_12", "t701_14", "t701_16", "t701_17", "t701_18" }.Sum(Usd), Usd("t701_turnover"));
+        Assert.Equal(Math.Round(Usd("t701_turnover") / 100m, 2, MidpointRounding.AwayFromZero), Usd("t701_ppi_01"));
+        Assert.Equal(Usd("wt03_r1_services") + Usd("wt03_r5_rent") + Usd("wt03_n3_management"), Usd("wt03_total"));
         Assert.All(october.GetProperty("reconciliation").EnumerateArray(), r => Assert.True(r.GetProperty("matches").GetBoolean(), r.GetRawText()));
     }
 

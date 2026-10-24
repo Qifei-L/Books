@@ -12,7 +12,7 @@ namespace Books.Domain.Documents;
 public sealed record TaxLine(
     string DocumentKind, Guid DocumentId, long DocumentNo, DateOnly Date, Guid PartyId, string? Reference, int LineNo, string? Description,
     Guid AccountId, Guid? TaxCodeId, TaxKind? TaxKind, decimal Net, decimal Tax, decimal TaxCalculated, string? TaxReason, bool ValidTaxInvoice,
-    string? WithholdingCategory, decimal Withholding, decimal? KhrRate, string? PostingUsage = null)
+    string? WithholdingCategory, decimal Withholding, decimal? KhrRate, string? PostingUsage = null, bool PartyTaxable = false)
 {
     public const string JournalKind = "journal";
 
@@ -49,10 +49,11 @@ public sealed record PostingRule(string Usage);
 /// <param name="ValidTaxInvoice">Purchases: only lines with (true) or without (false) a valid tax invoice; omit for both.</param>
 /// <param name="WithholdingCategory">Only lines whose withholding code has this category; omit for any.</param>
 /// <param name="Amount">net, tax or withholding.</param>
+/// <param name="Party">taxable (the customer or supplier has a tax ID) or non_taxable; omit for both.</param>
 public sealed record LineRule(
     string Side, [property: JsonPropertyName("tax_kinds")] IReadOnlyList<string>? TaxKinds = null,
     [property: JsonPropertyName("valid_tax_invoice")] bool? ValidTaxInvoice = null,
-    [property: JsonPropertyName("withholding_category")] string? WithholdingCategory = null, string Amount = "net");
+    [property: JsonPropertyName("withholding_category")] string? WithholdingCategory = null, string Amount = "net", string? Party = null);
 
 /// <summary>The sum of earlier boxes, each added or subtracted, optionally times a percent and rounded to the currency.</summary>
 public sealed record FormulaRule(IReadOnlyList<FormulaTerm> Terms, decimal? Percent = null);
@@ -146,6 +147,10 @@ public static class TaxReturns
                 {
                     errors.Add($"{at}: amount must be net, tax or withholding.");
                 }
+                if (rule.Party is not (null or "taxable" or "non_taxable"))
+                {
+                    errors.Add($"{at}: party must be taxable or non_taxable.");
+                }
                 var fromLines = Line(rule);
                 var fromPostings = box.Postings is { } extra ? Posting(extra) : null;
                 boxes.Add(new ReturnBox(box.Key, box.Section, box.Label, l => fromLines(l) ?? fromPostings?.Invoke(l), Information: box.Information));
@@ -201,46 +206,75 @@ public static class TaxReturns
             && (kinds is null || kinds.Contains(l.TaxKind))
             && (rule.ValidTaxInvoice is not { } valid || l.ValidTaxInvoice == valid)
             && (rule.WithholdingCategory is null || l.WithholdingCategory == rule.WithholdingCategory)
+            && (rule.Party is null || (rule.Party == "taxable") == l.PartyTaxable)
                 ? rule.Amount switch { "tax" => l.Tax, "withholding" => l.Withholding, _ => l.Net }
                 : null;
     }
 
+    /// <summary>Form WT 03: Part I resident (article 25 new) and Part II non-resident (article 26 new) payments.</summary>
     private static readonly WithholdingCategory[] CambodiaWithholding =
     [
-        new("services", "Resident: services, interest, royalties (15%)"),
-        new("rent", "Resident: rent of movable and immovable property (10%)"),
-        new("non_resident", "Non-resident (14%)"),
+        new("r1_services", "WT 03 I.1 Services, royalties for intangibles, interests in minerals (15%)"),
+        new("r2_interest", "WT 03 I.2 Interest paid by non-bank or saving institution taxpayers (15%)"),
+        new("r3_fixed_deposit", "WT 03 I.3 Interest to taxpayers with fixed term deposit accounts (6%)"),
+        new("r4_saving", "WT 03 I.4 Interest to taxpayers with non-fixed term saving (4%)"),
+        new("r5_rent", "WT 03 I.5 Rental or lease of movable and immovable property (10%)"),
+        new("n1_interest", "WT 03 II.1 Non-resident: interest (14%)"),
+        new("n2_royalty_rent", "WT 03 II.2 Non-resident: royalty, rental and income from the use of property (14%)"),
+        new("n3_management", "WT 03 II.3 Non-resident: management fee and technical services (14%)"),
+        new("n4_dividend", "WT 03 II.4 Non-resident: dividend (14%)"),
     ];
 
-    private const string Vat = "VAT";
-    private const string Prepayment = "Prepayment of tax on income";
-    private const string Withholding = "Withholding tax";
+    private const string VatPurchases = "T7 01 B. VAT: monthly purchases";
+    private const string VatSales = "T7 01 B. VAT: monthly sales";
+    private const string Prepayment = "T7 01 A. Prepayment of tax on income";
+    private const string Resident = "WT 03 I. Withholding tax on residents";
+    private const string NonResident = "WT 03 II. Withholding tax on non-residents";
+    private const string WithholdingTotal = "WT 03 Withholding tax";
+
+    private static BoxSpec Wht(WithholdingCategory c, bool tax, string section) =>
+        new($"wt03_{c.Key}{(tax ? "" : "_base")}", section, $"{c.Label}: {(tax ? "withholding tax" : "amount to be paid")}",
+            new LineRule("purchase", WithholdingCategory: c.Key, Amount: tax ? "withholding" : "net"));
 
     /// <summary>
-    /// Drafted from 04-cambodia-tax; the boxes and their wording are to be confirmed with an adviser against the
-    /// current monthly return form. Keys are stable so a filed return can be compared with a later recalculation.
+    /// The monthly return as on GDT's current forms (TTR001 total return, T7 01 head office, WT 03), checked against
+    /// the forms downloaded from tax.gov.kh on 2026-10-24. Box numbers follow the forms. A taxable person is a
+    /// customer or supplier with a tax ID. Imports (T7 01 boxes 05-06) come from customs declarations, which Books
+    /// does not record yet; credit carried from last month (TTR001 boxes 02 and 05) is entered on the form by hand.
     /// </summary>
-    private static readonly ReturnDefinitionSpec Cambodia = new("Cambodia monthly tax return (draft boxes)", CambodiaWithholding,
+    private static readonly ReturnDefinitionSpec Cambodia = new("Cambodia monthly tax return (TTR001, T7 01, WT 03)", CambodiaWithholding,
     [
-        new("taxable_sales", Vat, "Taxable sales, excluding VAT", new LineRule("sale", ["vat_output"])),
-        new("output_vat", Vat, "Output VAT", new LineRule("sale", ["vat_output"], Amount: "tax"), Postings: new PostingRule("output_vat")),
-        new("zero_rated_sales", Vat, "Zero-rated sales", new LineRule("sale", ["vat_zero_rated"])),
-        new("non_vat_sales", Vat, "Sales outside VAT", new LineRule("sale", ["non_vat", "none"])),
-        new("taxable_purchases", Vat, "Purchases with a valid tax invoice, excluding VAT", new LineRule("purchase", ["vat_input"], true)),
-        new("input_vat", Vat, "Deductible input VAT", new LineRule("purchase", ["vat_input"], true, Amount: "tax"), Postings: new PostingRule("input_vat")),
-        new("net_vat", Vat, "VAT payable (negative: credit)", Formula: new FormulaRule([new("output_vat"), new("input_vat", -1)])),
-        new("non_deductible_vat", Vat, "Input VAT without a valid tax invoice (not deductible)",
+        new("t701_03", VatPurchases, "03 Local purchases with VAT 10%, excluding VAT", new LineRule("purchase", ["vat_input"], true)),
+        new("t701_04", VatPurchases, "04 VAT on local purchases", new LineRule("purchase", ["vat_input"], true, Amount: "tax")),
+        new("t701_07", VatPurchases, "07 Purchases without VAT, taxable persons", new LineRule("purchase", ["vat_zero_rated", "non_vat", "none"], Party: "taxable")),
+        new("t701_08", VatPurchases, "08 Purchases without VAT, non-taxable persons", new LineRule("purchase", ["vat_zero_rated", "non_vat", "none"], Party: "non_taxable")),
+        new("t701_09", VatPurchases, "09 Non-creditable purchases, taxable persons", new LineRule("purchase", ["vat_input"], false, Party: "taxable")),
+        new("t701_10", VatPurchases, "10 Non-creditable purchases, non-taxable persons", new LineRule("purchase", ["vat_input"], false, Party: "non_taxable")),
+        new("t701_input_journals", VatPurchases, "Input VAT posted by journals (in box 11)", Postings: new PostingRule("input_vat")),
+        new("t701_11", VatPurchases, "11 Total input tax (04 + 06)", Formula: new FormulaRule([new("t701_04"), new("t701_input_journals")])),
+        new("t701_non_deductible_vat", VatPurchases, "VAT on non-creditable purchases (expensed, not on the form)",
             new LineRule("purchase", ["vat_input"], false, Amount: "tax"), Information: true),
-        new("turnover", Prepayment, "Turnover, excluding VAT", new LineRule("sale")),
-        new("prepayment", Prepayment, "Prepayment of tax on income (1% of turnover)", Formula: new FormulaRule([new("turnover")], 1m)),
-        .. CambodiaWithholding.SelectMany(c => new BoxSpec[]
-        {
-            new($"wht_{c.Key}_base", Withholding, $"{c.Label}: amounts paid or accrued", new LineRule("purchase", WithholdingCategory: c.Key)),
-            new($"wht_{c.Key}", Withholding, $"{c.Label}: tax withheld", new LineRule("purchase", WithholdingCategory: c.Key, Amount: "withholding")),
-        }),
-        new("wht_journals", Withholding, "Withholding tax posted by journals", Postings: new PostingRule("withholding_payable")),
-        new("wht_total", Withholding, "Withholding tax payable",
-            Formula: new FormulaRule([.. CambodiaWithholding.Select(c => new FormulaTerm($"wht_{c.Key}")), new FormulaTerm("wht_journals")])),
+        new("t701_12", VatSales, "12 Sales with VAT 10% to taxable persons, excluding VAT", new LineRule("sale", ["vat_output"], Party: "taxable")),
+        new("t701_13", VatSales, "13 VAT on sales to taxable persons", new LineRule("sale", ["vat_output"], Party: "taxable", Amount: "tax")),
+        new("t701_14", VatSales, "14 Sales with VAT 10% to non-taxable persons, excluding VAT", new LineRule("sale", ["vat_output"], Party: "non_taxable")),
+        new("t701_15", VatSales, "15 VAT on sales to non-taxable persons", new LineRule("sale", ["vat_output"], Party: "non_taxable", Amount: "tax")),
+        new("t701_16", VatSales, "16 Exports at 0%", new LineRule("sale", ["vat_zero_rated"])),
+        new("t701_17", VatSales, "17 Sales without VAT, taxable persons", new LineRule("sale", ["non_vat", "none"], Party: "taxable")),
+        new("t701_18", VatSales, "18 Sales without VAT, non-taxable persons", new LineRule("sale", ["non_vat", "none"], Party: "non_taxable")),
+        new("t701_output_journals", VatSales, "Output VAT posted by journals (in box 19)", Postings: new PostingRule("output_vat")),
+        new("t701_19", VatSales, "19 Total output tax (13 + 15)", Formula: new FormulaRule([new("t701_13"), new("t701_15"), new("t701_output_journals")])),
+        new("t701_vat_payable", VatSales, "VAT to be paid, 19 - 11 (negative: credit forward)", Formula: new FormulaRule([new("t701_19"), new("t701_11", -1)])),
+        new("t701_turnover", Prepayment, "Turnover excluding VAT (base for box 01)", new LineRule("sale"), Information: true),
+        new("t701_ppi_01", Prepayment, "01 Prepayment of tax on income for the month (1%)", Formula: new FormulaRule([new("t701_turnover")], 1m)),
+        .. CambodiaWithholding.Take(5).SelectMany(c => new[] { Wht(c, false, Resident), Wht(c, true, Resident) }),
+        new("wt03_resident_total", Resident, "Total withholding tax on residents",
+            Formula: new FormulaRule([.. CambodiaWithholding.Take(5).Select(c => new FormulaTerm($"wt03_{c.Key}"))])),
+        .. CambodiaWithholding.Skip(5).SelectMany(c => new[] { Wht(c, false, NonResident), Wht(c, true, NonResident) }),
+        new("wt03_nonresident_total", NonResident, "Total withholding tax on non-residents",
+            Formula: new FormulaRule([.. CambodiaWithholding.Skip(5).Select(c => new FormulaTerm($"wt03_{c.Key}"))])),
+        new("wt03_journals", WithholdingTotal, "Withholding tax posted by journals", Postings: new PostingRule("withholding_payable")),
+        new("wt03_total", WithholdingTotal, "Withholding tax payable (TTR001 line 03)",
+            Formula: new FormulaRule([new("wt03_resident_total"), new("wt03_nonresident_total"), new("wt03_journals")])),
     ]);
 }
 

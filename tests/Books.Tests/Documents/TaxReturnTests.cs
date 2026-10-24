@@ -21,11 +21,15 @@ public sealed class TaxReturnTests(TestHost host)
         var october = await GetAsync(s, "tax-returns/2026-10");
 
         var boxes = Boxes(october);
-        Assert.Equal(("900.00", "90.00", "250.00", "0.00"), (boxes["taxable_sales"].Usd, boxes["output_vat"].Usd, boxes["zero_rated_sales"].Usd, boxes["non_vat_sales"].Usd));
-        Assert.Equal(("1000.00", "100.00", "-10.00", "5.00"), (boxes["taxable_purchases"].Usd, boxes["input_vat"].Usd, boxes["net_vat"].Usd, boxes["non_deductible_vat"].Usd));
-        Assert.Equal(("1150.00", "11.50"), (boxes["turnover"].Usd, boxes["prepayment"].Usd));
-        Assert.Equal(("1000.00", "100.00", "0.00", "100.00"), (boxes["wht_rent_base"].Usd, boxes["wht_rent"].Usd, boxes["wht_services"].Usd, boxes["wht_total"].Usd));
-        Assert.Equal(("369000", "410000", "-41000", "47150"), (boxes["output_vat"].Khr, boxes["input_vat"].Khr, boxes["net_vat"].Khr, boxes["prepayment"].Khr));
+        // The customer and the supplier have no tax ID, so they are non-taxable persons (T7 01 boxes 14-15, 10).
+        Assert.Equal(("0.00", "900.00", "90.00", "250.00", "0.00", "90.00"),
+            (boxes["t701_12"].Usd, boxes["t701_14"].Usd, boxes["t701_15"].Usd, boxes["t701_16"].Usd, boxes["t701_18"].Usd, boxes["t701_19"].Usd));
+        Assert.Equal(("1000.00", "100.00", "50.00", "100.00", "-10.00", "5.00"),
+            (boxes["t701_03"].Usd, boxes["t701_04"].Usd, boxes["t701_10"].Usd, boxes["t701_11"].Usd, boxes["t701_vat_payable"].Usd, boxes["t701_non_deductible_vat"].Usd));
+        Assert.Equal(("1150.00", "11.50"), (boxes["t701_turnover"].Usd, boxes["t701_ppi_01"].Usd));
+        Assert.Equal(("1000.00", "100.00", "0.00", "100.00", "100.00"),
+            (boxes["wt03_r5_rent_base"].Usd, boxes["wt03_r5_rent"].Usd, boxes["wt03_r1_services"].Usd, boxes["wt03_resident_total"].Usd, boxes["wt03_total"].Usd));
+        Assert.Equal(("369000", "410000", "-41000", "47150"), (boxes["t701_19"].Khr, boxes["t701_11"].Khr, boxes["t701_vat_payable"].Khr, boxes["t701_ppi_01"].Khr));
         Assert.Equal("document_snapshots", october.GetProperty("tax_currency_basis").GetString());
         // The October draft is not in the return; it is flagged so it can be posted or re-dated before filing.
         Assert.Equal(["DRAFTS_IN_PERIOD"], october.GetProperty("issues").EnumerateArray().Select(i => i.GetProperty("code").GetString()));
@@ -36,7 +40,7 @@ public sealed class TaxReturnTests(TestHost host)
     {
         var s = await SeedAsync();
 
-        var lines = await GetAsync(s, "tax-returns/2026-10/boxes/output_vat");
+        var lines = await GetAsync(s, "tax-returns/2026-10/boxes/t701_15");
 
         Assert.Equal([("sales_invoice", "100.00", "410000"), ("sales_credit_note", "-10.00", "-41000")],
             lines.GetProperty("lines").EnumerateArray().Select(l => (Get(l, "document_type"), Get(l, "amount"), Get(l, "tax_currency_amount"))));
@@ -50,7 +54,7 @@ public sealed class TaxReturnTests(TestHost host)
         var overridden = await GetAsync(s, "tax-returns/2026-10?khrRate=4200&khrReason=NBC%2031%20Oct%20rate");
         var noReason = await s.Books.Admin.GetAsync($"{s.LedgerUrl}/tax-returns/2026-10?khrRate=4200", Ct);
 
-        Assert.Equal(("override", "4200", "378000"), (overridden.GetProperty("tax_currency_basis").GetString(), overridden.GetProperty("override_rate").GetString(), Boxes(overridden)["output_vat"].Khr));
+        Assert.Equal(("override", "4200", "378000"), (overridden.GetProperty("tax_currency_basis").GetString(), overridden.GetProperty("override_rate").GetString(), Boxes(overridden)["t701_19"].Khr));
         await noReason.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
     }
 
@@ -78,16 +82,16 @@ public sealed class TaxReturnTests(TestHost host)
         })).DataAsync(HttpStatusCode.Created);
 
         var october = await GetAsync(s, "tax-returns/2026-10");
-        var drilldown = await GetAsync(s, "tax-returns/2026-10/boxes/output_vat");
+        var drilldown = await GetAsync(s, "tax-returns/2026-10/boxes/t701_output_journals");
 
         Assert.All(matched.GetProperty("reconciliation").EnumerateArray(), r => Assert.True(r.GetProperty("matches").GetBoolean()));
-        Assert.Equal(("95.00", "389500"), Boxes(october)["output_vat"]);           // 90.00 from documents + 5.00 journal, at 4100
-        Assert.Equal("-5.00", Boxes(october)["net_vat"].Usd);
+        Assert.Equal(("95.00", "389500"), Boxes(october)["t701_19"]);              // 90.00 from documents + 5.00 journal, at 4100
+        Assert.Equal("-5.00", Boxes(october)["t701_vat_payable"].Usd);
         var vat = october.GetProperty("reconciliation").EnumerateArray().Single(r => Get(r, "usage") == "output_vat");
         Assert.Equal(("95.00", "95.00", true), (Get(vat, "ledger_amount"), Get(vat, "return_amount"), vat.GetProperty("matches").GetBoolean()));
         var other = Assert.Single(vat.GetProperty("other_postings").EnumerateArray());
         Assert.Equal(("ADJ-1", "journal", "5.00"), (Get(other, "reference"), Get(other, "source"), Get(other, "amount")));
-        var journal = drilldown.GetProperty("lines").EnumerateArray().Single(l => Get(l, "document_type") == "journal");
+        var journal = Assert.Single(drilldown.GetProperty("lines").EnumerateArray());
         Assert.Equal(("ADJ-1", "5.00", "4100"), (Get(journal, "reference"), Get(journal, "amount"), Get(journal, "tax_currency_rate")));
     }
 

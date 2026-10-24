@@ -27,7 +27,7 @@ public sealed class TaxReturnFilingTests(TestHost host)
         var october = await TaxReturnTests.GetAsync(s, "tax-returns/2026-10");
 
         await blocked.AssertProblemAsync((HttpStatusCode)422, "RETURN_INCOMPLETE");
-        Assert.Equal("-10.00", TaxReturnTests.Boxes(filed)["net_vat"].Usd);
+        Assert.Equal("-10.00", TaxReturnTests.Boxes(filed)["t701_vat_payable"].Usd);
         await again.AssertProblemAsync(HttpStatusCode.Conflict, "RETURN_ALREADY_FILED");
         Assert.Equal("DATE_CLOSED", late.GetProperty("issues")[0].GetProperty("code").GetString());
         Assert.Equal("2026-10", Assert.Single(list.EnumerateArray()).GetProperty("period").GetString());
@@ -52,8 +52,8 @@ public sealed class TaxReturnFilingTests(TestHost host)
         var october = await TaxReturnTests.GetAsync(s, "tax-returns/2026-10");
 
         var differences = october.GetProperty("filed").GetProperty("differences").EnumerateArray().ToDictionary(d => d.GetProperty("key").GetString()!);
-        Assert.Equal(("90.00", "100.00"), (differences["output_vat"].GetProperty("filed_amount").GetString(), differences["output_vat"].GetProperty("current_amount").GetString()));
-        Assert.False(differences.ContainsKey("input_vat"));
+        Assert.Equal(("90.00", "100.00"), (differences["t701_15"].GetProperty("filed_amount").GetString(), differences["t701_15"].GetProperty("current_amount").GetString()));
+        Assert.False(differences.ContainsKey("t701_04"));
     }
 
     [Fact]

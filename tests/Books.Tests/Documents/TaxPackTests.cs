@@ -21,11 +21,11 @@ public sealed class TaxPackTests(TestHost host)
 
         Assert.Equal(("cambodia-2026", "KHR"), (pack.GetProperty("tax_pack").GetString(), pack.GetProperty("tax_currency").GetString()));
         var boxes = pack.GetProperty("boxes").EnumerateArray().Select(b => b.GetProperty("key").GetString()).ToList();
-        Assert.Contains("output_vat", boxes);
-        Assert.Contains("prepayment", boxes);
-        Assert.Contains("wht_rent", boxes);
-        Assert.Equal(["services", "rent", "non_resident"], pack.GetProperty("withholding_categories").EnumerateArray().Select(c => c.GetProperty("key").GetString()));
-        Assert.Equal("rent", codes["WHT 10% rent"].GetString());
+        Assert.Contains("t701_19", boxes);
+        Assert.Contains("t701_ppi_01", boxes);
+        Assert.Contains("wt03_r5_rent", boxes);
+        Assert.Equal(["r1_services", "r2_interest", "r3_fixed_deposit", "r4_saving", "r5_rent", "n1_interest", "n2_royalty_rent", "n3_management", "n4_dividend"], pack.GetProperty("withholding_categories").EnumerateArray().Select(c => c.GetProperty("key").GetString()));
+        Assert.Equal("r5_rent", codes["WHT 10% rent"].GetString());
         Assert.Equal(JsonValueKind.Null, codes["VAT 10% (sales)"].ValueKind);
     }
 
@@ -37,12 +37,12 @@ public sealed class TaxPackTests(TestHost host)
 
         var onVat = await s.Books.Admin.PostAsync(url, new { name = "VAT 10% B", kind = "vat_output", rate = "10", account_id = s.Account("2100"), return_category = "rent" });
         var unknown = await s.Books.Admin.PostAsync(url, new { name = "WHT 5%", kind = "withholding", rate = "5", account_id = s.Account("2200"), return_category = "dividends" });
-        var created = await (await s.Books.Admin.PostAsync(url, new { name = "WHT 15% B", kind = "withholding", rate = "15", account_id = s.Account("2200"), return_category = "services" }))
+        var created = await (await s.Books.Admin.PostAsync(url, new { name = "WHT 15% B", kind = "withholding", rate = "15", account_id = s.Account("2200"), return_category = "r1_services" }))
             .DataAsync(HttpStatusCode.Created);
 
         await onVat.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
         await unknown.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
-        Assert.Equal("services", created.GetProperty("return_category").GetString());
+        Assert.Equal("r1_services", created.GetProperty("return_category").GetString());
     }
 
     [Fact]

@@ -39,9 +39,9 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
         new("VAT 0% (zero-rated)", TaxKind.VatZeroRated, 0m, null),
         new("Non-VAT", TaxKind.NonVat, 0m, null),
         new("VAT 4% fuel (sales)", TaxKind.VatOutput, 4m, "2100", From: new DateOnly(2026, 3, 1)),
-        new("WHT 15% services, interest, royalties", TaxKind.Withholding, 15m, "2200", Category: "services"),
-        new("WHT 10% rent", TaxKind.Withholding, 10m, "2200", Category: "rent"),
-        new("WHT 14% non-resident", TaxKind.Withholding, 14m, "2200", Category: "non_resident"),
+        new("WHT 15% services, interest, royalties", TaxKind.Withholding, 15m, "2200", Category: "r1_services"),
+        new("WHT 10% rent", TaxKind.Withholding, 10m, "2200", Category: "r5_rent"),
+        new("WHT 14% non-resident", TaxKind.Withholding, 14m, "2200", Category: "n3_management"),
     ];
 
     public sealed record Summary(string Template, IReadOnlyList<string> Created, IReadOnlyList<string> Reused);
