@@ -70,7 +70,7 @@ public static class DemoData
         var sales = await Account("4000", "Sales", AccountType.Income, revenue);
         var service = await Account("4100", "Service income", AccountType.Income, revenue);
         var rent = await Account("5000", "Rent", AccountType.CostAndExpense, expenses);
-        var salaries = await Account("5100", "Salaries", AccountType.CostAndExpense, expenses);
+        var salaries = chart["6100"];                                        // from the template, like the other payroll accounts
         var utilities = await Account("5200", "Utilities", AccountType.CostAndExpense, expenses);
         var bankCharges = await Account("5300", "Bank charges", AccountType.CostAndExpense, expenses);
         var vat = chart["2100"];
