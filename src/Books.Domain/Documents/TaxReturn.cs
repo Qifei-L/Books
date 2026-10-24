@@ -12,7 +12,8 @@ namespace Books.Domain.Documents;
 public sealed record TaxLine(
     string DocumentKind, Guid DocumentId, long DocumentNo, DateOnly Date, Guid PartyId, string? Reference, int LineNo, string? Description,
     Guid AccountId, Guid? TaxCodeId, TaxKind? TaxKind, decimal Net, decimal Tax, decimal TaxCalculated, string? TaxReason, bool ValidTaxInvoice,
-    string? WithholdingCategory, decimal Withholding, decimal? KhrRate, string? PostingUsage = null, bool PartyTaxable = false, PayRunLine? Payroll = null)
+    string? WithholdingCategory, decimal Withholding, decimal? KhrRate, string? PostingUsage = null, bool PartyTaxable = false, PayRunLine? Payroll = null,
+    decimal PayrollScale = 1)
 {
     public const string JournalKind = "journal";
 
@@ -221,7 +222,7 @@ public static class TaxReturns
 
     private static Func<TaxLine, decimal?> Payroll(PayrollRule rule) =>
         l => l.Payroll is { } p && (rule.Resident is not { } resident || p.Resident == resident)
-            ? rule.Amount switch
+            ? l.PayrollScale * rule.Amount switch
             {
                 "gross" => p.Gross,
                 "fringe_benefits" => p.FringeBenefits,

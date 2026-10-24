@@ -16,7 +16,11 @@ public static class PayRunEndpoints
     public sealed record AccountsRequest(Guid SalaryExpense, Guid NssfExpense, Guid SalariesPayable, Guid SalaryTaxPayable, Guid NssfPayable, Guid? OtherDeductions);
 
     /// <param name="Period">The month the pay is for, yyyy-MM.</param>
-    public sealed record PayRunRequest(string Period, DateOnly Date, string? Reference, string? Description, AccountsRequest? Accounts, IReadOnlyList<LineRequest> Lines, bool Post = true);
+    /// <param name="Currency">The lines' currency, for example KHR; omit for the ledger's.</param>
+    /// <param name="Rate">Line currency per one unit of the ledger's currency; omit for the rate of the 15th.</param>
+    public sealed record PayRunRequest(
+        string Period, DateOnly Date, string? Reference, string? Description, AccountsRequest? Accounts, IReadOnlyList<LineRequest> Lines, bool Post = true,
+        string? Currency = null, string? Rate = null);
 
     public static void MapPayRunEndpoints(this RouteGroupBuilder api)
     {
@@ -46,6 +50,7 @@ public static class PayRunEndpoints
             body.Accounts is { } a ? new PayRunAccounts(a.SalaryExpense, a.NssfExpense, a.SalariesPayable, a.SalaryTaxPayable, a.NssfPayable, a.OtherDeductions) : null,
             (body.Lines ?? throw BooksProblem.Invalid("lines is required.")).Select((l, i) => new PayRunLineInput(l.EmployeeCode, l.Name, l.Resident,
                 N(l.Gross, i, "gross"), N(l.FringeBenefits, i, "fringe_benefits"), N(l.SalaryTax, i, "salary_tax"), N(l.FringeBenefitTax, i, "fringe_benefit_tax"),
-                N(l.NssfEmployee, i, "nssf_employee"), N(l.NssfEmployer, i, "nssf_employer"), N(l.OtherDeductions, i, "other_deductions"), N(l.Net, i, "net"))).ToList());
+                N(l.NssfEmployee, i, "nssf_employee"), N(l.NssfEmployer, i, "nssf_employer"), N(l.OtherDeductions, i, "other_deductions"), N(l.Net, i, "net"))).ToList(),
+            body.Currency, PurchaseEndpoints.Rate(body.Rate));
     }
 }

@@ -26,10 +26,15 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
         new("2000", "Accounts payable", AccountType.Liabilities, "Current liabilities", [Usage.Payable]),
         new("2100", "VAT output payable", AccountType.Liabilities, "Current liabilities", [Usage.OutputVat]),
         new("2200", "Withholding tax payable", AccountType.Liabilities, "Current liabilities", [Usage.WithholdingPayable]),
+        new("2300", "Salaries payable", AccountType.Liabilities, "Current liabilities", [Usage.SalariesPayable]),
+        new("2310", "Tax on salary payable", AccountType.Liabilities, "Current liabilities", [Usage.SalaryTaxPayable]),
+        new("2320", "NSSF payable", AccountType.Liabilities, "Current liabilities", [Usage.NssfPayable]),
         new("2999", "Suspense", AccountType.Liabilities, "Current liabilities", [], SystemPurpose.Suspense),
         new("3100", "Retained earnings", AccountType.Equity, "Equity", [], SystemPurpose.RetainedEarnings),
         new("3900", "Opening balance clearing", AccountType.Equity, "Equity", [], SystemPurpose.OpeningBalanceClearing),
         new("5900", "Non-deductible VAT", AccountType.CostAndExpense, "Operating expenses", [Usage.NonDeductibleVat]),
+        new("6100", "Salaries and wages", AccountType.CostAndExpense, "Operating expenses", [Usage.SalaryExpense]),
+        new("6110", "NSSF contributions", AccountType.CostAndExpense, "Operating expenses", [Usage.NssfExpense]),
     ];
 
     private static readonly TaxSpec[] TaxCodes =

@@ -7,16 +7,22 @@ namespace Books.Domain.Ledgers;
 /// (owner decision). Many-to-many: an account may carry several usages and a usage may sit on several accounts.
 /// Distinct from account type, system purposes and permissions.
 /// </summary>
-public enum Usage { Payable, Receivable, Bank, OutputVat, InputVat, NonDeductibleVat, WithholdingPayable }
+public enum Usage
+{
+    Payable, Receivable, Bank, OutputVat, InputVat, NonDeductibleVat, WithholdingPayable,
+
+    // Payroll results (pay runs) post to these.
+    SalaryExpense, NssfExpense, SalariesPayable, SalaryTaxPayable, NssfPayable,
+}
 
 public static class Usages
 {
     /// <summary>The account types a usage allows.</summary>
     public static AccountType[] Types(Usage usage) => usage switch
     {
-        Usage.Payable or Usage.OutputVat or Usage.WithholdingPayable => [AccountType.Liabilities],
+        Usage.Payable or Usage.OutputVat or Usage.WithholdingPayable or Usage.SalariesPayable or Usage.SalaryTaxPayable or Usage.NssfPayable => [AccountType.Liabilities],
         Usage.Receivable or Usage.Bank or Usage.InputVat => [AccountType.Assets],
-        Usage.NonDeductibleVat => [AccountType.CostAndExpense],
+        Usage.NonDeductibleVat or Usage.SalaryExpense or Usage.NssfExpense => [AccountType.CostAndExpense],
         _ => throw new ArgumentOutOfRangeException(nameof(usage)),
     };
 

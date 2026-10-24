@@ -27,3 +27,19 @@ dotnet test --solution Books.slnx                     # integration tests start 
 ```
 
 Without Docker, set `BOOKS_TEST_POSTGRES` to an admin connection string; the tests create a fresh database on that server.
+
+### Run it locally and try it
+
+```bash
+docker compose up -d
+export ConnectionStrings__Books="Host=localhost;Port=5432;Username=books;Password=books;Database=books"
+dotnet tool restore
+dotnet ef database update --project src/Books.Infrastructure --startup-project src/Books.Infrastructure --connection "$ConnectionStrings__Books"
+ASPNETCORE_ENVIRONMENT=Development dotnet run --project src/Books.Api --urls http://localhost:5180
+```
+
+- **Preview UI:** open <http://localhost:5180/app/>, sign in with the local test issuer (any subject), then **Create demo organization**. The demo has a year of journals, purchases, sales, payments, an imported bank statement and an October tax return. The UI is read-only; work goes through the API and MCP.
+- **API:** `POST /dev/token` with `{"subject": "me"}` returns a bearer token (Development only). Endpoints live under `/api/v1`, for example `/api/v1/organizations`. Writes need an `Idempotency-Key` header (a UUID) and, for changes, `If-Match: "v<version>"`.
+- **MCP:** `POST /dev/token` with `{"subject": "me", "mcp": true}` gives a token for `http://localhost:5180/mcp` (Streamable HTTP). Point an MCP client such as Claude Desktop, Claude Code or Cursor at it with that bearer token; `tools/list` shows every tool. AI clients save drafts; posting, filing and publishing need a person through the API.
+- **No Docker:** any PostgreSQL 17 works; set the connection string to it. To start over, drop and recreate the database and run the migrations again.
+- Tokens from the local issuer last a short time and stop working when the API restarts; sign in again.

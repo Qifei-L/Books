@@ -55,17 +55,45 @@ public sealed class PayRunTests(TestHost host)
         Assert.Equal(("draft", accounts["salaries_payable"]), (Get(november, "status"), november.GetProperty("accounts").GetProperty("salaries_payable").GetGuid()));
     }
 
+    [Fact]
+    public async Task Khr_results_keep_their_amounts_on_tos_01_and_post_converted_totals_to_template_accounts()
+    {
+        var (s, accounts) = await SetUpAsync();
+
+        var run = await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/pay-runs", new
+        {
+            period = "2026-10", date = "2026-10-31", currency = "KHR", rate = "4000",
+            lines = new[]
+            {
+                new
+                {
+                    employee_code = "E1", name = "Sok Dara", resident = true, gross = "4000000", salary_tax = "100000",
+                    nssf_employee = "80000", nssf_employer = "104000", net = "3820000",
+                },
+            },
+        })).DataAsync(HttpStatusCode.Created);
+
+        var journal = await (await s.Books.Admin.GetAsync($"{s.Books.JournalsUrl}/{run.GetProperty("journal_id").GetGuid()}", Ct)).DataAsync();
+        var lines = journal.GetProperty("lines").EnumerateArray().ToDictionary(l => l.GetProperty("account_id").GetGuid(), l => (Get(l, "debit"), Get(l, "credit")));
+        Assert.Equal(("KHR", "4000", "4000000"), (Get(run, "currency"), Get(run, "rate"), Get(run.GetProperty("totals"), "gross")));
+        Assert.Equal(("1000.00", "26.00"), (lines[accounts["salary_expense"]].Item1, lines[accounts["nssf_expense"]].Item1));
+        Assert.Equal(("955.00", "25.00", "46.00"), (lines[accounts["salaries_payable"]].Item2, lines[accounts["salary_tax_payable"]].Item2, lines[accounts["nssf_payable"]].Item2));
+        var boxes = TaxReturnTests.Boxes(await TaxReturnTests.GetAsync(s, "tax-returns/2026-10"));
+        Assert.Equal(("25.00", "100000"), boxes["tos_resident_tax"]);                  // exactly what the payroll system reported in KHR
+    }
+
     private async Task<(SalesInvoiceTests.Setup, Dictionary<string, Guid>)> SetUpAsync()
     {
         var s = await new SalesInvoiceTests(host).SetUpAsync();
         async Task<Guid> Account(string code, string name, string type) => (await AccountTests.CreateAsync(s.Books.Admin, s.Books.OrgId, s.Books.LedgerId, code, name, type)).Id();
+        // The Cambodia template sets up the payroll accounts; a staff-loan account takes other deductions.
         var accounts = new Dictionary<string, Guid>
         {
-            ["salary_expense"] = await Account("5100", "Salaries", "cost_and_expense"),
-            ["nssf_expense"] = await Account("5110", "NSSF contributions", "cost_and_expense"),
-            ["salaries_payable"] = await Account("2300", "Salaries payable", "liabilities"),
-            ["salary_tax_payable"] = await Account("2310", "Tax on salary payable", "liabilities"),
-            ["nssf_payable"] = await Account("2320", "NSSF payable", "liabilities"),
+            ["salary_expense"] = s.Account("6100"),
+            ["nssf_expense"] = s.Account("6110"),
+            ["salaries_payable"] = s.Account("2300"),
+            ["salary_tax_payable"] = s.Account("2310"),
+            ["nssf_payable"] = s.Account("2320"),
             ["other_deductions"] = await Account("2330", "Staff loans", "liabilities"),
         };
         return (s, accounts);

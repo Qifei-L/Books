@@ -52,7 +52,8 @@ public sealed class BooksBankTools(
     [Description("Saves a month's payroll results from the client's payroll system as a draft pay run (up to 5000 employees) for a person to post. "
         + "Map the payroll file's columns to: employee_code, name, resident, gross, fringe_benefits, salary_tax, fringe_benefit_tax, nssf_employee, "
         + "nssf_employer, other_deductions, net (decimal strings in the ledger's currency); gross must equal net + salary_tax + nssf_employee + "
-        + "other_deductions. Books posts one summary journal and reports the tax for form TOS 01. Omit accounts to reuse the previous pay run's.")]
+        + "other_deductions. Keep the payroll system's currency (usually KHR) and give currency; the rate defaults to the 15th. "
+        + "Books posts one summary journal and reports the tax for form TOS 01. Omit accounts to reuse the previous pay run's or the template's.")]
     public Task<CallToolResult> SavePayRun(
         Guid org_id, Guid ledger_id,
         [Description("A new UUID per pay run; reuse it to retry safely.")] Guid idempotency_key,
@@ -61,11 +62,13 @@ public sealed class BooksBankTools(
         PayRunEndpoints.LineRequest[] lines,
         PayRunEndpoints.AccountsRequest? accounts = null,
         string? reference = null,
+        [Description("The lines' currency, for example KHR; omit for the ledger's.")] string? currency = null,
+        [Description("Line currency per one unit of the ledger's currency; omit for the rate of the 15th.")] string? rate = null,
         CancellationToken ct = default) =>
         McpWrites.RunAsync(async () =>
         {
-            var input = PayRunEndpoints.Input(new PayRunEndpoints.PayRunRequest(period, date, reference, null, accounts, lines, Post: false));
-            var meta = McpWrites.Meta(http, "save_pay_run_draft", idempotency_key, new { org_id, ledger_id, period, date, lines, accounts, reference });
+            var input = PayRunEndpoints.Input(new PayRunEndpoints.PayRunRequest(period, date, reference, null, accounts, lines, Post: false, currency, rate));
+            var meta = McpWrites.Meta(http, "save_pay_run_draft", idempotency_key, new { org_id, ledger_id, period, date, lines, accounts, reference, currency, rate });
             return await payRuns.CreateAsync(await principals.GetAsync(ct), meta, org_id, ledger_id, input, post: false, ct);
         });
 

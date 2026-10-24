@@ -899,6 +899,13 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date")
                         .HasColumnName("date");
@@ -931,6 +938,11 @@ namespace Books.Infrastructure.Migrations
                     b.Property<DateOnly>("Period")
                         .HasColumnType("date")
                         .HasColumnName("period");
+
+                    b.Property<decimal?>("Rate")
+                        .HasPrecision(20, 10)
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("rate");
 
                     b.Property<string>("Reference")
                         .HasMaxLength(200)
@@ -2205,7 +2217,7 @@ namespace Books.Infrastructure.Migrations
 
                     b.ToTable("account_usages", null, t =>
                         {
-                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable')");
+                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', 'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable')");
                         });
                 });
 

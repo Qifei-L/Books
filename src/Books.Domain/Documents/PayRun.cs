@@ -40,6 +40,12 @@ public sealed class PayRun
     public string? Reference { get; private set; }
     public string? Description { get; private set; }
     public PayRunAccounts Accounts { get; private set; } = null!;
+
+    /// <summary>The currency of the employee lines, as the payroll system reports them (usually KHR).</summary>
+    public string Currency { get; private set; } = "";
+
+    /// <summary>When the lines are not in the ledger's currency: line currency per one unit of the ledger's currency, for example 4100.</summary>
+    public decimal? Rate { get; private set; }
     public DocumentStatus Status { get; private set; } = DocumentStatus.Draft;
     public string? Issues { get; private set; }
     public Guid? JournalId { get; private set; }
@@ -49,8 +55,16 @@ public sealed class PayRun
 
     public IReadOnlyList<PayRunLine> Lines => _lines;
 
-    public void Set(DateOnly period, DateOnly date, string? reference, string? description, PayRunAccounts accounts, IEnumerable<PayRunLine> lines, bool isNew)
+    public void Set(DateOnly period, DateOnly date, string? reference, string? description, PayRunAccounts accounts, IEnumerable<PayRunLine> lines, bool isNew,
+        string currency, decimal? rate, string baseCurrency)
     {
+        currency = Ledgers.Currencies.Require(currency).Code;
+        if (currency != baseCurrency && rate is not > 0)
+        {
+            throw new DomainException($"Lines in {currency} need the rate to {baseCurrency}.");
+        }
+        Currency = currency;
+        Rate = currency == baseCurrency ? null : rate;
         var all = lines.ToList();
         if (all.Count is 0 or > 5000)
         {
@@ -107,22 +121,32 @@ public sealed class PayRun
     /// Cr salaries payable (net), Cr salary tax payable (salary and fringe benefit tax), Cr NSSF payable (both parts),
     /// Cr the other deductions account.
     /// </summary>
-    public JournalDraft ToJournal()
+    /// <remarks>
+    /// Lines in another currency are converted at the pay run's rate, each total rounded to the ledger's currency;
+    /// the salary expense takes the rounding so the journal balances.
+    /// </remarks>
+    public JournalDraft ToJournal(int minorUnits)
     {
+        decimal C(decimal amount) => Rate is { } rate ? Math.Round(amount / rate, minorUnits, MidpointRounding.AwayFromZero) : amount;
         var text = Description ?? $"Payroll {Period:yyyy-MM}";
         var a = Accounts;
-        var lines = new List<DraftLine>
+        var credits = new List<DraftLine>
         {
-            new(a.SalaryExpense, _lines.Sum(l => l.Gross + l.FringeBenefitTax), text),
-            new(a.NssfExpense, _lines.Sum(l => l.NssfEmployer), $"{text} (NSSF employer)"),
-            new(a.SalariesPayable, -_lines.Sum(l => l.Net), $"{text} (net pay)"),
-            new(a.SalaryTaxPayable, -_lines.Sum(l => l.SalaryTax + l.FringeBenefitTax), $"{text} (tax on salary)"),
-            new(a.NssfPayable, -_lines.Sum(l => l.NssfEmployee + l.NssfEmployer), $"{text} (NSSF)"),
+            new(a.SalariesPayable, -C(_lines.Sum(l => l.Net)), $"{text} (net pay)"),
+            new(a.SalaryTaxPayable, -C(_lines.Sum(l => l.SalaryTax + l.FringeBenefitTax)), $"{text} (tax on salary)"),
+            new(a.NssfPayable, -C(_lines.Sum(l => l.NssfEmployee + l.NssfEmployer)), $"{text} (NSSF)"),
         };
         if (a.OtherDeductions is { } other)
         {
-            lines.Add(new DraftLine(other, -_lines.Sum(l => l.OtherDeductions), $"{text} (other deductions)"));
+            credits.Add(new DraftLine(other, -C(_lines.Sum(l => l.OtherDeductions)), $"{text} (other deductions)"));
         }
+        var nssf = C(_lines.Sum(l => l.NssfEmployer));
+        var lines = new List<DraftLine>
+        {
+            new(a.SalaryExpense, -credits.Sum(l => l.Amount) - nssf, text),
+            new(a.NssfExpense, nssf, $"{text} (NSSF employer)"),
+        };
+        lines.AddRange(credits);
         return new JournalDraft(Date, lines.Where(l => l.Amount != 0).ToList(), Reference, text);
     }
 }

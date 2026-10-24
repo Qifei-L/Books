@@ -222,8 +222,11 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         var fifteenth = slot is null || payRuns.Count == 0 ? null : await db.ExchangeRates.AsNoTracking()
             .Where(r => r.OrgId == ledger.OrgId && r.FromCurrency == ledger.BaseCurrency && r.ToCurrency == slot.Currency && r.Date <= from.AddDays(14))
             .OrderByDescending(r => r.Date).Select(r => (decimal?)r.Rate).FirstOrDefaultAsync(ct);
+        // Lines in the tax currency (KHR from the payroll system) keep their own amounts: scaled to the ledger's
+        // currency and back at the pay run's rate, so the KHR boxes equal what the payroll system reported.
         var payrollLines = payRuns.SelectMany(r => r.Lines.Select(l => new TaxLine(PayRun.Kind, r.Id, r.PayRunNo, r.Date, Guid.Empty, r.Reference, l.LineNo,
-            $"{l.EmployeeCode} {l.Name}", Guid.Empty, null, null, 0, 0, 0, null, true, null, 0, rate?.Rate ?? fifteenth, Payroll: l)));
+            $"{l.EmployeeCode} {l.Name}", Guid.Empty, null, null, 0, 0, 0, null, true, null, 0,
+            r.Rate is { } own && r.Currency == slot?.Currency ? own : rate?.Rate ?? fifteenth, Payroll: l, PayrollScale: r.Rate is { } payRate ? 1 / payRate : 1)));
         lines = lines.Concat(journalLines).Concat(paymentLines).Concat(payrollLines).OrderBy(l => l.Date).ThenBy(l => l.DocumentKind).ThenBy(l => l.DocumentNo).ThenBy(l => l.LineNo).ToList();
 
         var issues = new List<JournalIssue>();

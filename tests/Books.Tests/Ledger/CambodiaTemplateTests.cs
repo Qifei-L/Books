@@ -17,7 +17,7 @@ public sealed class CambodiaTemplateTests(TestHost host)
 
         var summary = await (await ApplyAsync(books)).DataAsync();
 
-        Assert.Equal(17, summary.GetProperty("created").GetArrayLength());
+        Assert.Equal(22, summary.GetProperty("created").GetArrayLength());
         var accounts = (await AccountTests.ListAsync(books.Admin, books.OrgId, books.LedgerId)).EnumerateArray().ToDictionary(a => a.GetProperty("code").GetString()!);
         Assert.Equal(["payable"], accounts["2000"].GetProperty("usages").EnumerateArray().Select(u => u.GetString()));
         Assert.True(accounts["2000"].GetProperty("is_control").GetBoolean());
