@@ -16,8 +16,11 @@ public sealed record TaxLine(
 {
     public const string JournalKind = "journal";
 
-    public bool IsSale => DocumentKind is SalesInvoice.Kind or SalesInvoice.CreditNoteKind;
-    public bool IsPurchase => DocumentKind is PurchaseInvoice.Kind or PurchaseInvoice.DebitNoteKind;
+    /// <summary>Sales invoices and credit notes, and receipt lines posted straight to an account with a tax code.</summary>
+    public bool IsSale => DocumentKind is SalesInvoice.Kind or SalesInvoice.CreditNoteKind or Payment.ReceiptKind;
+
+    /// <summary>Purchase invoices and debit notes, and payment lines posted straight to an account with a tax code.</summary>
+    public bool IsPurchase => DocumentKind is PurchaseInvoice.Kind or PurchaseInvoice.DebitNoteKind or Payment.Kind;
     public bool TaxAdjusted => Tax != TaxCalculated;
 }
 

@@ -96,6 +96,40 @@ public sealed class TaxReturnTests(TestHost host)
     }
 
     [Fact]
+    public async Task Payment_and_receipt_lines_with_tax_codes_count_and_other_lines_do_not()
+    {
+        var s = await SeedAsync();
+        var bank = await PaymentTests.BankAsync(s.Books);
+        var supplier = (await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/parties", new { name = "Cash supplier", is_supplier = true })).DataAsync(HttpStatusCode.Created)).Id();
+        var expense = (await AccountTests.CreateAsync(s.Books.Admin, s.Books.OrgId, s.Books.LedgerId, "5300", "Repairs", "cost_and_expense")).Id();
+        await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/payments", new
+        {
+            bank_account_id = bank, party_id = supplier, date = "2026-10-12",
+            lines = new object[]
+            {
+                new { account_id = expense, amount = "200.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true, withholding_code_id = s.Taxes["WHT 10% rent"] },
+                new { account_id = expense, description = "Bank fee", amount = "1.00" },
+            },
+        })).DataAsync(HttpStatusCode.Created);
+        await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/receipts", new
+        {
+            bank_account_id = bank, party_id = s.Customer, date = "2026-10-14",
+            lines = new object[]
+            {
+                new { account_id = s.Books.Sales, description = "Cash sale", amount = "50.00", tax_code_id = s.Taxes["VAT 10% (sales)"] },
+                new { account_id = expense, description = "Tax withheld by customer", amount = "-5.00" },
+            },
+        })).DataAsync(HttpStatusCode.Created);
+
+        var october = await GetAsync(s, "tax-returns/2026-10");
+
+        var boxes = Boxes(october);
+        Assert.Equal(("1200.00", "120.00", "950.00", "95.00"), (boxes["t701_03"].Usd, boxes["t701_04"].Usd, boxes["t701_14"].Usd, boxes["t701_15"].Usd));
+        Assert.Equal(("1200.00", "120.00", "1200.00"), (boxes["wt03_r5_rent_base"].Usd, boxes["wt03_r5_rent"].Usd, boxes["t701_turnover"].Usd));
+        Assert.All(october.GetProperty("reconciliation").EnumerateArray(), r => Assert.True(r.GetProperty("matches").GetBoolean(), r.GetRawText()));
+    }
+
+    [Fact]
     public async Task Lines_with_an_overridden_vat_are_listed_for_review()
     {
         var s = await SeedAsync();
