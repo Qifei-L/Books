@@ -154,6 +154,35 @@ public static class DemoData
             "CN-2026-01", "Damaged goods returned", [Sale(sales, "Return of 10 pcs", 200m, "VAT 10% (sales)")], mekongInvoice), true, ct, creditNote: true);
         await salesInvoices.CreateAsync(principal, Meta(), orgId, ledgerId, new SalesInvoiceInput(customers[2], null, DateOnly.Parse("2026-10-28"), null,
             null, "Catering supplies (draft for review)", [Sale(sales, "Trading goods", 340m, "VAT 10% (sales)")]), false, ct);
+        // Payments and receipts (M7), Manager.io style: settle with the party on the A/P or A/R account; a customer's
+        // withholding and a bank fee are their own lines.
+        var paymentService = services.GetRequiredService<PaymentService>();
+        var withheld = await Account("5950", "Tax withheld by customers", AccountType.CostAndExpense, expenses);
+        PaymentLineInput Settle(Guid control, decimal amount) => new(null, control, null, null, null, null, amount);
+        PaymentLineInput To(Guid account, string description, decimal amount) => new(null, account, description, null, null, null, amount);
+        await paymentService.CreateAsync(principal, Meta(), orgId, ledgerId, new PaymentInput(bank, landlord, DateOnly.Parse("2026-10-15"), "TT-1015", "October rent",
+            [Settle(chart["2000"], 1_200m), To(bankCharges, "Transfer fee", 2m)]), true, false, ct);
+        await paymentService.CreateAsync(principal, Meta(), orgId, ledgerId, new PaymentInput(bank, null, DateOnly.Parse("2026-10-20"), "GDT-09", "VAT for September",
+            [To(vat, "VAT payable September", 181m)]), true, false, ct);
+        await paymentService.CreateAsync(principal, Meta(), orgId, ledgerId, new PaymentInput(bank, customers[0], DateOnly.Parse("2026-10-26"), "ABA-IN-26", "Mekong Retail payment",
+            [Settle(chart["1200"], 1_980m)]), true, true, ct);
+        await paymentService.CreateAsync(principal, Meta(), orgId, ledgerId, new PaymentInput(bank, customers[1], DateOnly.Parse("2026-10-29"), "ABA-IN-29", "Angkor Hotels part payment",
+            [Settle(chart["1200"], 1_500m), To(withheld, "WHT 15% withheld by customer", -225m)]), true, true, ct);
+        // Everything up to 14 October was reconciled before; the October statement starts from that balance.
+        var reconciliation = services.GetRequiredService<BankReconciliationService>();
+        var reconciled = await reconciliation.ReconciliationAsync(principal, orgId, ledgerId, bank, DateOnly.Parse("2026-10-14"), null, ct);
+        await reconciliation.ClearAsync(principal, Meta(), orgId, ledgerId, bank, DateOnly.Parse("2026-10-14"), reconciled.Pending.Select(p => p.JournalId).ToList(), ct);
+        var opening = decimal.Parse(reconciled.BookBalance, System.Globalization.CultureInfo.InvariantCulture);
+        var statements = services.GetRequiredService<BankStatementService>();
+        await statements.ImportAsync(principal, Meta(), orgId, ledgerId, bank, opening, opening + 1_502m,
+        [
+            new StatementLineInput(DateOnly.Parse("2026-10-16"), "TT PHNOM PENH PROPERTY", "TT-1015", -1_202m, "ABA-2610-0001"),
+            new StatementLineInput(DateOnly.Parse("2026-10-20"), "GDT TAX PAYMENT", null, -181m, "ABA-2610-0002"),
+            new StatementLineInput(DateOnly.Parse("2026-10-27"), "MEKONG RETAIL CO", null, 1_980m, "ABA-2610-0003"),
+            new StatementLineInput(DateOnly.Parse("2026-10-30"), "INCOMING TT ANGKOR HOTELS", null, 1_275m, "ABA-2610-0004"),
+            new StatementLineInput(DateOnly.Parse("2026-10-31"), "MONTHLY ACCOUNT FEE", null, -5m, "ABA-2610-0005"),
+            new StatementLineInput(DateOnly.Parse("2026-10-31"), "LOAN INTEREST", null, -365m, "ABA-2610-0006"),
+        ], ct);
         var ledgerVersion = long.Parse((await companies.GetLedgerAsync(principal, orgId, ledgerId, ct)).Version);
         await settings.CloseAsync(principal, Meta(ledgerVersion), orgId, ledgerId, DateOnly.Parse("2026-09-30"), ct);
         await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(landlord, null, DateOnly.Parse("2026-09-15"), null, "PPP-2026-09B", "Late September repair bill",

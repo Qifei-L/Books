@@ -108,6 +108,7 @@ async function chooseLedger(ledger) {
   await renderSetup();
   await renderSales();
   await renderPurchases();
+  await renderBank();
   await renderTax("2026-10");
   for (const id of ["tb-out", "gl-out", "pl-out", "bs-out"]) $(id).innerHTML = "";
 }
@@ -275,6 +276,40 @@ function showSale(d, party) {
       at ${t.rate} ${esc(t.rate_source)} of ${t.rate_date}${t.reason ? ` · ${esc(t.reason)}` : ""}</p>` : ""}
     ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}`;
   $("journal-dialog").showModal();
+}
+
+async function renderBank() {
+  const [banks, payments, receipts, parties] = await Promise.all([
+    api(`${ledgerUrl()}/bank-accounts`), api(`${ledgerUrl()}/payments`), api(`${ledgerUrl()}/receipts`), api(`${ledgerUrl()}/parties`),
+  ]);
+  if (!banks.length) {
+    $("tab-bank").innerHTML = `<p class="muted">No bank accounts.</p>`;
+    return;
+  }
+  const bank = banks.find((b) => b.id === state.bankId) ?? banks[0];
+  const statements = await api(`${ledgerUrl()}/bank-accounts/${bank.account_id ?? bank.id}/statements`);
+  const latest = statements[0];
+  const r = await api(`${ledgerUrl()}/bank-accounts/${bank.account_id ?? bank.id}/reconciliation?asOf=${latest?.to ?? "2026-10-31"}${latest ? `&statementBalance=${latest.closing_balance}` : ""}`);
+  const party = (id) => parties.find((p) => p.id === id)?.name ?? "";
+  const docs = [...payments, ...receipts].filter((d) => d.bank_account_id === (bank.account_id ?? bank.id)).sort((a, b) => a.date.localeCompare(b.date));
+  $("tab-bank").innerHTML = `
+    <p><label>Account <select id="bank-pick">${banks.map((b) => `<option value="${b.account_id ?? b.id}" ${b === bank ? "selected" : ""}>${esc(b.code)} ${esc(b.name)} · ${esc(b.bank_name)}</option>`).join("")}</select></label></p>
+    <h3>Payments and receipts</h3>
+    <table><tr><th>No.</th><th>Date</th><th>Party</th><th>Reference</th><th>Lines</th><th class="num">In</th><th class="num">Out</th><th>Status</th></tr>
+    ${docs.map((d) => `<tr><td>${d.type === "receipt" ? "RC" : "PM"} ${d.payment_no}</td><td>${d.date}</td><td>${esc(party(d.party_id))}</td><td>${esc(d.reference ?? "")}</td>
+      <td>${d.lines.map((l) => `${l.kind === "account" ? esc(accountName(l.account_id)) : l.kind === "invoice" ? "invoice" : "party balance"} ${l.amount}`).join("; ")}</td>
+      <td class="num">${d.type === "receipt" ? d.total : ""}</td><td class="num">${d.type === "payment" ? d.total : ""}</td>
+      <td>${d.status === "posted" ? `<span class="pill posted">posted</span>` : `<span class="pill draft">${d.status}</span> ${d.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>
+    <h3 style="margin-top:16px">Reconciliation at ${r.as_of}</h3>
+    <p>Book ${r.book_balance} · cleared ${r.cleared_balance}${r.statement_balance ? ` · statement ${r.statement_balance} · ${r.reconciled ? `<span class="ok">reconciled</span>` : `<span class="error">difference ${r.difference}</span>`}` : ""}</p>
+    <table><tr><th>Pending</th><th>Date</th><th>Source</th><th>Reference</th><th class="num">Amount</th></tr>
+    ${r.pending.slice(-15).map((p) => `<tr><td>No. ${p.journal_no}</td><td>${p.date}</td><td>${p.source}</td><td>${esc(p.reference ?? "")}</td><td class="num">${p.amount}</td></tr>`).join("")}</table>
+    ${r.pending.length > 15 ? `<p class="muted">${r.pending.length - 15} earlier pending postings not shown.</p>` : ""}
+    ${statements.map((st) => `<h3 style="margin-top:16px">Statement ${st.from} – ${st.to}</h3>
+      <p class="muted">Opening ${st.opening_balance} · closing ${st.closing_balance} · ${st.matched} matched · ${st.drafted} to Suspense (drafts) · ${st.duplicates} duplicates</p>
+      <table><tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Status</th></tr>
+      ${st.lines.map((l) => `<tr><td>${l.date}</td><td>${esc(l.description ?? "")}</td><td class="num">${l.amount}</td><td><span class="pill ${l.status === "matched" ? "posted" : "draft"}">${l.status}</span></td></tr>`).join("")}</table>`).join("")}`;
+  $("bank-pick").onchange = (e) => { state.bankId = e.target.value; renderBank(); };
 }
 
 async function renderTax(period) {
