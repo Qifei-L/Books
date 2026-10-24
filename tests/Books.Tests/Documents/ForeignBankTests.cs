@@ -31,6 +31,11 @@ public sealed class ForeignBankTests(TestHost host)
             lines = new[] { new { invoice_id = invoice.Id(), amount = "440000" } },
         })).DataAsync(HttpStatusCode.Created);
 
+        var unnamed = await s.Books.Admin.PostAsync($"{s.LedgerUrl}/receipts", new
+        {
+            bank_account_id = khr, party_id = s.Customer, date = "2026-10-21", lines = new[] { new { amount = "1000" } },
+        });
+        await unnamed.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
         Assert.Equal(("KHR", "440000", "110.00"), (Get(receipt, "currency"), Get(receipt, "total"), Get(receipt.GetProperty("lines")[0], "control_amount")));
         var lines = await JournalAsync(s, receipt);
         Assert.Equal(("107.32", "440000"), (lines[khr].Dr, lines[khr].Currency));             // 440,000 / 4,100

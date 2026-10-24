@@ -80,6 +80,7 @@
 | 2026-10-24 | Scope against QuickBooks: no quotes or estimates, no purchase orders, no budgets; payroll stays as imported results. Next is M15, data entry in the app for people, using the same API and rules as AI clients. |
 | 2026-10-24 | Data entry (M15): the app will become the real app for staff, but not yet (it stays Development-only with the local test issuer for now); no reviewer step before posting for now, to be refined later; posted documents may still be deleted (their journal goes with them). |
 | 2026-10-24 | Multi-currency part 2 (M12.2): bank accounts may be kept in KHR (balance in KHR and its USD value; payments, receipts, transfers and statements in the bank's currency); settling a foreign-currency invoice settles it in the invoice's currency, and the difference from the invoice's rate is realized exchange gain or loss; realized and unrealized exchange differences have separate accounts; revaluation of foreign balances is yearly, at year end (M12.2b). |
+| 2026-10-24 | M12.2 follow-up: where another currency is involved (a payment in a foreign-currency bank account, or a party with invoices in another currency), settlement lines must name the invoice, so the difference is always realized; the exchange accounts are Cost & Expense; ledgers set up before this apply the template again to get them; a transfer out of a foreign-currency account converts at the rate of the date (or the one given), the simple way. |
 
 ## Proposed defaults (accept or change)
 

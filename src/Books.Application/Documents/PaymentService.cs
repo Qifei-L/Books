@@ -242,6 +242,13 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
                     {
                         throw BooksProblem.Invalid($"Line {i}: settled_amount applies only to lines naming an invoice.");
                     }
+                    // Owner decision (M12.2): where another currency is involved the line names the invoice, so the
+                    // exchange difference is realized on it instead of staying in the party's balance.
+                    if (currency != ledger.BaseCurrency || await HasForeignInvoicesAsync(ledger, input.PartyId, usage, ct))
+                    {
+                        throw BooksProblem.Invalid($"Line {i}: name the invoice this settles (invoice_id); a payment in another currency, or a party with invoices "
+                            + "in another currency, settles invoice by invoice so the exchange difference is realized.");
+                    }
                     var control = line.AccountId ?? (partyControl ??= await ControlAccountAsync(ledger.Id, usage, input.ControlAccountId, ct));
                     lines.Add(PaymentLine.ForParty(control, line.Description, amount, payment.ToBase(amount, baseMinor)));
                 }
@@ -314,6 +321,14 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
         payment.Set(input.BankAccountId, input.PartyId, input.Date, input.Reference, input.Description, lines, isNew);
         return issues;
     }
+
+    /// <summary>Whether the party has posted invoices on this side (sales for receivables, purchases for payables) in another currency.</summary>
+    private async Task<bool> HasForeignInvoicesAsync(Ledger ledger, Guid? partyId, Usage usage, CancellationToken ct) =>
+        partyId is { } party && (usage == Usage.Receivable
+            ? await db.SalesInvoices.AnyAsync(x => x.LedgerId == ledger.Id && x.CustomerId == party && x.Status == DocumentStatus.Posted
+                && x.Currency != "" && x.Currency != ledger.BaseCurrency, ct)
+            : await db.PurchaseInvoices.AnyAsync(x => x.LedgerId == ledger.Id && x.SupplierId == party && x.Status == DocumentStatus.Posted
+                && x.Currency != "" && x.Currency != ledger.BaseCurrency, ct));
 
     /// <summary>The given account must carry the usage; when omitted, the ledger must have exactly one.</summary>
     private async Task<Guid> ControlAccountAsync(Guid ledgerId, Usage usage, Guid? accountId, CancellationToken ct)
