@@ -31,7 +31,7 @@ public static class TaxPacks
     {
         public static readonly CambodiaKhr Instance = new();
 
-        private static readonly HashSet<string> Kinds = [PurchaseInvoice.Kind, PurchaseInvoice.DebitNoteKind, "sales_invoice", "sales_credit_note"];
+        private static readonly HashSet<string> Kinds = [PurchaseInvoice.Kind, PurchaseInvoice.DebitNoteKind, SalesInvoice.Kind, SalesInvoice.CreditNoteKind];
 
         public string Currency => "KHR";
 

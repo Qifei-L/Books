@@ -59,12 +59,12 @@ public static class PurchaseEndpoints
         body.TaxCurrencyRate is null && body.TaxCurrencyReason is null ? null
             : new TaxCurrencyInput(Rate(body.TaxCurrencyRate), body.TaxCurrencyReason));
 
-    private static decimal? Rate(string? value) =>
+    internal static decimal? Rate(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null
         : decimal.TryParse(value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var n) ? n
         : throw BooksProblem.Invalid("tax_currency_rate must be a decimal string.");
 
-    private static decimal? Number(string? value, int index, string field, bool signed = false) =>
+    internal static decimal? Number(string? value, int index, string field, bool signed = false) =>
         string.IsNullOrWhiteSpace(value) ? null
         : decimal.TryParse(value, NumberStyles.AllowDecimalPoint | (signed ? NumberStyles.AllowLeadingSign : NumberStyles.None), CultureInfo.InvariantCulture, out var n) ? n
         : throw BooksProblem.Invalid($"Line {index + 1} {field} must be a decimal string.");

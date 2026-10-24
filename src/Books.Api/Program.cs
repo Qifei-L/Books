@@ -67,6 +67,7 @@ api.MapBankEndpoints();
 api.MapItemEndpoints();
 api.MapTransferEndpoints();
 api.MapPurchaseEndpoints();
+api.MapSalesEndpoints();
 api.MapJournalEndpoints();
 api.MapReportEndpoints();
 
