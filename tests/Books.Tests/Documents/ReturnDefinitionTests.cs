@@ -64,6 +64,7 @@ public sealed class ReturnDefinitionTests(TestHost host)
     public async Task A_version_cannot_start_in_a_filed_month_and_new_categories_reach_tax_codes()
     {
         var s = await new TaxReturnTests(host).SeedAsync();
+        await TaxReturnTests.DeleteDraftsAsync(s);
         await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/tax-returns/2026-10/file", new { })).DataAsync(HttpStatusCode.Created);
         var spec = await BuiltinAsync(s);
         ((JsonArray)spec["withholding_categories"]!).Add(JsonNode.Parse("""{"key": "dividends", "label": "Dividends (14%)"}"""));

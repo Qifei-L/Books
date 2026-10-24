@@ -17,6 +17,8 @@ public sealed class TaxReturnFilingTests(TestHost host)
     public async Task Filing_keeps_the_return_and_closes_the_month()
     {
         var s = await new TaxReturnTests(host).SeedAsync();
+        var blocked = await s.Books.Admin.PostAsync($"{s.LedgerUrl}/tax-returns/2026-10/file", new { });
+        await TaxReturnTests.DeleteDraftsAsync(s);
 
         var filed = await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/tax-returns/2026-10/file", new { })).DataAsync(HttpStatusCode.Created);
         var again = await s.Books.Admin.PostAsync($"{s.LedgerUrl}/tax-returns/2026-10/file", new { });
@@ -24,6 +26,7 @@ public sealed class TaxReturnFilingTests(TestHost host)
         var list = await TaxReturnTests.GetAsync(s, "tax-returns");
         var october = await TaxReturnTests.GetAsync(s, "tax-returns/2026-10");
 
+        await blocked.AssertProblemAsync((HttpStatusCode)422, "RETURN_INCOMPLETE");
         Assert.Equal("-10.00", TaxReturnTests.Boxes(filed)["net_vat"].Usd);
         await again.AssertProblemAsync(HttpStatusCode.Conflict, "RETURN_ALREADY_FILED");
         Assert.Equal("DATE_CLOSED", late.GetProperty("issues")[0].GetProperty("code").GetString());
@@ -36,6 +39,7 @@ public sealed class TaxReturnFilingTests(TestHost host)
     public async Task A_reopened_and_changed_month_shows_what_differs_from_the_filed_return()
     {
         var s = await new TaxReturnTests(host).SeedAsync();
+        await TaxReturnTests.DeleteDraftsAsync(s);
         await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/tax-returns/2026-10/file", new { })).DataAsync(HttpStatusCode.Created);
         var version = long.Parse((await LedgerAsync(s)).GetProperty("version").GetString()!);
         await (await s.Books.Admin.WriteAsync(HttpMethod.Put, $"{s.LedgerUrl}/close", new { closed_through = "2026-09-30" }, ifMatch: version)).DataAsync();

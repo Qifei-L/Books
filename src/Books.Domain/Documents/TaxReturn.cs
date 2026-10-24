@@ -8,13 +8,16 @@ namespace Books.Domain.Documents;
 /// One posted document line as the tax return sees it. Amounts are signed: credit and debit notes are negative.
 /// </summary>
 /// <param name="KhrRate">The rate of the document's tax currency snapshot (owner decision: the return starts from the snapshots).</param>
+/// <param name="PostingUsage">For a journal posting on a tax account (DocumentKind "journal"): the account's usage; its amount is in Tax.</param>
 public sealed record TaxLine(
     string DocumentKind, Guid DocumentId, long DocumentNo, DateOnly Date, Guid PartyId, string? Reference, int LineNo, string? Description,
     Guid AccountId, Guid? TaxCodeId, TaxKind? TaxKind, decimal Net, decimal Tax, decimal TaxCalculated, string? TaxReason, bool ValidTaxInvoice,
-    string? WithholdingCategory, decimal Withholding, decimal? KhrRate)
+    string? WithholdingCategory, decimal Withholding, decimal? KhrRate, string? PostingUsage = null)
 {
+    public const string JournalKind = "journal";
+
     public bool IsSale => DocumentKind is SalesInvoice.Kind or SalesInvoice.CreditNoteKind;
-    public bool IsPurchase => !IsSale;
+    public bool IsPurchase => DocumentKind is PurchaseInvoice.Kind or PurchaseInvoice.DebitNoteKind;
     public bool TaxAdjusted => Tax != TaxCalculated;
 }
 
@@ -27,8 +30,19 @@ public sealed record WithholdingCategory(string Key, string Label);
 public sealed record ReturnDefinitionSpec(
     string Name, [property: JsonPropertyName("withholding_categories")] IReadOnlyList<WithholdingCategory> WithholdingCategories, IReadOnlyList<BoxSpec> Boxes);
 
-/// <summary>A box adds up document lines (Lines) or is calculated from earlier boxes (Formula).</summary>
-public sealed record BoxSpec(string Key, string Section, string Label, LineRule? Lines = null, FormulaRule? Formula = null, bool Information = false);
+/// <summary>
+/// A box adds up document lines (Lines) and journal postings on tax accounts (Postings), or is calculated from earlier
+/// boxes (Formula).
+/// </summary>
+public sealed record BoxSpec(
+    string Key, string Section, string Label, LineRule? Lines = null, FormulaRule? Formula = null, bool Information = false, PostingRule? Postings = null);
+
+/// <summary>
+/// Journal postings, not from purchase or sales documents, on the accounts carrying a usage (output_vat, input_vat or
+/// withholding_payable): manual tax corrections count in the return and show in its drilldown (owner decision).
+/// Liabilities count credits as positive; input VAT counts debits as positive.
+/// </summary>
+public sealed record PostingRule(string Usage);
 
 /// <param name="Side">sale or purchase.</param>
 /// <param name="TaxKinds">vat_output, vat_input, vat_zero_rated, non_vat or none (no tax code); omit for any.</param>
@@ -100,12 +114,20 @@ public static class TaxReturns
             {
                 errors.Add($"{at}: section and label are required.");
             }
-            if ((box.Lines is null) == (box.Formula is null))
+            if ((box.Lines is null && box.Postings is null) == (box.Formula is null))
             {
-                errors.Add($"{at}: give either lines or formula.");
+                errors.Add($"{at}: give lines and/or postings, or a formula.");
                 continue;
             }
-            if (box.Lines is { } rule)
+            if (box.Postings is { } postings && !PostingUsages.Contains(postings.Usage))
+            {
+                errors.Add($"{at}: postings usage must be one of {string.Join(", ", PostingUsages)}.");
+            }
+            if (box.Formula is null && box.Lines is null)
+            {
+                boxes.Add(new ReturnBox(box.Key, box.Section, box.Label, Posting(box.Postings!), Information: box.Information));
+            }
+            else if (box.Lines is { } rule)
             {
                 if (rule.Side is not ("sale" or "purchase"))
                 {
@@ -124,7 +146,9 @@ public static class TaxReturns
                 {
                     errors.Add($"{at}: amount must be net, tax or withholding.");
                 }
-                boxes.Add(new ReturnBox(box.Key, box.Section, box.Label, Line(rule), Information: box.Information));
+                var fromLines = Line(rule);
+                var fromPostings = box.Postings is { } extra ? Posting(extra) : null;
+                boxes.Add(new ReturnBox(box.Key, box.Section, box.Label, l => fromLines(l) ?? fromPostings?.Invoke(l), Information: box.Information));
             }
             else if (box.Formula is { } formula)
             {
@@ -163,11 +187,17 @@ public static class TaxReturns
             : throw new DomainException(string.Join(" ", errors));
     }
 
+    /// <summary>The tax account usages a box can take journal postings from.</summary>
+    public static readonly string[] PostingUsages = ["output_vat", "input_vat", "withholding_payable"];
+
+    private static Func<TaxLine, decimal?> Posting(PostingRule rule) =>
+        l => l.DocumentKind == TaxLine.JournalKind && l.PostingUsage == rule.Usage ? l.Tax : null;
+
     private static Func<TaxLine, decimal?> Line(LineRule rule)
     {
         var kinds = rule.TaxKinds?.Where(Kinds.ContainsKey).Select(k => Kinds[k]).ToList();
         return l =>
-            (rule.Side == "sale") == l.IsSale
+            (rule.Side == "sale" ? l.IsSale : l.IsPurchase)
             && (kinds is null || kinds.Contains(l.TaxKind))
             && (rule.ValidTaxInvoice is not { } valid || l.ValidTaxInvoice == valid)
             && (rule.WithholdingCategory is null || l.WithholdingCategory == rule.WithholdingCategory)
@@ -193,11 +223,11 @@ public static class TaxReturns
     private static readonly ReturnDefinitionSpec Cambodia = new("Cambodia monthly tax return (draft boxes)", CambodiaWithholding,
     [
         new("taxable_sales", Vat, "Taxable sales, excluding VAT", new LineRule("sale", ["vat_output"])),
-        new("output_vat", Vat, "Output VAT", new LineRule("sale", ["vat_output"], Amount: "tax")),
+        new("output_vat", Vat, "Output VAT", new LineRule("sale", ["vat_output"], Amount: "tax"), Postings: new PostingRule("output_vat")),
         new("zero_rated_sales", Vat, "Zero-rated sales", new LineRule("sale", ["vat_zero_rated"])),
         new("non_vat_sales", Vat, "Sales outside VAT", new LineRule("sale", ["non_vat", "none"])),
         new("taxable_purchases", Vat, "Purchases with a valid tax invoice, excluding VAT", new LineRule("purchase", ["vat_input"], true)),
-        new("input_vat", Vat, "Deductible input VAT", new LineRule("purchase", ["vat_input"], true, Amount: "tax")),
+        new("input_vat", Vat, "Deductible input VAT", new LineRule("purchase", ["vat_input"], true, Amount: "tax"), Postings: new PostingRule("input_vat")),
         new("net_vat", Vat, "VAT payable (negative: credit)", Formula: new FormulaRule([new("output_vat"), new("input_vat", -1)])),
         new("non_deductible_vat", Vat, "Input VAT without a valid tax invoice (not deductible)",
             new LineRule("purchase", ["vat_input"], false, Amount: "tax"), Information: true),
@@ -208,8 +238,9 @@ public static class TaxReturns
             new($"wht_{c.Key}_base", Withholding, $"{c.Label}: amounts paid or accrued", new LineRule("purchase", WithholdingCategory: c.Key)),
             new($"wht_{c.Key}", Withholding, $"{c.Label}: tax withheld", new LineRule("purchase", WithholdingCategory: c.Key, Amount: "withholding")),
         }),
+        new("wht_journals", Withholding, "Withholding tax posted by journals", Postings: new PostingRule("withholding_payable")),
         new("wht_total", Withholding, "Withholding tax payable",
-            Formula: new FormulaRule([.. CambodiaWithholding.Select(c => new FormulaTerm($"wht_{c.Key}"))])),
+            Formula: new FormulaRule([.. CambodiaWithholding.Select(c => new FormulaTerm($"wht_{c.Key}")), new FormulaTerm("wht_journals")])),
     ]);
 }
 
