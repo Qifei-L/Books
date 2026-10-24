@@ -56,6 +56,7 @@ Replace our Manager.io bookkeeping with a system that:
 | M11 Other monthly taxes | Tax on salary from imported payroll results (TOS 01) is done; specific, accommodation and public lighting tax (T7 01) | Part done |
 | M12 Multi-currency | Foreign-currency bank accounts, documents and parties; exchange differences | Planned |
 | M13 Attachments | Files attached to documents and journals, shared by every document type | Planned |
+| M14 Organization-shared information | Information kept once per organization and used by every company (ledger) in it: customers and suppliers, items, tax codes, return definitions and templates; exchange rates are already shared. Each ledger still keeps its own balances and documents | Planned (scope to confirm) |
 | Later | Annual income tax return; import VAT (T7 01 boxes 05–06); CamInvoice | Planned |
 
 MCP tools ship with each milestone, not at the end.
