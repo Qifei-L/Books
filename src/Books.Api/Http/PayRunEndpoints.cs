@@ -29,6 +29,11 @@ public static class PayRunEndpoints
         runs.MapGet("", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, PayRunService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.ListAsync(await principals.GetAsync(ct), orgId, ledgerId, ct)));
 
+        // A page of employee lines: search matches the employee code or name; limit 1–500, default 100.
+        runs.MapGet("/{payRunId:guid}/lines", async (Guid orgId, Guid ledgerId, Guid payRunId, string? search, int? offset, int? limit, PrincipalAccessor principals,
+            PayRunService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.LinesAsync(await principals.GetAsync(ct), orgId, ledgerId, payRunId, search, offset ?? 0, limit ?? 100, ct)));
+
         runs.MapPost("", async (Guid orgId, Guid ledgerId, PayRunRequest body, PrincipalAccessor principals, PayRunService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.CreateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, Input(body), body.Post, ct)));
 

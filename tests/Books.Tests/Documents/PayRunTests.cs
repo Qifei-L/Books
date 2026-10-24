@@ -82,6 +82,31 @@ public sealed class PayRunTests(TestHost host)
         Assert.Equal(("25.00", "100000"), boxes["tos_resident_tax"]);                  // exactly what the payroll system reported in KHR
     }
 
+    [Fact]
+    public async Task Employee_lines_are_read_a_page_at_a_time_and_found_by_code_or_name()
+    {
+        var (s, accounts) = await SetUpAsync();
+        var run = await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/pay-runs", Body(accounts))).DataAsync(HttpStatusCode.Created);
+        var url = $"{s.LedgerUrl}/pay-runs/{run.Id()}/lines";
+
+        var first = await (await s.Books.Admin.GetAsync($"{url}?limit=2", Ct)).DataAsync();
+        var second = await (await s.Books.Admin.GetAsync($"{url}?offset=2&limit=2", Ct)).DataAsync();
+        var byName = await (await s.Books.Admin.GetAsync($"{url}?search=sophea", Ct)).DataAsync();
+        var byCode = await (await s.Books.Admin.GetAsync($"{url}?search=E3", Ct)).DataAsync();
+        var tooMany = await s.Books.Admin.GetAsync($"{url}?limit=501", Ct);
+
+        Assert.Equal((3, "E1 E2"), (first.GetProperty("total").GetInt32(), Codes(first)));
+        Assert.Equal("E3", Codes(second));
+        Assert.Equal((1, "E2"), (byName.GetProperty("total").GetInt32(), Codes(byName)));
+        var expat = byCode.GetProperty("lines")[0];
+        Assert.Equal(("2000.00", "300.00", "400.00", "60.00", "100.00", "1500.00", false),
+            (Get(expat, "gross"), Get(expat, "fringe_benefits"), Get(expat, "salary_tax"), Get(expat, "fringe_benefit_tax"), Get(expat, "other_deductions"), Get(expat, "net"),
+                expat.GetProperty("resident").GetBoolean()));
+        await tooMany.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
+    }
+
+    private static string Codes(JsonElement page) => string.Join(" ", page.GetProperty("lines").EnumerateArray().Select(l => Get(l, "employee_code")));
+
     private async Task<(SalesInvoiceTests.Setup, Dictionary<string, Guid>)> SetUpAsync()
     {
         var s = await new SalesInvoiceTests(host).SetUpAsync();

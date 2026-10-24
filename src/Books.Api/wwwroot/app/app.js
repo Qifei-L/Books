@@ -54,7 +54,7 @@ $("demo").addEventListener("click", async () => {
     showError(error);
   } finally {
     $("demo").disabled = false;
-    $("demo").textContent = "Create demo organization";
+    $("demo").textContent = "New demo";
   }
 });
 
@@ -71,39 +71,46 @@ async function start() {
   }
 }
 
+// The organization and company are picked in the header; the page itself is the chosen company's books.
 async function loadOrganizations(select) {
   const orgs = await api("/api/v1/me/organizations");
-  $("orgs").innerHTML = orgs.length
-    ? orgs.map((o) => `<li data-id="${o.id}">${esc(o.name)} <span class="pill">${esc(o.role)}</span></li>`).join("")
-    : `<li class="muted">No organizations yet.</li>`;
-  for (const li of $("orgs").querySelectorAll("li[data-id]")) li.onclick = () => chooseOrganization(li.dataset.id);
+  $("switcher").classList.remove("hidden");
+  $("org-pick").innerHTML = orgs.length
+    ? orgs.map((o) => `<option value="${o.id}">${esc(o.name)} (${esc(o.role)})</option>`).join("")
+    : `<option value="">No organizations yet</option>`;
+  $("org-pick").onchange = (e) => chooseOrganization(e.target.value);
   const first = select ?? orgs[0]?.id;
   if (first) await chooseOrganization(first);
+  else showLedger(false);
 }
 
 async function chooseOrganization(orgId) {
   state.org = orgId;
+  $("org-pick").value = orgId;
   state.role = (await api("/api/v1/me/organizations")).find((o) => o.id === orgId)?.role;
-  for (const li of $("orgs").querySelectorAll("li")) li.classList.toggle("selected", li.dataset.id === orgId);
   const ledgers = await api(`/api/v1/organizations/${orgId}/ledgers`);
-  $("ledgers").innerHTML = ledgers.length
-    ? ledgers.map((l) => `<li data-id="${l.id}">${esc(l.company_name)} <span class="pill">${esc(l.base_currency)} · ${esc(l.effective_access)}</span></li>`).join("")
-    : `<li class="muted">No ledgers you can see.</li>`;
-  for (const li of $("ledgers").querySelectorAll("li[data-id]")) li.onclick = () => chooseLedger(ledgers.find((l) => l.id === li.dataset.id));
+  $("ledger-pick").innerHTML = ledgers.map((l) => `<option value="${l.id}">${esc(l.company_name)}</option>`).join("");
+  $("ledger-pick").onchange = (e) => chooseLedger(ledgers.find((l) => l.id === e.target.value));
   if (ledgers[0]) await chooseLedger(ledgers[0]);
-  else $("ledger").classList.add("hidden");
+  else showLedger(false);
+}
+
+function showLedger(shown) {
+  $("ledger").classList.toggle("hidden", !shown);
+  $("no-ledger").classList.toggle("hidden", shown);
+  $("ledger-pick").classList.toggle("hidden", !shown);
+  if (!shown) $("ledger-meta").textContent = "";
 }
 
 const ledgerUrl = () => `/api/v1/organizations/${state.org}/ledgers/${state.ledger.id}`;
 
 async function chooseLedger(ledger) {
   state.ledger = ledger;
-  for (const li of $("ledgers").querySelectorAll("li")) li.classList.toggle("selected", li.dataset.id === ledger.id);
-  $("ledger").classList.remove("hidden");
-  $("ledger-title").textContent = ledger.company_name;
-  const months = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  $("ledger-meta").textContent = `Base currency ${ledger.base_currency} · fiscal year starts in ${months[ledger.fy_start_month]} · `
-    + (ledger.closed_through ? `closed through ${ledger.closed_through}` : "not closed");
+  $("ledger-pick").value = ledger.id;
+  showLedger(true);
+  const months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  $("ledger-meta").textContent = `${ledger.base_currency} · FY from ${months[ledger.fy_start_month]} · `
+    + (ledger.closed_through ? `closed to ${ledger.closed_through}` : "not closed") + (ledger.effective_access === "edit" ? "" : " · read only");
   await renderChart();
   await renderJournals();
   await renderSetup();
@@ -112,6 +119,7 @@ async function chooseLedger(ledger) {
   await renderBank();
   await renderInventory();
   await renderAssets();
+  await renderPayroll();
   await renderTax("2026-10");
   for (const id of ["tb-out", "gl-out", "pl-out", "bs-out"]) $(id).innerHTML = "";
   for (const id of ["tb-form", "pl-form", "bs-form"]) $(id).requestSubmit();
@@ -162,6 +170,11 @@ async function openDocument(kind, id) {
     if (kind.startsWith("sales")) showSale(doc, party);
     else if (kind.startsWith("purchase")) showPurchase(doc, party);
     else if (kind === "payment" || kind === "receipt") showPayment(doc, party);
+    else if (kind === "pay_run") {
+      $("journal-dialog").close();
+      document.querySelector('.tabs button[data-tab="payroll"]').click();
+      showPayRun(doc);
+    }
     else if (kind === "stock_adjustment") {
       const items = await api(`${ledgerUrl()}/items`);
       showAdjustment(doc, (iid) => items.find((i) => i.id === iid)?.name ?? "");
