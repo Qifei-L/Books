@@ -11,5 +11,18 @@ public static class TaxReturnEndpoints
 
         ledger.MapGet("/tax-pack", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.PackAsync(await principals.GetAsync(ct), orgId, ledgerId, ct)));
+
+        // A month's return, yyyy-MM. khrRate with khrReason recalculates the tax currency at one rate for the month.
+        ledger.MapGet("/tax-returns/{period}", async (Guid orgId, Guid ledgerId, string period, string? khrRate, string? khrReason,
+            PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.ReturnAsync(await principals.GetAsync(ct), orgId, ledgerId, period, Override(khrRate, khrReason), ct)));
+
+        ledger.MapGet("/tax-returns/{period}/boxes/{key}", async (Guid orgId, Guid ledgerId, string period, string key, string? khrRate, string? khrReason,
+            PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.BoxLinesAsync(await principals.GetAsync(ct), orgId, ledgerId, period, key, Override(khrRate, khrReason), ct)));
     }
+
+    internal static ReturnRateOverride? Override(string? rate, string? reason) =>
+        rate is null && reason is null ? null
+        : new ReturnRateOverride(PurchaseEndpoints.Rate(rate) ?? throw Books.Application.Common.BooksProblem.Invalid("khrRate is required with khrReason."), reason ?? "");
 }
