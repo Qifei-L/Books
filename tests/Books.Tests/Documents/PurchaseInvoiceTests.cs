@@ -116,6 +116,9 @@ public sealed class PurchaseInvoiceTests(TestHost host)
         var books = await JournalBooks.CreateAsync(host, subject: subject);
         var ledgerUrl = $"/api/v1/organizations/{books.OrgId}/ledgers/{books.LedgerId}";
         await (await books.Admin.PostAsync($"{ledgerUrl}/templates/cambodia-2026", new { })).DataAsync();
+        // The Cambodia pack shows KHR totals, so documents need a USD→KHR rate on or before their date.
+        await (await books.Admin.WriteAsync(HttpMethod.Put, $"/api/v1/organizations/{books.OrgId}/exchange-rates",
+            new { date = "2026-01-01", from_currency = "USD", to_currency = "KHR", rate = "4000", source = "NBC" })).DataAsync();
         var rent = (await AccountTests.CreateAsync(books.Admin, books.OrgId, books.LedgerId, "5000", "Rent", "cost_and_expense")).Id();
         var supplies = (await AccountTests.CreateAsync(books.Admin, books.OrgId, books.LedgerId, "5100", "Office supplies", "cost_and_expense")).Id();
         var supplier = await Party(books, new { name = "Phnom Penh Property Ltd.", is_supplier = true, payment_terms_days = 30 });

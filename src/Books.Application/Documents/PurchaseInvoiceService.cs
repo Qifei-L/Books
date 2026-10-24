@@ -22,7 +22,7 @@ public sealed record PurchaseLineInput(
 /// <param name="OriginalInvoiceId">Debit notes only: the invoice being corrected.</param>
 public sealed record PurchaseInvoiceInput(
     Guid SupplierId, Guid? PayableAccountId, DateOnly Date, DateOnly? DueDate, string? Reference, string? Description, IReadOnlyList<PurchaseLineInput> Lines,
-    Guid? OriginalInvoiceId = null);
+    Guid? OriginalInvoiceId = null, TaxCurrencyInput? TaxCurrency = null);
 
 public sealed record PurchaseLineDto(
     Guid LineId, Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string NetAmount,
@@ -32,14 +32,14 @@ public sealed record PurchaseLineDto(
 public sealed record PurchaseInvoiceDto(
     Guid Id, Guid LedgerId, string Type, long InvoiceNo, Guid? OriginalInvoiceId, Guid SupplierId, Guid PayableAccountId, DateOnly Date, DateOnly DueDate,
     string? Reference, string? Description, IReadOnlyList<PurchaseLineDto> Lines,
-    string NetTotal, string TaxTotal, string GrossTotal, string WithholdingTotal, string PayableTotal,
+    string NetTotal, string TaxTotal, string GrossTotal, string WithholdingTotal, string PayableTotal, TaxCurrencyDto? TaxCurrency,
     string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version);
 
 /// <summary>
 /// Purchase invoices. Save posts when valid; otherwise the invoice is kept as a draft with the reasons. A posted
 /// invoice whose change cannot be posted stays unchanged (rule 28). AI clients may save drafts only.
 /// </summary>
-public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, ReadRunner reads, DocumentPosting posting)
+public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, ReadRunner reads, DocumentPosting posting, TaxCurrencyService taxCurrency)
 {
     public Task<IReadOnlyList<PurchaseInvoiceDto>> ListAsync(Principal principal, Guid orgId, Guid ledgerId, CancellationToken ct, bool debitNotes = false) =>
         reads.RunAsync<IReadOnlyList<PurchaseInvoiceDto>>(principal, orgId, async scope =>
@@ -206,6 +206,10 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
         }
         var dueDate = input.DueDate ?? input.Date.AddDays(supplier.PaymentTermsDays ?? 0);
         invoice.Set(supplier.Id, payable, input.Date, dueDate, input.Reference, input.Description, lines, isNew, input.OriginalInvoiceId);
+        if (await taxCurrency.ApplyAsync(ledger, invoice.SourceKind, invoice.Id, invoice.Date, invoice.GrossTotal, invoice.TaxTotal, input.TaxCurrency, ct) is { } rateIssue)
+        {
+            issues.Add(rateIssue);
+        }
         return issues;
     }
 
@@ -248,12 +252,13 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
             .OrderByDescending(i => i.Date).ThenByDescending(i => i.InvoiceNo)
             .Select(i => new { i, JournalNo = db.Journals.Where(j => j.Id == i.JournalId).Select(j => (long?)j.JournalNo).FirstOrDefault() })
             .ToListAsync(ct);
+        var taxCurrencies = await taxCurrency.LoadAsync(ledgerId, rows.Select(x => x.i.Id).ToList(), ct);
         return rows.Select(x => new PurchaseInvoiceDto(
             x.i.Id, x.i.LedgerId, x.i.IsDebitNote ? "debit_note" : "invoice", x.i.InvoiceNo, x.i.OriginalInvoiceId, x.i.SupplierId, x.i.PayableAccountId, x.i.Date, x.i.DueDate, x.i.Reference, x.i.Description,
             x.i.Lines.OrderBy(l => l.LineNo).Select(l => new PurchaseLineDto(l.LineId, l.AccountId, l.Description, l.ItemId, Q(l.Quantity), Q(l.UnitPrice),
                 F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason, l.ValidTaxInvoice,
                 l.WithholdingCodeId, F(l.WithholdingAmount))).ToList(),
-            F(x.i.NetTotal), F(x.i.TaxTotal), F(x.i.GrossTotal), F(x.i.WithholdingTotal), F(x.i.PayableTotal),
+            F(x.i.NetTotal), F(x.i.TaxTotal), F(x.i.GrossTotal), F(x.i.WithholdingTotal), F(x.i.PayableTotal), taxCurrencies.GetValueOrDefault(x.i.Id),
             Text.Of(x.i.Status), x.i.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.i.Issues, BooksJson.Options)!,
             x.i.JournalId, x.JournalNo, x.i.Version.ToString())).ToList();
     }

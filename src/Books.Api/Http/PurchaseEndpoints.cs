@@ -15,7 +15,7 @@ public static class PurchaseEndpoints
 
     public sealed record InvoiceRequest(
         Guid SupplierId, Guid? PayableAccountId, DateOnly Date, DateOnly? DueDate, string? Reference, string? Description,
-        IReadOnlyList<LineRequest> Lines, bool Post = true, Guid? OriginalInvoiceId = null);
+        IReadOnlyList<LineRequest> Lines, bool Post = true, Guid? OriginalInvoiceId = null, string? TaxCurrencyRate = null, string? TaxCurrencyReason = null);
 
     public static void MapPurchaseEndpoints(this RouteGroupBuilder api)
     {
@@ -55,7 +55,14 @@ public static class PurchaseEndpoints
             l.AccountId, l.Description, l.ItemId, Number(l.Quantity, i, "quantity", signed: true), Number(l.UnitPrice, i, "unit_price"),
             Number(l.Amount, i, "amount", signed: true), l.TaxCodeId, Number(l.TaxAmount, i, "tax_amount", signed: true), l.TaxReason,
             l.ValidTaxInvoice ?? true, l.WithholdingCodeId)).ToList(),
-        body.OriginalInvoiceId);
+        body.OriginalInvoiceId,
+        body.TaxCurrencyRate is null && body.TaxCurrencyReason is null ? null
+            : new TaxCurrencyInput(Rate(body.TaxCurrencyRate), body.TaxCurrencyReason));
+
+    private static decimal? Rate(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null
+        : decimal.TryParse(value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var n) ? n
+        : throw BooksProblem.Invalid("tax_currency_rate must be a decimal string.");
 
     private static decimal? Number(string? value, int index, string field, bool signed = false) =>
         string.IsNullOrWhiteSpace(value) ? null
