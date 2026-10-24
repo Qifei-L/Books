@@ -214,3 +214,67 @@ internal sealed class ReturnDefinitionVersionConfiguration : IEntityTypeConfigur
         b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
+{
+    public void Configure(EntityTypeBuilder<Payment> b)
+    {
+        b.ToTable("payments", t => t.HasCheckConstraint(
+            "ck_payments_status", "status IN ('draft', 'posted', 'deleted') AND (status <> 'posted' OR journal_id IS NOT NULL)"));
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Reference).HasMaxLength(200);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.Property(x => x.Issues).HasColumnType("jsonb");
+        b.Ignore(x => x.Total);
+        b.Ignore(x => x.SourceKind);
+        b.HasAlternateKey(x => new { x.LedgerId, x.Id });
+        // Payments and receipts are numbered in separate series.
+        b.HasIndex(x => new { x.LedgerId, x.IsReceipt, x.PaymentNo }).IsUnique();
+        b.HasIndex(x => new { x.LedgerId, x.PartyId });
+        b.HasIndex(x => new { x.LedgerId, x.BankAccountId, x.Date });
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.PaymentId).OnDelete(DeleteBehavior.Restrict);
+        b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Party>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.PartyId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.BankAccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Journal>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.JournalId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class PaymentLineConfiguration : IEntityTypeConfiguration<PaymentLine>
+{
+    public void Configure(EntityTypeBuilder<PaymentLine> b)
+    {
+        b.ToTable("payment_lines", t => t.HasCheckConstraint("ck_payment_lines_kind",
+            "(kind = 'invoice' AND invoice_id IS NOT NULL AND control_account_id IS NOT NULL AND account_id IS NULL) OR "
+            + "(kind = 'party' AND invoice_id IS NULL AND control_account_id IS NOT NULL AND account_id IS NULL) OR "
+            + "(kind = 'account' AND invoice_id IS NULL AND control_account_id IS NULL AND account_id IS NOT NULL)"));
+        b.HasKey(x => new { x.PaymentId, x.LineNo });
+        b.Ignore(x => x.TaxAdjusted);
+        b.Ignore(x => x.Total);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.Property(x => x.TaxReason).HasMaxLength(500);
+        foreach (var amount in new[] { nameof(PaymentLine.NetAmount), nameof(PaymentLine.TaxCalculated), nameof(PaymentLine.TaxAmount),
+                     nameof(PaymentLine.WithholdingAmount), nameof(PaymentLine.Quantity), nameof(PaymentLine.UnitPrice) })
+        {
+            b.Property(amount).HasPrecision(20, 4);
+        }
+        // The settled invoice is a purchase invoice (payments) or a sales invoice (receipts); checked by the service.
+        b.HasIndex(x => x.InvoiceId);
+        b.HasIndex(x => x.AccountId);
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.ControlAccountId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<TaxCode>().WithMany().HasForeignKey(x => x.TaxCodeId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<TaxCode>().WithMany().HasForeignKey(x => x.WithholdingCodeId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
