@@ -26,7 +26,7 @@ public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner read
         }, ct);
 
     public Task<WriteResult> CreateCategoryAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, string name, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("item_category.create", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("item_category.create", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var category = new ItemCategory(Guid.CreateVersion7(), await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct), name, scope.Now);
@@ -43,7 +43,7 @@ public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner read
         }, ct);
 
     public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, ItemInput input, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("item.create", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("item.create", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var item = new Item(Guid.CreateVersion7(), await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct), input.Name, scope.Now);
@@ -56,7 +56,7 @@ public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner read
         }, ct);
 
     public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid itemId, ItemInput input, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("item.update", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("item.update", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var item = await db.Items.SingleOrDefaultAsync(i => i.LedgerId == ledgerId && i.Id == itemId, ct) ?? throw BooksProblem.NotFound();

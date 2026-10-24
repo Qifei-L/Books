@@ -26,7 +26,7 @@ public sealed class PartyService(IBooksDb db, WriteRunner writes, ReadRunner rea
         }, ct);
 
     public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, PartyInput input, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("party.create", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("party.create", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
@@ -40,7 +40,7 @@ public sealed class PartyService(IBooksDb db, WriteRunner writes, ReadRunner rea
         }, ct);
 
     public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid partyId, PartyInput input, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("party.update", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("party.update", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var party = await db.Parties.SingleOrDefaultAsync(p => p.LedgerId == ledgerId && p.Id == partyId, ct) ?? throw BooksProblem.NotFound();
@@ -56,7 +56,7 @@ public sealed class PartyService(IBooksDb db, WriteRunner writes, ReadRunner rea
 
     /// <summary>A party named on any journal line, including drafts, is kept; deactivate it instead.</summary>
     public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid partyId, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("party.delete", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("party.delete", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var party = await db.Parties.SingleOrDefaultAsync(p => p.LedgerId == ledgerId && p.Id == partyId, ct) ?? throw BooksProblem.NotFound();

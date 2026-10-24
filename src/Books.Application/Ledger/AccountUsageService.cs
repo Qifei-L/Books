@@ -37,7 +37,7 @@ public sealed class AccountUsageService(IBooksDb db, WriteRunner writes)
 
     /// <summary>Replaces an account's usages. A usage cannot be removed while something still relies on it.</summary>
     public Task<WriteResult> ReplaceAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid accountId, IReadOnlyList<Usage> usages, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("account.usages", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("account.usages", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var account = await db.Accounts.SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Id == accountId, ct) ?? throw BooksProblem.NotFound();

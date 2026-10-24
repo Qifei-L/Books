@@ -48,8 +48,8 @@ Replace our Manager.io bookkeeping with a system that:
 | 5 | M3 Statements | Balance Sheet, P&L, year-end calculation |
 | 6 | M4 Document framework | Parties, tax codes, bank accounts, posting adapter, allocations |
 | 7–8 | M5 Purchases | AP documents, WHT, AP aging |
-| 9 | M6 Sales | AR documents, KHR totals, AR aging |
-| 10–11 | M7 Bank | Transfers, statement import, matching, reconciliation |
+| 9 | M6 Sales | AR documents, KHR totals (tax currency slot), AR aging, MCP batch tools |
+| 10–11 | M7 Bank | Payments and receipts, statement lines through MCP batch import, matching, reconciliation |
 | 12 | M8 Tax reporting | VAT/WHT monthly summary and detail, filed-period snapshot |
 | 13–14 | M9 Migration | Manager.io import and automated reconciliation |
 | 15–18 | M10 Parallel run | One month side by side, then cut over |

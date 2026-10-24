@@ -24,7 +24,7 @@ public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner r
         }, ct);
 
     public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, TaxCodeInput input, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("tax_code.create", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("tax_code.create", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             scope.RequireAdmin();
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
@@ -41,7 +41,7 @@ public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner r
 
     /// <summary>Replaces name, rate, account, dates and active flag; the kind never changes.</summary>
     public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid taxCodeId, TaxCodeInput input, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("tax_code.update", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("tax_code.update", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             scope.RequireAdmin();
             var code = await db.TaxCodes.SingleOrDefaultAsync(t => t.LedgerId == ledgerId && t.Id == taxCodeId, ct) ?? throw BooksProblem.NotFound();

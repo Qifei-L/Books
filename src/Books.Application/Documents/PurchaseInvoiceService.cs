@@ -49,7 +49,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
         }, ct);
 
     public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, PurchaseInvoiceInput input, bool post, CancellationToken ct, bool debitNote = false) =>
-        writes.RunAsync(principal, new WriteRequest(post ? "purchase_invoice.save" : "purchase_invoice.save_draft", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest(post ? "purchase_invoice.save" : "purchase_invoice.save_draft", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
@@ -64,7 +64,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
         }, ct);
 
     public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid invoiceId, PurchaseInvoiceInput input, bool post, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest(post ? "purchase_invoice.save" : "purchase_invoice.save_draft", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest(post ? "purchase_invoice.save" : "purchase_invoice.save_draft", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var invoice = await FindAsync(ledgerId, invoiceId, ct);
@@ -93,7 +93,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
         }, ct);
 
     public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid invoiceId, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("purchase_invoice.delete", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("purchase_invoice.delete", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var invoice = await FindAsync(ledgerId, invoiceId, ct);

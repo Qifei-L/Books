@@ -22,7 +22,7 @@ public sealed class AccountGroupService(IBooksDb db, WriteRunner writes, ReadRun
         }, ct);
 
     public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, string name, AccountType type, Guid? parentId, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("account_group.create", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("account_group.create", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
@@ -34,7 +34,7 @@ public sealed class AccountGroupService(IBooksDb db, WriteRunner writes, ReadRun
         }, ct);
 
     public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid groupId, UpdateAccountGroup command, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("account_group.update", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("account_group.update", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var group = await db.AccountGroups.SingleOrDefaultAsync(g => g.LedgerId == ledgerId && g.Id == groupId, ct) ?? throw BooksProblem.NotFound();
@@ -54,7 +54,7 @@ public sealed class AccountGroupService(IBooksDb db, WriteRunner writes, ReadRun
 
     /// <summary>Only an empty group can be deleted: no accounts and no groups inside it.</summary>
     public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid groupId, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("account_group.delete", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("account_group.delete", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var group = await db.AccountGroups.SingleOrDefaultAsync(g => g.LedgerId == ledgerId && g.Id == groupId, ct) ?? throw BooksProblem.NotFound();

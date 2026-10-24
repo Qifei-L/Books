@@ -20,7 +20,7 @@ public sealed class AccountPurposeService(IBooksDb db, WriteRunner writes, ReadR
 
     /// <summary>Assigns an account to a purpose, or clears it with null.</summary>
     public Task<WriteResult> AssignAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, SystemPurpose purpose, Guid? accountId, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("ledger.purpose", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("ledger.purpose", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
