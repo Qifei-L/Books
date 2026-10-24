@@ -1961,6 +1961,11 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("numeric(9,4)")
                         .HasColumnName("rate");
 
+                    b.Property<string>("ReturnCategory")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("return_category");
+
                     b.Property<long>("Version")
                         .HasColumnType("bigint")
                         .HasColumnName("version");

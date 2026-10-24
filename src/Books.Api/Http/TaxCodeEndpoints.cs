@@ -10,7 +10,7 @@ public static class TaxCodeEndpoints
 {
     /// <param name="Rate">Percent as a decimal string, for example "10" or "4.5".</param>
     public sealed record TaxCodeRequest(
-        string Name, string Kind, string Rate, Guid? AccountId, DateOnly? EffectiveFrom, DateOnly? EffectiveTo, bool? Active, Guid? NonDeductibleAccountId = null);
+        string Name, string Kind, string Rate, Guid? AccountId, DateOnly? EffectiveFrom, DateOnly? EffectiveTo, bool? Active, Guid? NonDeductibleAccountId = null, string? ReturnCategory = null);
 
     public static void MapTaxCodeEndpoints(this RouteGroupBuilder api)
     {
@@ -40,5 +40,5 @@ public static class TaxCodeEndpoints
         decimal.TryParse(body.Rate, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var rate)
             ? rate
             : throw BooksProblem.Invalid("rate must be a decimal string such as \"10\"."),
-        body.AccountId, body.EffectiveFrom, body.EffectiveTo, body.Active ?? true, body.NonDeductibleAccountId);
+        body.AccountId, body.EffectiveFrom, body.EffectiveTo, body.Active ?? true, body.NonDeductibleAccountId, body.ReturnCategory);
 }

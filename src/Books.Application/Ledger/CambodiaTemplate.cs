@@ -17,7 +17,7 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
 
     private sealed record AccountSpec(string Code, string Name, AccountType Type, string Group, Usage[] Usages, SystemPurpose? Purpose = null);
 
-    private sealed record TaxSpec(string Name, TaxKind Kind, decimal Rate, string? AccountCode, string? NonDeductibleCode = null, DateOnly? From = null);
+    private sealed record TaxSpec(string Name, TaxKind Kind, decimal Rate, string? AccountCode, string? NonDeductibleCode = null, DateOnly? From = null, string? Category = null);
 
     private static readonly AccountSpec[] Accounts =
     [
@@ -39,9 +39,9 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
         new("VAT 0% (zero-rated)", TaxKind.VatZeroRated, 0m, null),
         new("Non-VAT", TaxKind.NonVat, 0m, null),
         new("VAT 4% fuel (sales)", TaxKind.VatOutput, 4m, "2100", From: new DateOnly(2026, 3, 1)),
-        new("WHT 15% services, interest, royalties", TaxKind.Withholding, 15m, "2200"),
-        new("WHT 10% rent", TaxKind.Withholding, 10m, "2200"),
-        new("WHT 14% non-resident", TaxKind.Withholding, 14m, "2200"),
+        new("WHT 15% services, interest, royalties", TaxKind.Withholding, 15m, "2200", Category: "services"),
+        new("WHT 10% rent", TaxKind.Withholding, 10m, "2200", Category: "rent"),
+        new("WHT 14% non-resident", TaxKind.Withholding, 14m, "2200", Category: "non_resident"),
     ];
 
     public sealed record Summary(string Template, IReadOnlyList<string> Created, IReadOnlyList<string> Reused);
@@ -90,7 +90,9 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
                 }
                 var account = spec.AccountCode is null ? null : byCode[spec.AccountCode];
                 var nonDeductible = spec.NonDeductibleCode is null ? null : byCode[spec.NonDeductibleCode];
-                db.TaxCodes.Add(new TaxCode(Guid.CreateVersion7(), ledger, spec.Name, spec.Kind, spec.Rate, account, nonDeductible, spec.From, null, scope.Now));
+                var code = new TaxCode(Guid.CreateVersion7(), ledger, spec.Name, spec.Kind, spec.Rate, account, nonDeductible, spec.From, null, scope.Now);
+                code.SetReturnCategory(spec.Category, [.. Books.Domain.Documents.TaxReturns.For(Key)!.WithholdingCategories.Select(c => c.Key)]);
+                db.TaxCodes.Add(code);
                 created.Add($"tax code {spec.Name}");
             }
 

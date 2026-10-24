@@ -1,6 +1,7 @@
 using Books.Application.Access;
 using Books.Application.Common;
 using Books.Domain.Access;
+using Books.Domain.Documents;
 using Books.Domain.Ledgers;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,10 +9,10 @@ namespace Books.Application.Ledgers;
 
 public sealed record TaxCodeDto(
     Guid Id, Guid LedgerId, string Name, string Kind, string Rate, Guid? AccountId, Guid? NonDeductibleAccountId,
-    DateOnly? EffectiveFrom, DateOnly? EffectiveTo, bool Active, string Version);
+    DateOnly? EffectiveFrom, DateOnly? EffectiveTo, string? ReturnCategory, bool Active, string Version);
 
 public sealed record TaxCodeInput(
-    string Name, TaxKind Kind, decimal Rate, Guid? AccountId, DateOnly? EffectiveFrom, DateOnly? EffectiveTo, bool Active = true, Guid? NonDeductibleAccountId = null);
+    string Name, TaxKind Kind, decimal Rate, Guid? AccountId, DateOnly? EffectiveFrom, DateOnly? EffectiveTo, bool Active = true, Guid? NonDeductibleAccountId = null, string? ReturnCategory = null);
 
 /// <summary>Tax codes of a ledger. Anyone with access reads them; only administrators change them (owner decision).</summary>
 public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner reads, AccountUsageService usages)
@@ -31,6 +32,7 @@ public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner r
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var (account, nonDeductible) = (await AccountAsync(ledgerId, input.AccountId, ct), await AccountAsync(ledgerId, input.NonDeductibleAccountId, ct));
             var code = new TaxCode(Guid.CreateVersion7(), ledger, input.Name, input.Kind, input.Rate, account, nonDeductible, input.EffectiveFrom, input.EffectiveTo, scope.Now);
+            code.SetReturnCategory(input.ReturnCategory, Categories(ledger));
             await EnsureUsagesAsync(code, account, nonDeductible, ct);
             db.TaxCodes.Add(code);
             await db.SaveChangesAsync(ct);
@@ -53,12 +55,16 @@ public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner r
             var before = (await LoadAsync(ledgerId, code.Id, ct)).Single();
             var (account, nonDeductible) = (await AccountAsync(ledgerId, input.AccountId, ct), await AccountAsync(ledgerId, input.NonDeductibleAccountId, ct));
             code.Update(input.Name, input.Rate, account, nonDeductible, input.EffectiveFrom, input.EffectiveTo, input.Active);
+            code.SetReturnCategory(input.ReturnCategory, Categories(await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct)));
             await EnsureUsagesAsync(code, account, nonDeductible, ct);
             await db.SaveChangesAsync(ct);
             var after = (await LoadAsync(ledgerId, code.Id, ct)).Single();
             scope.Audit("tax_code.updated", "tax_code", code.Id, new { before, after });
             return WriteResult.Of(200, after, code.Version);
         }, ct);
+
+    internal static IReadOnlyCollection<string> Categories(Ledger ledger) =>
+        TaxReturns.For(ledger.TaxPack)?.WithholdingCategories.Select(c => c.Key).ToList() ?? [];
 
     /// <summary>The referenced accounts carry the matching usage, added here in the same transaction if missing.</summary>
     private async Task EnsureUsagesAsync(TaxCode code, Account? account, Account? nonDeductible, CancellationToken ct)
@@ -83,6 +89,6 @@ public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner r
         (await db.TaxCodes.AsNoTracking().Where(t => t.LedgerId == ledgerId && (id == null || t.Id == id))
             .OrderBy(t => t.Name).ThenBy(t => t.Id).ToListAsync(ct))
         .Select(t => new TaxCodeDto(t.Id, t.LedgerId, t.Name, Text.Of(t.Kind), t.Rate.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture),
-            t.AccountId, t.NonDeductibleAccountId, t.EffectiveFrom, t.EffectiveTo, t.Active, t.Version.ToString()))
+            t.AccountId, t.NonDeductibleAccountId, t.EffectiveFrom, t.EffectiveTo, t.ReturnCategory, t.Active, t.Version.ToString()))
         .ToList();
 }

@@ -47,9 +47,30 @@ public sealed class TaxCode
 
     public DateOnly? EffectiveFrom { get; private set; }
     public DateOnly? EffectiveTo { get; private set; }
+
+    /// <summary>Withholding codes: the tax pack's category the code is reported under on the monthly return.</summary>
+    public string? ReturnCategory { get; private set; }
+
     public bool Active { get; private set; } = true;
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
+
+    /// <param name="allowed">The ledger's tax pack categories; empty when the ledger has no tax pack.</param>
+    public void SetReturnCategory(string? category, IReadOnlyCollection<string> allowed)
+    {
+        category = string.IsNullOrWhiteSpace(category) ? null : category.Trim();
+        if (category is not null && Kind != TaxKind.Withholding)
+        {
+            throw new DomainException("Only withholding codes have a return category.");
+        }
+        if (category is not null && !allowed.Contains(category))
+        {
+            throw new DomainException(allowed.Count == 0
+                ? "This ledger has no tax pack, so return_category must be empty."
+                : $"return_category must be one of: {string.Join(", ", allowed)}.");
+        }
+        ReturnCategory = category;
+    }
 
     public bool AppliesOn(DateOnly date) =>
         Active && (EffectiveFrom is null || date >= EffectiveFrom) && (EffectiveTo is null || date <= EffectiveTo);

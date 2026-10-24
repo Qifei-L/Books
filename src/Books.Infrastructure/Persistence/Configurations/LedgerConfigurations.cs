@@ -147,6 +147,7 @@ internal sealed class TaxCodeConfiguration : IEntityTypeConfiguration<TaxCode>
         b.Property(x => x.Id).ValueGeneratedNever();
         b.Property(x => x.Name).HasMaxLength(200);
         b.Property(x => x.Rate).HasPrecision(9, 4);
+        b.Property(x => x.ReturnCategory).HasMaxLength(40);
         b.HasAlternateKey(x => new { x.LedgerId, x.Id });
         b.HasOne<Ledger>().WithMany()
             .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
