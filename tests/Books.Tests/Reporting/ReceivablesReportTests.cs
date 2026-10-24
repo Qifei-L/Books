@@ -18,7 +18,8 @@ public sealed class ReceivablesReportTests(TestHost host)
         var aging = await GetAsync(s, "ar-aging?asOf=2026-11-30");
 
         var row = Assert.Single(aging.GetProperty("rows").EnumerateArray());
-        Assert.Equal(("0.00", "-110.00", "1350.00", "0.00", "550.00", "1790.00"),
+        // The credit note settles the oldest invoice: July 550 - 110 = 440.
+        Assert.Equal(("0.00", "0.00", "1350.00", "0.00", "440.00", "1790.00"),
             (Get(row, "not_due"), Get(row, "days1_to30"), Get(row, "days31_to60"), Get(row, "days61_to90"), Get(row, "over90"), Get(row, "total")));
         Assert.Equal(s.Customer, row.GetProperty("customer_id").GetGuid());
         Assert.Equal("1790.00", Get(aging, "control_balance"));

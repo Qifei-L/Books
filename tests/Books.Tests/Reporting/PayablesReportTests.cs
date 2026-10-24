@@ -18,7 +18,8 @@ public sealed class PayablesReportTests(TestHost host)
         var aging = await GetAsync(s, "ap-aging?asOf=2026-11-30");
 
         var row = Assert.Single(aging.GetProperty("rows").EnumerateArray());
-        Assert.Equal(("0.00", "945.00", "0.00", "0.00", "550.00", "1495.00"),
+        // The debit note settles the oldest invoice (owner decision: by party): July 550 - 110 = 440.
+        Assert.Equal(("0.00", "1055.00", "0.00", "0.00", "440.00", "1495.00"),
             (Get(row, "not_due"), Get(row, "days1_to30"), Get(row, "days31_to60"), Get(row, "days61_to90"), Get(row, "over90"), Get(row, "total")));
         Assert.Equal("1495.00", Get(aging, "control_balance"));
         Assert.True(aging.GetProperty("matches_control").GetBoolean());
@@ -38,7 +39,7 @@ public sealed class PayablesReportTests(TestHost host)
 
         var totals = aging.GetProperty("totals");
         // The July invoice was due 31 Jul: 86 days overdue on 25 Oct.
-        Assert.Equal(("945.00", "550.00", "1495.00"), (Get(totals, "not_due"), Get(totals, "days61_to90"), Get(totals, "total")));
+        Assert.Equal(("1055.00", "440.00", "1495.00"), (Get(totals, "not_due"), Get(totals, "days61_to90"), Get(totals, "total")));
         Assert.True(aging.GetProperty("matches_control").GetBoolean());
     }
 
