@@ -2072,6 +2072,159 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("sales_invoice_lines", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.StockAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<long>("AdjustmentNo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("adjustment_no");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Issues")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("issues");
+
+                    b.Property<Guid?>("JournalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("journal_id");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reference");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stock_adjustments");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_stock_adjustments_created_by");
+
+                    b.HasIndex("LedgerId", "AdjustmentNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_stock_adjustments_ledger_id_adjustment_no");
+
+                    b.HasIndex("LedgerId", "Date")
+                        .HasDatabaseName("ix_stock_adjustments_ledger_id_date");
+
+                    b.HasIndex("LedgerId", "JournalId")
+                        .HasDatabaseName("ix_stock_adjustments_ledger_id_journal_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_stock_adjustments_org_id_ledger_id");
+
+                    b.ToTable("stock_adjustments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_adjustments_status", "status IN ('draft', 'posted', 'deleted') AND (status <> 'posted' OR journal_id IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.StockAdjustmentLine", b =>
+                {
+                    b.Property<Guid>("AdjustmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("adjustment_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_no");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<decimal>("BookQuantity")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("book_quantity");
+
+                    b.Property<decimal?>("CountedQuantity")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("counted_quantity");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("InventoryAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inventory_account_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("quantity");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("unit_cost");
+
+                    b.Property<decimal>("Value")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("value");
+
+                    b.HasKey("AdjustmentId", "LineNo")
+                        .HasName("pk_stock_adjustment_lines");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_stock_adjustment_lines_account_id");
+
+                    b.HasIndex("InventoryAccountId")
+                        .HasDatabaseName("ix_stock_adjustment_lines_inventory_account_id");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_stock_adjustment_lines_item_id");
+
+                    b.ToTable("stock_adjustment_lines", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_adjustment_lines_quantity", "quantity <> 0");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Journals.Journal", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3634,6 +3787,62 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_sales_invoice_lines_tax_codes_tax_code_id");
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.StockAdjustment", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_adjustments_users_created_by");
+
+                    b.HasOne("Books.Domain.Journals.Journal", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "JournalId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_stock_adjustments_journals_ledger_id_journal_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_adjustments_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.StockAdjustmentLine", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_adjustment_lines_accounts_account_id");
+
+                    b.HasOne("Books.Domain.Documents.StockAdjustment", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("AdjustmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_adjustment_lines_stock_adjustments_adjustment_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("InventoryAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_adjustment_lines_accounts_inventory_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_adjustment_lines_items_item_id");
+                });
+
             modelBuilder.Entity("Books.Domain.Journals.Journal", b =>
                 {
                     b.HasOne("Books.Domain.Access.User", null)
@@ -3932,6 +4141,11 @@ namespace Books.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.SalesInvoice", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.StockAdjustment", b =>
                 {
                     b.Navigation("Lines");
                 });

@@ -109,6 +109,7 @@ async function chooseLedger(ledger) {
   await renderSales();
   await renderPurchases();
   await renderBank();
+  await renderInventory();
   await renderTax("2026-10");
   for (const id of ["tb-out", "gl-out", "pl-out", "bs-out"]) $(id).innerHTML = "";
   for (const id of ["tb-form", "pl-form", "bs-form"]) $(id).requestSubmit();
@@ -126,7 +127,7 @@ function openGl(accountId, from, to) {
 
 const SOURCES = {
   purchase_invoice: "Purchase invoice", purchase_debit_note: "Debit note", sales_invoice: "Sales invoice", sales_credit_note: "Credit note",
-  payment: "Payment", receipt: "Receipt", bank_transfer: "Bank transfer", pay_run: "Pay run",
+  payment: "Payment", receipt: "Receipt", bank_transfer: "Bank transfer", pay_run: "Pay run", stock_adjustment: "Stock adjustment",
 };
 
 async function openJournal(id) {
@@ -144,7 +145,7 @@ async function openJournalNo(no) {
 
 const DOC_LISTS = {
   sales_invoice: "sales-invoices", sales_credit_note: "credit-notes", purchase_invoice: "purchase-invoices", purchase_debit_note: "debit-notes",
-  payment: "payments", receipt: "receipts", pay_run: "pay-runs", bank_transfer: "transfers",
+  payment: "payments", receipt: "receipts", pay_run: "pay-runs", bank_transfer: "transfers", stock_adjustment: "stock-adjustments",
 };
 
 // Opens whatever produced a posting: the document's own view where there is one, otherwise its journal.
@@ -158,6 +159,10 @@ async function openDocument(kind, id) {
     if (kind.startsWith("sales")) showSale(doc, party);
     else if (kind.startsWith("purchase")) showPurchase(doc, party);
     else if (kind === "payment" || kind === "receipt") showPayment(doc, party);
+    else if (kind === "stock_adjustment") {
+      const items = await api(`${ledgerUrl()}/items`);
+      showAdjustment(doc, (iid) => items.find((i) => i.id === iid)?.name ?? "");
+    }
     else if (doc.journal_id) openJournal(doc.journal_id);
   } catch (error) {
     showError(error);

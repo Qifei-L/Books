@@ -16,7 +16,7 @@ namespace Books.Api.Mcp;
 [McpServerToolType]
 public sealed class BooksBankTools(
     PrincipalAccessor principals, PaymentService payments, BankStatementService statements, BankReconciliationService reconciliation, PayRunService payRuns,
-    FixedAssetService assets, InventoryReportService inventory, IHttpContextAccessor http)
+    FixedAssetService assets, InventoryReportService inventory, StockAdjustmentService adjustments, IHttpContextAccessor http)
 {
     public sealed record PaymentLine(
         [property: JsonPropertyName("amount"), Description("Decimal string; VAT excluded on account lines; may be negative (fees, discounts, tax a customer withheld).")] string Amount,
@@ -34,6 +34,14 @@ public sealed class BooksBankTools(
         [property: JsonPropertyName("lines")] PaymentLine[] Lines,
         [property: JsonPropertyName("party_id"), Description("Supplier or customer; required to settle invoices or balances.")] Guid? PartyId = null,
         [property: JsonPropertyName("reference")] string? Reference = null,
+        [property: JsonPropertyName("description")] string? Description = null);
+
+    public sealed record AdjustmentLine(
+        [property: JsonPropertyName("item_id"), Description("An inventory item from list_items (track_inventory true).")] Guid ItemId,
+        [property: JsonPropertyName("quantity"), Description("Signed change as a decimal string: negative writes off, positive adds. Give this or counted_quantity.")] string? Quantity = null,
+        [property: JsonPropertyName("counted_quantity"), Description("The quantity counted on the date; Books works out the difference from the book quantity.")] string? CountedQuantity = null,
+        [property: JsonPropertyName("unit_cost"), Description("Stock coming in only: its cost per unit; omit for the average cost.")] string? UnitCost = null,
+        [property: JsonPropertyName("account_id"), Description("The other side; omit for the cost of sales account.")] Guid? AccountId = null,
         [property: JsonPropertyName("description")] string? Description = null);
 
     public sealed record StatementLine(
@@ -68,6 +76,27 @@ public sealed class BooksBankTools(
     [Description("Inventory items on a date: quantities in and out, on hand, average cost and value, checked against the inventory account.")]
     public Task<CallToolResult> Inventory(Guid org_id, Guid ledger_id, DateOnly as_of, CancellationToken ct) =>
         BooksReadTools.RunAsync(async () => await inventory.ReportAsync(await principals.GetAsync(ct), org_id, ledger_id, as_of, ct));
+
+    [McpServerTool(Name = "list_stock_adjustments", ReadOnly = true, Idempotent = true)]
+    [Description("Stock adjustments and counts with each line's quantity change, book quantity, counted quantity and value.")]
+    public Task<CallToolResult> StockAdjustments(Guid org_id, Guid ledger_id, CancellationToken ct) =>
+        BooksReadTools.RunAsync(async () => await adjustments.ListAsync(await principals.GetAsync(ct), org_id, ledger_id, ct));
+
+    [McpServerTool(Name = "save_stock_adjustment_draft", Idempotent = true)]
+    [Description("Saves a stock write-off or a stock count as a draft for a person to post. For a count, give counted_quantity per item and Books "
+        + "takes the difference from the quantity on hand on the date; leave out items whose count matches. Stock going out is valued at the "
+        + "average cost; stock coming in at unit_cost or the average cost. Each item once per adjustment.")]
+    public Task<CallToolResult> SaveStockAdjustment(Guid org_id, Guid ledger_id,
+        [Description("A new UUID per adjustment; reuse it to retry safely.")] Guid idempotency_key,
+        [Description("yyyy-MM-dd")] DateOnly date, AdjustmentLine[] lines, string? reference = null, string? description = null,
+        CancellationToken ct = default) =>
+        McpWrites.RunAsync(async () =>
+        {
+            var input = StockAdjustmentEndpoints.Input(new StockAdjustmentEndpoints.AdjustmentRequest(date, reference, description,
+                lines.Select(l => new StockAdjustmentEndpoints.LineRequest(l.ItemId, l.Description, l.Quantity, l.CountedQuantity, l.UnitCost, l.AccountId)).ToList(), Post: false));
+            var meta = McpWrites.Meta(http, "save_stock_adjustment_draft", idempotency_key, new { org_id, ledger_id, date, lines, reference, description });
+            return await adjustments.CreateAsync(await principals.GetAsync(ct), meta, org_id, ledger_id, input, post: false, ct);
+        });
 
     [McpServerTool(Name = "list_pay_runs", ReadOnly = true, Idempotent = true)]
     [Description("Pay runs (imported payroll results) with their totals and status.")]

@@ -49,7 +49,7 @@ const options = (rows, selected, label, empty) =>
   + rows.map((r) => `<option value="${r.id}" ${r.id === selected ? "selected" : ""}>${esc(label(r))}</option>`).join("");
 
 async function refreshLedger() {
-  await Promise.all([renderSales(), renderPurchases(), renderBank(), renderSetup(), renderJournals()]);
+  await Promise.all([renderSales(), renderPurchases(), renderBank(), renderInventory(), renderSetup(), renderJournals()]);
 }
 
 // ---- Customers and suppliers ----

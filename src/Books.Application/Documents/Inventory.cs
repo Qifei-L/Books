@@ -19,7 +19,8 @@ public sealed record InventoryReport(DateOnly AsOf, string Currency, IReadOnlyLi
 /// <summary>
 /// Inventory items (owner default: average cost, Manager.io style). Movements are read from posted documents:
 /// purchase invoices bring stock in at their net amount and debit notes take it out; sales invoices take it out at
-/// the average cost of the stock before them and credit notes bring it back at that cost.
+/// the average cost of the stock before them and credit notes bring it back at that cost; stock adjustments move it
+/// in or out at the value worked out when they were saved.
 /// </summary>
 public static class Inventory
 {
@@ -34,9 +35,15 @@ public static class Inventory
     /// <summary>Average cost of the item's stock on the date, leaving out one document (the one being saved).</summary>
     internal static async Task<decimal> AverageCostAsync(IBooksDb db, Guid ledgerId, Guid itemId, DateOnly date, Guid excludeDocument, CancellationToken ct)
     {
+        var (quantity, value) = await PositionAsync(db, ledgerId, itemId, date, excludeDocument, ct);
+        return quantity > 0 ? value / quantity : 0;
+    }
+
+    /// <summary>Quantity on hand and its value on the date, leaving out one document (the one being saved).</summary>
+    internal static async Task<(decimal Quantity, decimal Value)> PositionAsync(IBooksDb db, Guid ledgerId, Guid itemId, DateOnly date, Guid excludeDocument, CancellationToken ct)
+    {
         var movements = (await MovementsAsync(db, ledgerId, date, ct)).Where(m => m.ItemId == itemId && m.DocumentId != excludeDocument).ToList();
-        var quantity = movements.Sum(m => m.Quantity);
-        return quantity > 0 ? movements.Sum(m => m.Value) / quantity : 0;
+        return (movements.Sum(m => m.Quantity), movements.Sum(m => m.Value));
     }
 
     internal static async Task<List<StockMovement>> MovementsAsync(IBooksDb db, Guid ledgerId, DateOnly to, CancellationToken ct)
@@ -47,10 +54,13 @@ public static class Inventory
         var minor = Currencies.Require(await db.Ledgers.Where(l => l.Id == ledgerId).Select(l => l.BaseCurrency).SingleAsync(ct)).MinorUnits;
         var sales = await db.SalesInvoices.AsNoTracking().Include(i => i.Lines)
             .Where(i => i.LedgerId == ledgerId && i.Status == DocumentStatus.Posted && i.Date <= to).ToListAsync(ct);
+        var adjustments = await db.StockAdjustments.AsNoTracking().Include(a => a.Lines)
+            .Where(a => a.LedgerId == ledgerId && a.Status == DocumentStatus.Posted && a.Date <= to).ToListAsync(ct);
         return purchases.SelectMany(p => p.Lines.Where(l => l.ItemId is { } id && tracked.Contains(id))
                 .Select(l => new StockMovement(l.ItemId!.Value, p.Date, p.Id, (p.IsDebitNote ? -1 : 1) * (l.Quantity ?? 0), (p.IsDebitNote ? -1 : 1) * p.ToBase(l.NetAmount, minor))))
             .Concat(sales.SelectMany(s => s.Lines.Where(l => l.ItemId is { } id && tracked.Contains(id))
                 .Select(l => new StockMovement(l.ItemId!.Value, s.Date, s.Id, (s.IsCreditNote ? 1 : -1) * (l.Quantity ?? 0), (s.IsCreditNote ? 1 : -1) * l.CostAmount))))
+            .Concat(adjustments.SelectMany(a => a.Lines.Select(l => new StockMovement(l.ItemId, a.Date, a.Id, l.Quantity, l.Value))))
             .ToList();
     }
 }
