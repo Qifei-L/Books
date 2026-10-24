@@ -36,6 +36,8 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<DocumentTaxCurrency> DocumentTaxCurrencies => Set<DocumentTaxCurrency>();
     public DbSet<SalesInvoice> SalesInvoices => Set<SalesInvoice>();
     public DbSet<SalesInvoiceLine> SalesInvoiceLines => Set<SalesInvoiceLine>();
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<PaymentLine> PaymentLines => Set<PaymentLine>();
     public DbSet<FiledTaxReturn> FiledTaxReturns => Set<FiledTaxReturn>();
     public DbSet<ReturnDefinitionVersion> ReturnDefinitionVersions => Set<ReturnDefinitionVersion>();
     public DbSet<Journal> Journals => Set<Journal>();
@@ -62,6 +64,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
         configurationBuilder.Properties<TaxKind>().HaveConversion<LowerCaseEnumConverter<TaxKind>>().HaveMaxLength(20);
         configurationBuilder.Properties<Books.Domain.Documents.DocumentStatus>().HaveConversion<LowerCaseEnumConverter<Books.Domain.Documents.DocumentStatus>>().HaveMaxLength(20);
         configurationBuilder.Properties<Books.Domain.Documents.DefinitionStatus>().HaveConversion<LowerCaseEnumConverter<Books.Domain.Documents.DefinitionStatus>>().HaveMaxLength(20);
+        configurationBuilder.Properties<Books.Domain.Documents.PaymentLineKind>().HaveConversion<LowerCaseEnumConverter<Books.Domain.Documents.PaymentLineKind>>().HaveMaxLength(20);
         configurationBuilder.Properties<Usage>().HaveConversion<LowerCaseEnumConverter<Usage>>().HaveMaxLength(40);
         configurationBuilder.Properties<MembershipStatus>().HaveConversion<LowerCaseEnumConverter<MembershipStatus>>().HaveMaxLength(20);
     }
