@@ -72,6 +72,7 @@ api.MapTransferEndpoints();
 api.MapPurchaseEndpoints();
 api.MapSalesEndpoints();
 api.MapPaymentEndpoints();
+api.MapPayRunEndpoints();
 api.MapTaxReturnEndpoints();
 api.MapJournalEndpoints();
 api.MapReportEndpoints();

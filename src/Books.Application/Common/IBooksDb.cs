@@ -41,6 +41,8 @@ public interface IBooksDb
     DbSet<PaymentLine> PaymentLines { get; }
     DbSet<BankClearing> BankClearings { get; }
     DbSet<BankStatement> BankStatements { get; }
+    DbSet<PayRun> PayRuns { get; }
+    DbSet<PayRunLine> PayRunLines { get; }
     DbSet<FiledTaxReturn> FiledTaxReturns { get; }
     DbSet<ReturnDefinitionVersion> ReturnDefinitionVersions { get; }
     DbSet<Journal> Journals { get; }

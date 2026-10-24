@@ -15,7 +15,8 @@ namespace Books.Api.Mcp;
 /// </summary>
 [McpServerToolType]
 public sealed class BooksBankTools(
-    PrincipalAccessor principals, PaymentService payments, BankStatementService statements, BankReconciliationService reconciliation, IHttpContextAccessor http)
+    PrincipalAccessor principals, PaymentService payments, BankStatementService statements, BankReconciliationService reconciliation, PayRunService payRuns,
+    IHttpContextAccessor http)
 {
     public sealed record PaymentLine(
         [property: JsonPropertyName("amount"), Description("Decimal string; VAT excluded on account lines; may be negative (fees, discounts, tax a customer withheld).")] string Amount,
@@ -41,6 +42,32 @@ public sealed class BooksBankTools(
         [property: JsonPropertyName("description")] string? Description = null,
         [property: JsonPropertyName("reference")] string? Reference = null,
         [property: JsonPropertyName("external_id"), Description("The bank's own transaction ID, if shown; used to skip lines imported before.")] string? ExternalId = null);
+
+    [McpServerTool(Name = "list_pay_runs", ReadOnly = true, Idempotent = true)]
+    [Description("Pay runs (imported payroll results) with their totals and status.")]
+    public Task<CallToolResult> PayRuns(Guid org_id, Guid ledger_id, CancellationToken ct) =>
+        BooksReadTools.RunAsync(async () => await payRuns.ListAsync(await principals.GetAsync(ct), org_id, ledger_id, ct));
+
+    [McpServerTool(Name = "save_pay_run_draft", Idempotent = true)]
+    [Description("Saves a month's payroll results from the client's payroll system as a draft pay run (up to 5000 employees) for a person to post. "
+        + "Map the payroll file's columns to: employee_code, name, resident, gross, fringe_benefits, salary_tax, fringe_benefit_tax, nssf_employee, "
+        + "nssf_employer, other_deductions, net (decimal strings in the ledger's currency); gross must equal net + salary_tax + nssf_employee + "
+        + "other_deductions. Books posts one summary journal and reports the tax for form TOS 01. Omit accounts to reuse the previous pay run's.")]
+    public Task<CallToolResult> SavePayRun(
+        Guid org_id, Guid ledger_id,
+        [Description("A new UUID per pay run; reuse it to retry safely.")] Guid idempotency_key,
+        [Description("The month the pay is for, yyyy-MM.")] string period,
+        [Description("The journal date, usually the pay date.")] DateOnly date,
+        PayRunEndpoints.LineRequest[] lines,
+        PayRunEndpoints.AccountsRequest? accounts = null,
+        string? reference = null,
+        CancellationToken ct = default) =>
+        McpWrites.RunAsync(async () =>
+        {
+            var input = PayRunEndpoints.Input(new PayRunEndpoints.PayRunRequest(period, date, reference, null, accounts, lines, Post: false));
+            var meta = McpWrites.Meta(http, "save_pay_run_draft", idempotency_key, new { org_id, ledger_id, period, date, lines, accounts, reference });
+            return await payRuns.CreateAsync(await principals.GetAsync(ct), meta, org_id, ledger_id, input, post: false, ct);
+        });
 
     [McpServerTool(Name = "list_payments", ReadOnly = true, Idempotent = true)]
     [Description("Payments and receipts of a ledger with their lines, status and reasons a draft is not posted.")]

@@ -334,3 +334,53 @@ internal sealed class BankStatementLineConfiguration : IEntityTypeConfiguration<
         b.HasOne<Payment>().WithMany().HasForeignKey(x => x.PaymentId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class PayRunConfiguration : IEntityTypeConfiguration<PayRun>
+{
+    public void Configure(EntityTypeBuilder<PayRun> b)
+    {
+        b.ToTable("pay_runs", t => t.HasCheckConstraint(
+            "ck_pay_runs_status", "status IN ('draft', 'posted', 'deleted') AND (status <> 'posted' OR journal_id IS NOT NULL) AND EXTRACT(DAY FROM period) = 1"));
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Reference).HasMaxLength(200);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.Property(x => x.Issues).HasColumnType("jsonb");
+        b.ComplexProperty(x => x.Accounts, a =>
+        {
+            a.Property(x => x.SalaryExpense).HasColumnName("salary_expense_account_id");
+            a.Property(x => x.NssfExpense).HasColumnName("nssf_expense_account_id");
+            a.Property(x => x.SalariesPayable).HasColumnName("salaries_payable_account_id");
+            a.Property(x => x.SalaryTaxPayable).HasColumnName("salary_tax_payable_account_id");
+            a.Property(x => x.NssfPayable).HasColumnName("nssf_payable_account_id");
+            a.Property(x => x.OtherDeductions).HasColumnName("other_deductions_account_id");
+        });
+        b.HasAlternateKey(x => new { x.LedgerId, x.Id });
+        b.HasIndex(x => new { x.LedgerId, x.PayRunNo }).IsUnique();
+        b.HasIndex(x => new { x.LedgerId, x.Period });
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.PayRunId).OnDelete(DeleteBehavior.Restrict);
+        b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Journal>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.JournalId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class PayRunLineConfiguration : IEntityTypeConfiguration<PayRunLine>
+{
+    public void Configure(EntityTypeBuilder<PayRunLine> b)
+    {
+        b.ToTable("pay_run_lines");
+        b.HasKey(x => new { x.PayRunId, x.LineNo });
+        b.Property(x => x.EmployeeCode).HasMaxLength(200);
+        b.Property(x => x.Name).HasMaxLength(200);
+        foreach (var amount in new[] { nameof(PayRunLine.Gross), nameof(PayRunLine.FringeBenefits), nameof(PayRunLine.SalaryTax), nameof(PayRunLine.FringeBenefitTax),
+                     nameof(PayRunLine.NssfEmployee), nameof(PayRunLine.NssfEmployer), nameof(PayRunLine.OtherDeductions), nameof(PayRunLine.Net) })
+        {
+            b.Property(amount).HasPrecision(20, 4);
+        }
+    }
+}
