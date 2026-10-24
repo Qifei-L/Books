@@ -10,6 +10,12 @@
   <header>
     <strong>Books</strong>
     <span class="tag">preview · development only</span>
+    <span id="switcher" class="switcher hidden">
+      <select id="org-pick" title="Organization"></select>
+      <select id="ledger-pick" title="Company"></select>
+      <span id="ledger-meta" class="muted small"></span>
+      <button id="demo" class="secondary small" title="Creates a demo organization with a year of sample data through the normal API rules">New demo</button>
+    </span>
     <span id="who" class="who"></span>
   </header>
 
@@ -25,38 +31,33 @@
     </section>
 
     <section id="home" class="hidden">
-      <div class="row">
-        <div class="card narrow">
-          <h3>Organizations</h3>
-          <ul id="orgs" class="list"></ul>
-          <button id="demo" class="secondary">Create demo organization</button>
-          <p class="muted small">Creates sample accounts and a year of journals through the normal API rules.</p>
-        </div>
-        <div class="card narrow">
-          <h3>Ledgers</h3>
-          <ul id="ledgers" class="list"><li class="muted">Choose an organization.</li></ul>
-        </div>
-      </div>
-
-      <div id="ledger" class="card hidden">
-        <h2 id="ledger-title"></h2>
-        <p id="ledger-meta" class="muted"></p>
-        <nav class="tabs">
-          <button data-tab="chart" class="active">Accounts</button>
-          <button data-tab="journals">Journals</button>
-          <button data-tab="sales">Sales</button>
+      <p id="no-ledger" class="card muted hidden">No company you can see yet. Use <b>New demo</b> to create one with sample data.</p>
+      <div id="ledger" class="layout hidden">
+        <!-- Modules grouped by what people do, Manager.io style. -->
+        <nav class="tabs side">
+          <div class="nav-group">Business</div>
+          <button data-tab="sales" class="active">Sales</button>
           <button data-tab="purchases">Purchases</button>
           <button data-tab="bank">Cash and bank</button>
+          <button data-tab="payroll">Payroll</button>
+          <div class="nav-group">Assets</div>
           <button data-tab="inventory">Inventory</button>
           <button data-tab="assets">Fixed assets</button>
-          <button data-tab="tax">Tax return</button>
-          <button data-tab="tb">Trial balance</button>
-          <button data-tab="gl">GL detail</button>
+          <div class="nav-group">Accounting</div>
+          <button data-tab="journals">Journals</button>
+          <button data-tab="chart">Chart of accounts</button>
+          <div class="nav-group">Reports</div>
           <button data-tab="pl">Profit and loss</button>
           <button data-tab="bs">Balance sheet</button>
+          <button data-tab="tb">Trial balance</button>
+          <button data-tab="gl">GL detail</button>
+          <div class="nav-group">Tax</div>
+          <button data-tab="tax">Tax return</button>
+          <div class="nav-group">Setup</div>
           <button data-tab="setup">Settings</button>
         </nav>
-        <div id="tab-chart" class="tab"></div>
+        <div class="content card">
+        <div id="tab-chart" class="tab hidden"></div>
         <div id="tab-journals" class="tab hidden"></div>
         <div id="tab-tb" class="tab hidden">
           <form class="inline" id="tb-form">
@@ -87,7 +88,8 @@
           <div id="pl-out"></div>
         </div>
         <div id="tab-setup" class="tab hidden"></div>
-        <div id="tab-sales" class="tab hidden"></div>
+        <div id="tab-sales" class="tab"></div>
+        <div id="tab-payroll" class="tab hidden"></div>
         <div id="tab-purchases" class="tab hidden"></div>
         <div id="tab-bank" class="tab hidden"></div>
         <div id="tab-inventory" class="tab hidden"></div>
@@ -100,6 +102,7 @@
             <button type="button" class="secondary" data-export="balance-sheet">Excel</button>
           </form>
           <div id="bs-out"></div>
+        </div>
         </div>
       </div>
     </section>
@@ -118,5 +121,6 @@
   <script src="forms.js"></script>
   <script src="inventory.js"></script>
   <script src="setup.js"></script>
+  <script src="payroll.js"></script>
 </body>
 </html>

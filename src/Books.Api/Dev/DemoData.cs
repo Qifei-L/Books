@@ -186,6 +186,18 @@ public static class DemoData
             new BankTransferInput(DateOnly.Parse("2026-10-21"), acleda, wing, 500m, 0m, null, "FX-1021", "Buy riel", ToAmount: 2_060_000m), true, ct);
         await paymentService.CreateAsync(principal, Meta(), orgId, ledgerId, new PaymentInput(wing, null, DateOnly.Parse("2026-10-23"), "WING-23", "Printing paid in riel",
             [To(utilities, "Leaflets", 410_000m)]), true, false, ct);
+        // Payroll: October results for 40 staff from the payroll system, in KHR, posted as one summary journal.
+        string[] given = ["Sokha", "Dara", "Sophea", "Vannak", "Chantha", "Pisey", "Rithy", "Srey Mom", "Visal", "Bopha"];
+        string[] family = ["Chan", "Sok", "Kim", "Heng", "Meas"];
+        var staff = Enumerable.Range(1, 40).Select(i =>
+        {
+            var gross = 1_200_000m + i * 35_000m;
+            var nssf = Math.Round(Math.Min(gross, 1_200_000m) * 0.02m);
+            var tax = Math.Round(Math.Max(0, gross - nssf - 1_500_000m) * 0.05m / 100) * 100;
+            return new PayRunLineInput($"E{i:000}", $"{family[i % 5]} {given[i % 10]}", i % 13 != 0, gross, 0, tax, 0, nssf, Math.Round(gross * 0.026m), 0, gross - tax - nssf);
+        }).ToList();
+        await services.GetRequiredService<PayRunService>().CreateAsync(principal, Meta(), orgId, ledgerId,
+            new PayRunInput(new DateOnly(2026, 10, 1), DateOnly.Parse("2026-10-31"), "PAY-2610", "October payroll", null, staff, "KHR"), true, ct);
         // Everything up to 14 October was reconciled before; the October statement starts from that balance.
         var reconciliation = services.GetRequiredService<BankReconciliationService>();
         var reconciled = await reconciliation.ReconciliationAsync(principal, orgId, ledgerId, bank, DateOnly.Parse("2026-10-14"), null, ct);

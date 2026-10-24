@@ -119,6 +119,13 @@ public sealed class BooksBankTools(
     public Task<CallToolResult> PayRuns(Guid org_id, Guid ledger_id, CancellationToken ct) =>
         BooksReadTools.RunAsync(async () => await payRuns.ListAsync(await principals.GetAsync(ct), org_id, ledger_id, ct));
 
+    [McpServerTool(Name = "get_pay_run_lines", ReadOnly = true, Idempotent = true)]
+    [Description("Employee lines of a pay run, a page at a time (pay runs may have thousands): gross, fringe benefits, tax on salary, NSSF and net per "
+        + "employee, in the pay run's currency. search matches the employee code or name.")]
+    public Task<CallToolResult> PayRunLines(Guid org_id, Guid ledger_id, Guid pay_run_id, string? search = null,
+        [Description("Default 0.")] int offset = 0, [Description("1–500, default 100.")] int limit = 100, CancellationToken ct = default) =>
+        BooksReadTools.RunAsync(async () => await payRuns.LinesAsync(await principals.GetAsync(ct), org_id, ledger_id, pay_run_id, search, offset, limit, ct));
+
     [McpServerTool(Name = "save_pay_run_draft", Idempotent = true)]
     [Description("Saves a month's payroll results from the client's payroll system as a draft pay run (up to 5000 employees) for a person to post. "
         + "Map the payroll file's columns to: employee_code, name, resident, gross, fringe_benefits, salary_tax, fringe_benefit_tax, nssf_employee, "

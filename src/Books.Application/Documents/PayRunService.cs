@@ -24,6 +24,13 @@ public sealed record PayRunInput(
 
 public sealed record PayRunTotals(int Employees, string Gross, string FringeBenefits, string SalaryTax, string FringeBenefitTax, string NssfEmployee, string NssfEmployer, string OtherDeductions, string Net);
 
+public sealed record PayRunLineDto(
+    int LineNo, string EmployeeCode, string Name, bool Resident, string Gross, string FringeBenefits, string SalaryTax, string FringeBenefitTax,
+    string NssfEmployee, string NssfEmployer, string OtherDeductions, string Net);
+
+/// <summary>One page of a pay run's employee lines (pay runs may have thousands), in the lines' currency.</summary>
+public sealed record PayRunLinesPage(Guid PayRunId, string Currency, int Total, int Offset, int Limit, IReadOnlyList<PayRunLineDto> Lines);
+
 /// <param name="Totals">In the lines' currency.</param>
 public sealed record PayRunDto(
     Guid Id, Guid LedgerId, long PayRunNo, string Period, DateOnly Date, string? Reference, string? Description, PayRunAccounts Accounts, string Currency, string? Rate,
@@ -40,6 +47,33 @@ public sealed class PayRunService(IBooksDb db, WriteRunner writes, ReadRunner re
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Read, ct);
             return await LoadAsync(ledgerId, null, ct);
+        }, ct);
+
+    /// <summary>A page of the pay run's employees, in line order, optionally only those whose code or name contains the search text.</summary>
+    public Task<PayRunLinesPage> LinesAsync(Principal principal, Guid orgId, Guid ledgerId, Guid payRunId, string? search, int offset, int limit, CancellationToken ct) =>
+        reads.RunAsync(principal, orgId, async scope =>
+        {
+            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Read, ct);
+            if (offset < 0 || limit is < 1 or > 500)
+            {
+                throw BooksProblem.Invalid("offset must be 0 or more and limit 1–500.");
+            }
+            var run = await db.PayRuns.AsNoTracking().Where(r => r.LedgerId == ledgerId && r.Id == payRunId).Select(r => new { r.Currency }).SingleOrDefaultAsync(ct)
+                ?? throw BooksProblem.NotFound();
+            var query = db.PayRunLines.AsNoTracking().Where(l => l.PayRunId == payRunId);
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLowerInvariant();
+                query = query.Where(l => l.EmployeeCode.ToLower().Contains(term) || l.Name.ToLower().Contains(term));
+            }
+            var total = await query.CountAsync(ct);
+            var minor = Currencies.Require(run.Currency).MinorUnits;
+            string F(decimal v) => v.ToString("F" + minor, CultureInfo.InvariantCulture);
+            var lines = (await query.OrderBy(l => l.LineNo).Skip(offset).Take(limit).ToListAsync(ct))
+                .Select(l => new PayRunLineDto(l.LineNo, l.EmployeeCode, l.Name, l.Resident, F(l.Gross), F(l.FringeBenefits), F(l.SalaryTax), F(l.FringeBenefitTax),
+                    F(l.NssfEmployee), F(l.NssfEmployer), F(l.OtherDeductions), F(l.Net)))
+                .ToList();
+            return new PayRunLinesPage(payRunId, run.Currency, total, offset, limit, lines);
         }, ct);
 
     public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, PayRunInput input, bool post, CancellationToken ct) =>

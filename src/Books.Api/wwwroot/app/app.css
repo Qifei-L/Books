@@ -7,7 +7,24 @@ body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-ser
 header { display: flex; gap: 12px; align-items: center; padding: 12px 20px; background: var(--card); border-bottom: 1px solid var(--line); }
 header .tag { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; }
 header .who { margin-left: auto; color: var(--muted); }
-main { padding: 16px 20px; max-width: 1200px; margin: 0 auto; }
+main { padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
+header { flex-wrap: wrap; }
+.switcher { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: 12px; }
+.switcher .small { white-space: nowrap; }
+.switcher select { max-width: 240px; }
+.layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 16px; align-items: start; }
+.content { min-width: 0; margin-bottom: 0; overflow-x: auto; }
+.content td { white-space: nowrap; }
+.tabs.side { flex-direction: column; align-items: stretch; gap: 0; border-bottom: none; margin: 0; position: sticky; top: 12px; }
+.tabs.side .nav-group { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 12px 10px 4px; }
+.tabs.side button { text-align: left; padding: 6px 10px; border-bottom: none; border-left: 2px solid transparent; }
+.tabs.side button.active { background: var(--card); border-left-color: var(--accent); }
+.tabs.side button:hover { color: var(--ink); }
+.figures { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 8px 0 12px; }
+.figure { display: flex; flex-direction: column; background: var(--bg); border-radius: 6px; padding: 6px 10px; }
+.figure b { font-variant-numeric: tabular-nums; }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
+@media (max-width: 760px) { .layout { grid-template-columns: 1fr; } .tabs.side { position: static; flex-direction: row; flex-wrap: wrap; } .tabs.side .nav-group { display: none; } }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
 .row { display: flex; gap: 16px; flex-wrap: wrap; }
 .narrow { flex: 1 1 300px; }
