@@ -65,6 +65,42 @@ public sealed class TaxReturnTests(TestHost host)
         await badPeriod.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
     }
 
+    [Fact]
+    public async Task Tax_accounts_reconcile_and_manual_postings_are_listed()
+    {
+        var s = await SeedAsync();
+        var matched = await GetAsync(s, "tax-returns/2026-10");
+        await (await s.Books.Admin.PostAsync(s.Books.JournalsUrl, new
+        {
+            accounting_date = "2026-10-31", post = true, reference = "ADJ-1", description = "VAT correction",
+            lines = new object[] { new { account_id = s.Books.Cash, debit = "5.00" }, new { account_id = s.Account("2100"), credit = "5.00" } },
+        })).DataAsync(HttpStatusCode.Created);
+
+        var october = await GetAsync(s, "tax-returns/2026-10");
+
+        Assert.All(matched.GetProperty("reconciliation").EnumerateArray(), r => Assert.True(r.GetProperty("matches").GetBoolean()));
+        var vat = october.GetProperty("reconciliation").EnumerateArray().Single(r => Get(r, "usage") == "output_vat");
+        Assert.Equal(("95.00", "90.00", "5.00", false), (Get(vat, "ledger_amount"), Get(vat, "return_amount"), Get(vat, "difference"), vat.GetProperty("matches").GetBoolean()));
+        var other = Assert.Single(vat.GetProperty("other_postings").EnumerateArray());
+        Assert.Equal(("ADJ-1", "journal", "5.00"), (Get(other, "reference"), Get(other, "source"), Get(other, "amount")));
+    }
+
+    [Fact]
+    public async Task Lines_with_an_overridden_vat_are_listed_for_review()
+    {
+        var s = await SeedAsync();
+        await (await s.Books.Admin.PostAsync(s.Url, new
+        {
+            customer_id = s.Customer, date = "2026-10-26",
+            lines = new[] { new { account_id = s.Books.Sales, amount = "33.33", tax_code_id = s.Taxes["VAT 10% (sales)"], tax_amount = "3.34", tax_reason = "Customer PO rounding" } },
+        })).DataAsync(HttpStatusCode.Created);
+
+        var october = await GetAsync(s, "tax-returns/2026-10");
+
+        var adjusted = Assert.Single(october.GetProperty("adjusted_lines").EnumerateArray());
+        Assert.Equal(("3.33", "3.34", "Customer PO rounding"), (Get(adjusted, "tax_calculated"), Get(adjusted, "tax_amount"), Get(adjusted, "tax_reason")));
+    }
+
     /// <summary>
     /// October: sales invoice (goods 1000 at VAT 10%, export service 250 at 0%), credit note 100 + VAT 10,
     /// purchase invoice (rent 1000 at VAT 10% with a valid invoice and WHT 10%; supplies 50 without a valid invoice),
