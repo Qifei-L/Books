@@ -97,6 +97,16 @@ public sealed class TestHost : IAsyncLifetime
         {
             await _container.DisposeAsync();
         }
+        else if (Environment.GetEnvironmentVariable("BOOKS_TEST_POSTGRES") is { Length: > 0 } external)
+        {
+            // A shared server would otherwise collect one database per run and slow down.
+            NpgsqlConnection.ClearAllPools();
+            await using var admin = new NpgsqlConnection(external);
+            await admin.OpenAsync();
+            var database = new NpgsqlConnectionStringBuilder(ConnectionString).Database;
+            await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS {database} WITH (FORCE)", admin);
+            await drop.ExecuteNonQueryAsync();
+        }
     }
 }
 
