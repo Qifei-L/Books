@@ -48,7 +48,7 @@ public sealed class ReturnDefinitionTests(TestHost host)
         var s = await new TaxReturnTests(host).SeedAsync();
         var spec = await BuiltinAsync(s);
         var boxes = (JsonArray)spec["boxes"]!;
-        boxes.Add(JsonNode.Parse("""{"key": "output_vat", "section": "VAT", "label": "Again", "lines": {"side": "sale", "amount": "tax"}}"""));
+        boxes.Add(JsonNode.Parse("""{"key": "t701_19", "section": "VAT", "label": "Again", "lines": {"side": "sale", "amount": "tax"}}"""));
         boxes.Add(JsonNode.Parse("""{"key": "bad", "section": "VAT", "label": "Bad", "formula": {"terms": [{"box": "nowhere"}]}}"""));
 
         var response = await s.Books.Admin.PostAsync(Url(s), new { effective_from = "2026-11", definition = spec });

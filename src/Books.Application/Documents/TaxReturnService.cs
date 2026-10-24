@@ -156,7 +156,10 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         var definition = await definitions.EffectiveAsync(ledger, from, definitionVersion, ct);
         var slot = TaxPacks.TaxCurrency(ledger.TaxPack);
         var codes = await db.TaxCodes.AsNoTracking().Where(t => t.LedgerId == ledgerId).ToDictionaryAsync(t => t.Id, ct);
-        var parties = await db.Parties.AsNoTracking().Where(p => p.LedgerId == ledgerId).ToDictionaryAsync(p => p.Id, p => p.Name, ct);
+        var partyRows = await db.Parties.AsNoTracking().Where(p => p.LedgerId == ledgerId).Select(p => new { p.Id, p.Name, p.TaxId }).ToListAsync(ct);
+        var parties = partyRows.ToDictionary(p => p.Id, p => p.Name);
+        // A taxable person, for the return's purposes, is a customer or supplier with a tax ID.
+        var taxable = partyRows.Where(p => !string.IsNullOrWhiteSpace(p.TaxId)).Select(p => p.Id).ToHashSet();
 
         var purchases = await db.PurchaseInvoices.AsNoTracking().Include(i => i.Lines)
             .Where(i => i.LedgerId == ledgerId && i.Status == DocumentStatus.Posted && i.Date >= from && i.Date <= to).ToListAsync(ct);
@@ -172,12 +175,12 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
             var sign = i.IsDebitNote ? -1 : 1;
             return new TaxLine(i.SourceKind, i.Id, i.InvoiceNo, i.Date, i.SupplierId, i.Reference, l.LineNo, l.Description, l.AccountId, l.TaxCodeId, Kind(l.TaxCodeId),
                 sign * l.NetAmount, sign * l.TaxAmount, sign * l.TaxCalculated, l.TaxReason, l.ValidTaxInvoice,
-                l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, sign * l.WithholdingAmount, Rate(i.Id));
+                l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, sign * l.WithholdingAmount, Rate(i.Id), PartyTaxable: taxable.Contains(i.SupplierId));
         })).Concat(sales.SelectMany(i => i.Lines.Select(l =>
         {
             var sign = i.IsCreditNote ? -1 : 1;
             return new TaxLine(i.SourceKind, i.Id, i.InvoiceNo, i.Date, i.CustomerId, i.Reference, l.LineNo, l.Description, l.AccountId, l.TaxCodeId, Kind(l.TaxCodeId),
-                sign * l.NetAmount, sign * l.TaxAmount, sign * l.TaxCalculated, l.TaxReason, true, null, 0, Rate(i.Id));
+                sign * l.NetAmount, sign * l.TaxAmount, sign * l.TaxCalculated, l.TaxReason, true, null, 0, Rate(i.Id), PartyTaxable: taxable.Contains(i.CustomerId));
         })));
 
         // Journal postings on tax accounts that do not come from purchase or sales documents (manual corrections):

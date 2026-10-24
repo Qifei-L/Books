@@ -27,7 +27,7 @@ public sealed class McpTaxToolTests(TestHost host)
         var draft = await mcp.CallToolAsync("save_tax_return_definition_draft",
             Args(s, ("idempotency_key", Guid.NewGuid()), ("effective_from", "2026-11"), ("definition", spec)), cancellationToken: Ct);
         var preview = await McpReadToolTests.CallAsync(mcp, "get_tax_return", Args(s, ("period", "2026-10"), ("definition_version", 1)));
-        var lines = await McpReadToolTests.CallAsync(mcp, "get_tax_return_box_lines", Args(s, ("period", "2026-10"), ("box_key", "output_vat")));
+        var lines = await McpReadToolTests.CallAsync(mcp, "get_tax_return_box_lines", Args(s, ("period", "2026-10"), ("box_key", "t701_15")));
 
         Assert.Equal(viaApi.GetRawText(), viaMcp.GetRawText());
         Assert.False(draft.IsError ?? false, ((TextContentBlock)draft.Content[0]).Text);

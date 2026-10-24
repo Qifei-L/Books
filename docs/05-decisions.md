@@ -69,6 +69,7 @@
 | 2026-10-24 | Payroll sheets differ by company: when salary tax is built (M11), the payroll layout (earnings, allowances, deductions, which items are taxable) is per-company data in the same versioned way, not one fixed form. |
 | 2026-10-24 | Journal postings on tax accounts that do not come from purchase or sales documents (manual corrections) count in the return: output VAT, input VAT and a "withholding tax posted by journals" box take them, at the month-end rate, and every box's figure opens to the documents and journals behind it. A VAT credit is not carried forward automatically; it is visible on the return. |
 | 2026-10-24 | Drafts dated in a month block filing that month (they would be stuck behind the close); reopening a filed month stays possible for administrators, with the differences from the filed return shown. Return definitions are kept per ledger, copied from the tax pack's template; a shared definition can be extracted later. |
+| 2026-10-24 | The built-in return follows GDT's current forms (TTR001, T7 01, WT 03). A taxable person is a customer or supplier with a tax ID (no separate VAT-registered flag). The template keeps one non-resident 14% withholding code, reported on WT 03 II.3, as its label says. VAT 4% on fuel counts in the VAT 10% lines. Imports (T7 01 boxes 05-06) are connected later. |
 
 ## Proposed defaults (accept or change)
 
