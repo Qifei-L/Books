@@ -14,7 +14,8 @@ public static class SalesEndpoints
 
     public sealed record InvoiceRequest(
         Guid CustomerId, Guid? ReceivableAccountId, DateOnly Date, DateOnly? DueDate, string? Reference, string? Description,
-        IReadOnlyList<LineRequest> Lines, bool Post = true, Guid? OriginalInvoiceId = null, string? TaxCurrencyRate = null, string? TaxCurrencyReason = null);
+        IReadOnlyList<LineRequest> Lines, bool Post = true, Guid? OriginalInvoiceId = null, string? TaxCurrencyRate = null, string? TaxCurrencyReason = null,
+        string? Currency = null, string? ExchangeRate = null);
 
     public static void MapSalesEndpoints(this RouteGroupBuilder api)
     {
@@ -44,5 +45,6 @@ public static class SalesEndpoints
             PurchaseEndpoints.Number(l.Amount, i, "amount", signed: true), l.TaxCodeId, PurchaseEndpoints.Number(l.TaxAmount, i, "tax_amount", signed: true), l.TaxReason, l.OtherTaxCodeId)).ToList(),
         body.OriginalInvoiceId,
         body.TaxCurrencyRate is null && body.TaxCurrencyReason is null ? null
-            : new TaxCurrencyInput(PurchaseEndpoints.Rate(body.TaxCurrencyRate), body.TaxCurrencyReason));
+            : new TaxCurrencyInput(PurchaseEndpoints.Rate(body.TaxCurrencyRate), body.TaxCurrencyReason),
+        body.Currency, PurchaseEndpoints.Rate(body.ExchangeRate));
 }

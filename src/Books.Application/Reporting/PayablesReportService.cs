@@ -84,9 +84,9 @@ public sealed class PayablesReportService(IBooksDb db, ReadRunner reads)
             .Where(p => p.LedgerId == ledgerId && p.Status == DocumentStatus.Posted && p.Date <= to && p.PartyId != null).ToListAsync(ct);
         var payables = await db.AccountUsages.Where(u => u.LedgerId == ledgerId && u.Usage == Usage.Payable).Select(u => u.AccountId).ToListAsync(ct);
         var charges = documents.Where(i => !i.IsDebitNote)
-            .Select(i => new Charge(i.Id, i.SupplierId, i.Date, i.DueDate, "invoice", i.InvoiceNo, i.Reference, i.PayableTotal)).ToList();
+            .Select(i => new Charge(i.Id, i.SupplierId, i.Date, i.DueDate, "invoice", i.InvoiceNo, i.Reference, i.BaseTotal)).ToList();
         var credits = documents.Where(i => i.IsDebitNote)
-            .Select(i => new Credit(i.SupplierId, i.Date, "debit_note", i.InvoiceNo, i.Reference, i.OriginalInvoiceId, i.PayableTotal))
+            .Select(i => new Credit(i.SupplierId, i.Date, "debit_note", i.InvoiceNo, i.Reference, i.OriginalInvoiceId, i.BaseTotal))
             .Concat(OpenItems.PaymentCredits(payments, payables.ToHashSet(), receiptsReduce: false)).ToList();
         return (charges, credits);
     }

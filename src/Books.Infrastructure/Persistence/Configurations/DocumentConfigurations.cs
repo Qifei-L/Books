@@ -48,6 +48,9 @@ internal sealed class PurchaseInvoiceConfiguration : IEntityTypeConfiguration<Pu
     {
         b.ToTable("purchase_invoices", t => t.HasCheckConstraint(
             "ck_purchase_invoices_status", "status IN ('draft', 'posted', 'deleted') AND (status <> 'posted' OR journal_id IS NOT NULL) AND due_date >= date"));
+        b.Property(x => x.Currency).HasMaxLength(3).IsFixedLength();
+        b.Property(x => x.ExchangeRate).HasPrecision(20, 10);
+        b.Property(x => x.BaseTotal).HasPrecision(20, 4);
         b.Property(x => x.Id).ValueGeneratedNever();
         b.Property(x => x.Reference).HasMaxLength(200);
         b.Property(x => x.Description).HasMaxLength(1000);
@@ -127,6 +130,9 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
     {
         b.ToTable("sales_invoices", t => t.HasCheckConstraint(
             "ck_sales_invoices_status", "status IN ('draft', 'posted', 'deleted') AND (status <> 'posted' OR journal_id IS NOT NULL) AND due_date >= date"));
+        b.Property(x => x.Currency).HasMaxLength(3).IsFixedLength();
+        b.Property(x => x.ExchangeRate).HasPrecision(20, 10);
+        b.Property(x => x.BaseTotal).HasPrecision(20, 4);
         b.Property(x => x.Id).ValueGeneratedNever();
         b.Property(x => x.Reference).HasMaxLength(200);
         b.Property(x => x.Description).HasMaxLength(1000);

@@ -22,7 +22,7 @@ public sealed record PurchaseLineInput(
 /// <param name="OriginalInvoiceId">Debit notes only: the invoice being corrected.</param>
 public sealed record PurchaseInvoiceInput(
     Guid SupplierId, Guid? PayableAccountId, DateOnly Date, DateOnly? DueDate, string? Reference, string? Description, IReadOnlyList<PurchaseLineInput> Lines,
-    Guid? OriginalInvoiceId = null, TaxCurrencyInput? TaxCurrency = null);
+    Guid? OriginalInvoiceId = null, TaxCurrencyInput? TaxCurrency = null, string? Currency = null, decimal? ExchangeRate = null);
 
 public sealed record PurchaseLineDto(
     Guid LineId, Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string NetAmount,
@@ -33,7 +33,8 @@ public sealed record PurchaseInvoiceDto(
     Guid Id, Guid LedgerId, string Type, long InvoiceNo, Guid? OriginalInvoiceId, Guid SupplierId, Guid PayableAccountId, DateOnly Date, DateOnly DueDate,
     string? Reference, string? Description, IReadOnlyList<PurchaseLineDto> Lines,
     string NetTotal, string TaxTotal, string GrossTotal, string WithholdingTotal, string PayableTotal, TaxCurrencyDto? TaxCurrency,
-    string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version);
+    string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version,
+    string Currency = "", string? ExchangeRate = null, string? BaseTotal = null);
 
 /// <summary>
 /// Purchase invoices. Save posts when valid; otherwise the invoice is kept as a draft with the reasons. A posted
@@ -140,11 +141,11 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
         var taxCodes = await TaxCodesAsync(invoice, ct);
         if (!post || documentIssues.Count > 0)
         {
-            var issues = documentIssues.Concat(await posting.CheckAsync(ledger, invoice.ToJournal(taxCodes), ct)).ToList();
+            var issues = documentIssues.Concat(await posting.CheckAsync(ledger, invoice.ToJournal(taxCodes, Currencies.Require(ledger.BaseCurrency).MinorUnits), ct)).ToList();
             invoice.KeptAsDraft(issues.Count == 0 ? null : BooksJson.Serialize(issues));
             return post ? "not_posted" : "draft";
         }
-        var outcome = await posting.PostAsync(scope, ledger, invoice.SourceKind, invoice.Id, invoice.JournalId, invoice.ToJournal(taxCodes), ct);
+        var outcome = await posting.PostAsync(scope, ledger, invoice.SourceKind, invoice.Id, invoice.JournalId, invoice.ToJournal(taxCodes, Currencies.Require(ledger.BaseCurrency).MinorUnits), ct);
         if (outcome.Journal is { } journal)
         {
             invoice.PostedAs(journal.Id);
@@ -161,7 +162,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
     private async Task<List<JournalIssue>> SetAsync(PurchaseInvoice invoice, Ledger ledger, PurchaseInvoiceInput input, bool isNew, CancellationToken ct)
     {
         var issues = new List<JournalIssue>();
-        var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
+        var minor = Currencies.Require(input.Currency ?? ledger.BaseCurrency).MinorUnits;
         var supplier = await db.Parties.SingleOrDefaultAsync(p => p.LedgerId == ledger.Id && p.Id == input.SupplierId, ct)
             ?? throw BooksProblem.Invalid("supplier_id must be a party of this ledger.");
         if (!supplier.IsSupplier || !supplier.Active)
@@ -239,8 +240,10 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
             throw BooksProblem.Invalid("original_invoice_id must be a purchase invoice of the same supplier.");
         }
         var dueDate = input.DueDate ?? input.Date.AddDays(supplier.PaymentTermsDays ?? 0);
+        invoice.SetCurrency(input.Currency ?? ledger.BaseCurrency, await Rates.ForDocumentAsync(db, ledger, input.Currency, input.ExchangeRate, input.Date, ct), ledger.BaseCurrency);
         invoice.Set(supplier.Id, payable, input.Date, dueDate, input.Reference, input.Description, lines, isNew, input.OriginalInvoiceId);
-        if (await taxCurrency.ApplyAsync(ledger, invoice.SourceKind, invoice.Id, invoice.Date, invoice.GrossTotal, invoice.TaxTotal, input.TaxCurrency, ct) is { } rateIssue)
+        if (await taxCurrency.ApplyAsync(ledger, invoice.SourceKind, invoice.Id, invoice.Date, invoice.GrossTotal, invoice.TaxTotal, input.TaxCurrency, ct,
+                invoice.Currency, invoice.ExchangeRate) is { } rateIssue)
         {
             issues.Add(rateIssue);
         }
@@ -294,6 +297,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
                 l.WithholdingCodeId, F(l.WithholdingAmount))).ToList(),
             F(x.i.NetTotal), F(x.i.TaxTotal), F(x.i.GrossTotal), F(x.i.WithholdingTotal), F(x.i.PayableTotal), taxCurrencies.GetValueOrDefault(x.i.Id),
             Text.Of(x.i.Status), x.i.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.i.Issues, BooksJson.Options)!,
-            x.i.JournalId, x.JournalNo, x.i.Version.ToString())).ToList();
+            x.i.JournalId, x.JournalNo, x.i.Version.ToString(), x.i.Currency, x.i.ExchangeRate?.ToString("0.##########", CultureInfo.InvariantCulture),
+            x.i.Status == DocumentStatus.Posted ? x.i.BaseTotal.ToString("F" + minor, CultureInfo.InvariantCulture) : null)).ToList();
     }
 }

@@ -62,6 +62,31 @@ public sealed class PurchaseInvoice
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
 
+
+    /// <summary>The document's currency; amounts on it and its lines are in this currency (M12).</summary>
+    public string Currency { get; private set; } = "";
+
+    /// <summary>Units of the document's currency per one unit of the ledger's currency (for example 4100 KHR per USD); null in the ledger's currency.</summary>
+    public decimal? ExchangeRate { get; private set; }
+
+    /// <summary>What the posting put on the control account, in the ledger's currency; aging and statements use it.</summary>
+    public decimal BaseTotal { get; private set; }
+
+    public void SetCurrency(string currency, decimal? rate, string baseCurrency)
+    {
+        currency = Currencies.Require(currency).Code;
+        if (currency != baseCurrency && rate is not > 0)
+        {
+            throw new DomainException($"A document in {currency} needs its exchange rate to {baseCurrency}.");
+        }
+        Currency = currency;
+        ExchangeRate = currency == baseCurrency ? null : rate;
+    }
+
+    /// <summary>An amount in the ledger's currency, rounded per amount so the journal and the tax return agree.</summary>
+    public decimal ToBase(decimal amount, int minorUnits) =>
+        ExchangeRate is { } rate ? Math.Round(amount / rate, minorUnits, MidpointRounding.AwayFromZero) : amount;
+
     public IReadOnlyList<PurchaseInvoiceLine> Lines => _lines;
 
     public decimal NetTotal => _lines.Sum(l => l.NetAmount);
@@ -125,22 +150,29 @@ public sealed class PurchaseInvoice
     /// tax invoice was received, otherwise Dr the code's non-deductible account (owner decision); summed by account.
     /// Cr withholding tax payable, summed by account. Cr Accounts Payable for gross less withholding, naming the supplier.
     /// </summary>
-    public JournalDraft ToJournal(IReadOnlyDictionary<Guid, TaxCode> taxCodes)
+    /// <remarks>
+    /// In another currency each amount converts at the document's rate, line by line; the payable takes the rounding,
+    /// and what it gets is kept as <see cref="BaseTotal"/>.
+    /// </remarks>
+    public JournalDraft ToJournal(IReadOnlyDictionary<Guid, TaxCode> taxCodes, int minorUnits)
     {
         // A debit note posts every amount with the opposite sign.
         var sign = IsDebitNote ? -1 : 1;
+        decimal C(decimal amount) => ToBase(amount, minorUnits);
         var text = Description ?? (IsDebitNote ? $"Debit note {InvoiceNo}" : $"Purchase invoice {InvoiceNo}");
-        var lines = _lines.Select(l => new DraftLine(l.AccountId, sign * l.NetAmount, l.Description ?? text, l.LineId, ItemId: l.ItemId, Quantity: l.Quantity)).ToList();
+        var lines = _lines.Select(l => new DraftLine(l.AccountId, sign * C(l.NetAmount), l.Description ?? text, l.LineId, ItemId: l.ItemId, Quantity: l.Quantity)).ToList();
         foreach (var vat in _lines.Where(l => l.TaxAmount != 0 && l.TaxCodeId is not null)
                      .GroupBy(l => VatAccount(taxCodes[l.TaxCodeId!.Value], l.ValidTaxInvoice)))
         {
-            lines.Add(new DraftLine(vat.Key, sign * vat.Sum(l => l.TaxAmount), text));
+            lines.Add(new DraftLine(vat.Key, sign * vat.Sum(l => C(l.TaxAmount)), text));
         }
         foreach (var wht in _lines.Where(l => l.WithholdingAmount != 0).GroupBy(l => taxCodes[l.WithholdingCodeId!.Value].AccountId!.Value))
         {
-            lines.Add(new DraftLine(wht.Key, -sign * wht.Sum(l => l.WithholdingAmount), $"{text} (withholding)"));
+            lines.Add(new DraftLine(wht.Key, -sign * wht.Sum(l => C(l.WithholdingAmount)), $"{text} (withholding)"));
         }
-        lines.Add(new DraftLine(PayableAccountId, -sign * PayableTotal, text, PartyId: SupplierId));
+        var payable = -lines.Sum(l => l.Amount);
+        BaseTotal = sign * -payable;
+        lines.Add(new DraftLine(PayableAccountId, payable, text, PartyId: SupplierId));
         return new JournalDraft(Date, lines, Reference, text);
     }
 

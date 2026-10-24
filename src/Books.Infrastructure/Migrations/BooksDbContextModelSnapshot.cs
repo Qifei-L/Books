@@ -1481,6 +1481,11 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<decimal>("BaseTotal")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("base_total");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1488,6 +1493,13 @@ namespace Books.Infrastructure.Migrations
                     b.Property<Guid>("CreatedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
 
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date")
@@ -1501,6 +1513,11 @@ namespace Books.Infrastructure.Migrations
                     b.Property<DateOnly>("DueDate")
                         .HasColumnType("date")
                         .HasColumnName("due_date");
+
+                    b.Property<decimal?>("ExchangeRate")
+                        .HasPrecision(20, 10)
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("exchange_rate");
 
                     b.Property<long>("InvoiceNo")
                         .HasColumnType("bigint")
@@ -1764,6 +1781,11 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<decimal>("BaseTotal")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("base_total");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1771,6 +1793,13 @@ namespace Books.Infrastructure.Migrations
                     b.Property<Guid>("CreatedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
 
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid")
@@ -1788,6 +1817,11 @@ namespace Books.Infrastructure.Migrations
                     b.Property<DateOnly>("DueDate")
                         .HasColumnType("date")
                         .HasColumnName("due_date");
+
+                    b.Property<decimal?>("ExchangeRate")
+                        .HasPrecision(20, 10)
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("exchange_rate");
 
                     b.Property<long>("InvoiceNo")
                         .HasColumnType("bigint")

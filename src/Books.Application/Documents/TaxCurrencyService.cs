@@ -20,7 +20,8 @@ public sealed class TaxCurrencyService(IBooksDb db)
 {
     /// <returns>An issue that keeps the document a draft when no rate is available, otherwise null.</returns>
     public async Task<JournalIssue?> ApplyAsync(
-        Ledger ledger, string documentKind, Guid documentId, DateOnly date, decimal gross, decimal tax, TaxCurrencyInput? input, CancellationToken ct)
+        Ledger ledger, string documentKind, Guid documentId, DateOnly date, decimal gross, decimal tax, TaxCurrencyInput? input, CancellationToken ct,
+        string? documentCurrency = null, decimal? documentRate = null)
     {
         var slot = TaxPacks.TaxCurrency(ledger.TaxPack);
         var existing = await db.DocumentTaxCurrencies.SingleOrDefaultAsync(t => t.DocumentId == documentId, ct);
@@ -37,6 +38,13 @@ public sealed class TaxCurrencyService(IBooksDb db)
         var rateDate = slot.RateDate(date);
         decimal rate;
         string source;
+        if (documentCurrency == slot.Currency && documentRate is { } own)
+        {
+            // Already in the tax currency: its own amounts are the tax amounts, at the document's rate.
+            existing ??= Add(documentId, ledger.Id, documentKind);
+            existing.Set(slot.Currency, own, date, "Document", null, gross / own, tax / own);
+            return null;
+        }
         if (input?.Rate is { } entered)
         {
             if (string.IsNullOrWhiteSpace(input.Reason))
@@ -77,6 +85,13 @@ public sealed class TaxCurrencyService(IBooksDb db)
         var minor = Currencies.Require(t.Currency).MinorUnits;
         return new TaxCurrencyDto(t.Currency, t.Rate.ToString("0.##########", CultureInfo.InvariantCulture), t.RateDate, t.RateSource, t.Reason,
             t.GrossTotal.ToString("F" + minor, CultureInfo.InvariantCulture), t.TaxTotal.ToString("F" + minor, CultureInfo.InvariantCulture));
+    }
+
+    private DocumentTaxCurrency Add(Guid documentId, Guid ledgerId, string documentKind)
+    {
+        var created = new DocumentTaxCurrency(documentId, ledgerId, documentKind);
+        db.DocumentTaxCurrencies.Add(created);
+        return created;
     }
 
     private void Remove(DocumentTaxCurrency? existing)

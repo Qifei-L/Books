@@ -168,22 +168,25 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         var ids = purchases.Select(p => p.Id).Concat(sales.Select(s => s.Id)).ToList();
         var snapshots = await db.DocumentTaxCurrencies.AsNoTracking().Where(t => ids.Contains(t.DocumentId)).ToDictionaryAsync(t => t.DocumentId, t => t.Rate, ct);
 
+        var baseMinor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
         TaxKind? Kind(Guid? code) => code is { } id ? codes[id].Kind : null;
         string? Category(Guid? code) => code is { } id && codes[id].Kind is TaxKind.VatInput or TaxKind.VatOutput ? codes[id].ReturnCategory : null;
         decimal? Rate(Guid documentId) => rate?.Rate ?? (snapshots.TryGetValue(documentId, out var r) ? r : null);
         IEnumerable<TaxLine> lines = purchases.SelectMany(i => i.Lines.Select(l =>
         {
             var sign = i.IsDebitNote ? -1 : 1;
+            decimal B(decimal amount) => sign * i.ToBase(amount, baseMinor);
             return new TaxLine(i.SourceKind, i.Id, i.InvoiceNo, i.Date, i.SupplierId, i.Reference, l.LineNo, l.Description, l.AccountId, l.TaxCodeId, Kind(l.TaxCodeId),
-                sign * l.NetAmount, sign * l.TaxAmount, sign * l.TaxCalculated, l.TaxReason, l.ValidTaxInvoice,
-                l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, sign * l.WithholdingAmount, Rate(i.Id), PartyTaxable: taxable.Contains(i.SupplierId),
+                B(l.NetAmount), B(l.TaxAmount), B(l.TaxCalculated), l.TaxReason, l.ValidTaxInvoice,
+                l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, B(l.WithholdingAmount), Rate(i.Id), PartyTaxable: taxable.Contains(i.SupplierId),
                 TaxCategory: Category(l.TaxCodeId));
         })).Concat(sales.SelectMany(i => i.Lines.Select(l =>
         {
             var sign = i.IsCreditNote ? -1 : 1;
+            decimal B(decimal amount) => sign * i.ToBase(amount, baseMinor);
             return new TaxLine(i.SourceKind, i.Id, i.InvoiceNo, i.Date, i.CustomerId, i.Reference, l.LineNo, l.Description, l.AccountId, l.TaxCodeId, Kind(l.TaxCodeId),
-                sign * l.NetAmount, sign * l.TaxAmount, sign * l.TaxCalculated, l.TaxReason, true, null, 0, Rate(i.Id), PartyTaxable: taxable.Contains(i.CustomerId),
-                TaxCategory: Category(l.TaxCodeId), OtherTax: sign * l.OtherTaxAmount, OtherTaxCategory: l.OtherTaxCodeId is { } o ? codes[o].ReturnCategory : null);
+                B(l.NetAmount), B(l.TaxAmount), B(l.TaxCalculated), l.TaxReason, true, null, 0, Rate(i.Id), PartyTaxable: taxable.Contains(i.CustomerId),
+                TaxCategory: Category(l.TaxCodeId), OtherTax: B(l.OtherTaxAmount), OtherTaxCategory: l.OtherTaxCodeId is { } o ? codes[o].ReturnCategory : null);
         })));
 
         // Journal postings on tax accounts that do not come from purchase or sales documents (manual corrections):
