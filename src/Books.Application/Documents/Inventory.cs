@@ -44,10 +44,11 @@ public static class Inventory
         var tracked = await db.Items.Where(i => i.LedgerId == ledgerId && i.TrackInventory).Select(i => i.Id).ToListAsync(ct);
         var purchases = await db.PurchaseInvoices.AsNoTracking().Include(i => i.Lines)
             .Where(i => i.LedgerId == ledgerId && i.Status == DocumentStatus.Posted && i.Date <= to).ToListAsync(ct);
+        var minor = Currencies.Require(await db.Ledgers.Where(l => l.Id == ledgerId).Select(l => l.BaseCurrency).SingleAsync(ct)).MinorUnits;
         var sales = await db.SalesInvoices.AsNoTracking().Include(i => i.Lines)
             .Where(i => i.LedgerId == ledgerId && i.Status == DocumentStatus.Posted && i.Date <= to).ToListAsync(ct);
         return purchases.SelectMany(p => p.Lines.Where(l => l.ItemId is { } id && tracked.Contains(id))
-                .Select(l => new StockMovement(l.ItemId!.Value, p.Date, p.Id, (p.IsDebitNote ? -1 : 1) * (l.Quantity ?? 0), (p.IsDebitNote ? -1 : 1) * l.NetAmount)))
+                .Select(l => new StockMovement(l.ItemId!.Value, p.Date, p.Id, (p.IsDebitNote ? -1 : 1) * (l.Quantity ?? 0), (p.IsDebitNote ? -1 : 1) * p.ToBase(l.NetAmount, minor))))
             .Concat(sales.SelectMany(s => s.Lines.Where(l => l.ItemId is { } id && tracked.Contains(id))
                 .Select(l => new StockMovement(l.ItemId!.Value, s.Date, s.Id, (s.IsCreditNote ? 1 : -1) * (l.Quantity ?? 0), (s.IsCreditNote ? 1 : -1) * l.CostAmount))))
             .ToList();

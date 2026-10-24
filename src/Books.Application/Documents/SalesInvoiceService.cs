@@ -23,7 +23,7 @@ public sealed record SalesLineInput(
 /// <param name="OriginalInvoiceId">Credit notes only: the invoice being corrected.</param>
 public sealed record SalesInvoiceInput(
     Guid CustomerId, Guid? ReceivableAccountId, DateOnly Date, DateOnly? DueDate, string? Reference, string? Description, IReadOnlyList<SalesLineInput> Lines,
-    Guid? OriginalInvoiceId = null, TaxCurrencyInput? TaxCurrency = null);
+    Guid? OriginalInvoiceId = null, TaxCurrencyInput? TaxCurrency = null, string? Currency = null, decimal? ExchangeRate = null);
 
 public sealed record SalesLineDto(
     Guid LineId, Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string NetAmount,
@@ -33,7 +33,8 @@ public sealed record SalesInvoiceDto(
     Guid Id, Guid LedgerId, string Type, long InvoiceNo, Guid? OriginalInvoiceId, Guid CustomerId, Guid ReceivableAccountId, DateOnly Date, DateOnly DueDate,
     string? Reference, string? Description, IReadOnlyList<SalesLineDto> Lines,
     string NetTotal, string OtherTaxTotal, string TaxTotal, string GrossTotal, TaxCurrencyDto? TaxCurrency,
-    string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version);
+    string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version,
+    string Currency = "", string? ExchangeRate = null, string? BaseTotal = null);
 
 /// <summary>
 /// Sales invoices and credit notes. Save posts when valid; otherwise the document is kept as a draft with the
@@ -140,11 +141,11 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
         var taxCodes = await TaxCodesAsync(invoice, ct);
         if (!post || documentIssues.Count > 0)
         {
-            var issues = documentIssues.Concat(await posting.CheckAsync(ledger, invoice.ToJournal(taxCodes), ct)).ToList();
+            var issues = documentIssues.Concat(await posting.CheckAsync(ledger, invoice.ToJournal(taxCodes, Currencies.Require(ledger.BaseCurrency).MinorUnits), ct)).ToList();
             invoice.KeptAsDraft(issues.Count == 0 ? null : BooksJson.Serialize(issues));
             return post ? "not_posted" : "draft";
         }
-        var outcome = await posting.PostAsync(scope, ledger, invoice.SourceKind, invoice.Id, invoice.JournalId, invoice.ToJournal(taxCodes), ct);
+        var outcome = await posting.PostAsync(scope, ledger, invoice.SourceKind, invoice.Id, invoice.JournalId, invoice.ToJournal(taxCodes, Currencies.Require(ledger.BaseCurrency).MinorUnits), ct);
         if (outcome.Journal is { } journal)
         {
             invoice.PostedAs(journal.Id);
@@ -161,7 +162,7 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
     private async Task<List<JournalIssue>> SetAsync(SalesInvoice invoice, Ledger ledger, SalesInvoiceInput input, bool isNew, CancellationToken ct)
     {
         var issues = new List<JournalIssue>();
-        var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
+        var minor = Currencies.Require(input.Currency ?? ledger.BaseCurrency).MinorUnits;
         var customer = await db.Parties.SingleOrDefaultAsync(p => p.LedgerId == ledger.Id && p.Id == input.CustomerId, ct)
             ?? throw BooksProblem.Invalid("customer_id must be a party of this ledger.");
         if (!customer.IsCustomer || !customer.Active)
@@ -231,7 +232,7 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             {
                 // Average cost (owner default, Manager.io style) of the stock before this document, on its date.
                 var average = await Inventory.AverageCostAsync(db, ledger.Id, line.ItemId!.Value, input.Date, invoice.Id, ct);
-                salesLine.Costed(Math.Round(line.Quantity!.Value * average, minor, MidpointRounding.AwayFromZero),
+                salesLine.Costed(Math.Round(line.Quantity!.Value * average, Currencies.Require(ledger.BaseCurrency).MinorUnits, MidpointRounding.AwayFromZero),
                     await Inventory.AccountAsync(db, ledger.Id, Usage.Inventory, ct), await Inventory.AccountAsync(db, ledger.Id, Usage.CostOfSales, ct));
             }
             lines.Add(salesLine);
@@ -243,8 +244,10 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             throw BooksProblem.Invalid("original_invoice_id must be a sales invoice of the same customer.");
         }
         var dueDate = input.DueDate ?? input.Date.AddDays(customer.PaymentTermsDays ?? 0);
+        invoice.SetCurrency(input.Currency ?? ledger.BaseCurrency, await Rates.ForDocumentAsync(db, ledger, input.Currency, input.ExchangeRate, input.Date, ct), ledger.BaseCurrency);
         invoice.Set(customer.Id, receivable, input.Date, dueDate, input.Reference, input.Description, lines, isNew, input.OriginalInvoiceId);
-        if (await taxCurrency.ApplyAsync(ledger, invoice.SourceKind, invoice.Id, invoice.Date, invoice.GrossTotal, invoice.TaxTotal, input.TaxCurrency, ct) is { } rateIssue)
+        if (await taxCurrency.ApplyAsync(ledger, invoice.SourceKind, invoice.Id, invoice.Date, invoice.GrossTotal, invoice.TaxTotal, input.TaxCurrency, ct,
+                invoice.Currency, invoice.ExchangeRate) is { } rateIssue)
         {
             issues.Add(rateIssue);
         }
@@ -298,6 +301,7 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
                 F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason, l.OtherTaxCodeId, F(l.OtherTaxAmount))).ToList(),
             F(x.i.NetTotal), F(x.i.OtherTaxTotal), F(x.i.TaxTotal), F(x.i.GrossTotal), taxCurrencies.GetValueOrDefault(x.i.Id),
             Text.Of(x.i.Status), x.i.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.i.Issues, BooksJson.Options)!,
-            x.i.JournalId, x.JournalNo, x.i.Version.ToString())).ToList();
+            x.i.JournalId, x.JournalNo, x.i.Version.ToString(), x.i.Currency, x.i.ExchangeRate?.ToString("0.##########", CultureInfo.InvariantCulture),
+            x.i.Status == DocumentStatus.Posted ? x.i.BaseTotal.ToString("F" + minor, CultureInfo.InvariantCulture) : null)).ToList();
     }
 }

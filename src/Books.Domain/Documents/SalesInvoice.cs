@@ -59,6 +59,31 @@ public sealed class SalesInvoice
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
 
+
+    /// <summary>The document's currency; amounts on it and its lines are in this currency (M12).</summary>
+    public string Currency { get; private set; } = "";
+
+    /// <summary>Units of the document's currency per one unit of the ledger's currency (for example 4100 KHR per USD); null in the ledger's currency.</summary>
+    public decimal? ExchangeRate { get; private set; }
+
+    /// <summary>What the posting put on the control account, in the ledger's currency; aging and statements use it.</summary>
+    public decimal BaseTotal { get; private set; }
+
+    public void SetCurrency(string currency, decimal? rate, string baseCurrency)
+    {
+        currency = Currencies.Require(currency).Code;
+        if (currency != baseCurrency && rate is not > 0)
+        {
+            throw new DomainException($"A document in {currency} needs its exchange rate to {baseCurrency}.");
+        }
+        Currency = currency;
+        ExchangeRate = currency == baseCurrency ? null : rate;
+    }
+
+    /// <summary>An amount in the ledger's currency, rounded per amount so the journal and the tax return agree.</summary>
+    public decimal ToBase(decimal amount, int minorUnits) =>
+        ExchangeRate is { } rate ? Math.Round(amount / rate, minorUnits, MidpointRounding.AwayFromZero) : amount;
+
     public IReadOnlyList<SalesInvoiceLine> Lines => _lines;
 
     public decimal NetTotal => _lines.Sum(l => l.NetAmount);
@@ -120,14 +145,19 @@ public sealed class SalesInvoice
     /// Posting adapter. Cr each line's account with its net amount; Cr each output VAT account with its VAT, summed by
     /// account; Dr Accounts Receivable with the gross total, naming the customer. A credit note posts the opposite.
     /// </summary>
-    public JournalDraft ToJournal(IReadOnlyDictionary<Guid, TaxCode> taxCodes)
+    /// <remarks>
+    /// In another currency each amount converts at the document's rate, line by line (cost of sales is already in the
+    /// ledger's currency); the receivable takes the rounding, and what it gets is kept as <see cref="BaseTotal"/>.
+    /// </remarks>
+    public JournalDraft ToJournal(IReadOnlyDictionary<Guid, TaxCode> taxCodes, int minorUnits)
     {
         var sign = IsCreditNote ? -1 : 1;
+        decimal C(decimal amount) => ToBase(amount, minorUnits);
         var text = Description ?? (IsCreditNote ? $"Credit note {InvoiceNo}" : $"Sales invoice {InvoiceNo}");
-        var lines = _lines.Select(l => new DraftLine(l.AccountId, -sign * l.NetAmount, l.Description ?? text, l.LineId, ItemId: l.ItemId, Quantity: l.Quantity)).ToList();
+        var lines = _lines.Select(l => new DraftLine(l.AccountId, -sign * C(l.NetAmount), l.Description ?? text, l.LineId, ItemId: l.ItemId, Quantity: l.Quantity)).ToList();
         foreach (var vat in _lines.Where(l => l.TaxAmount != 0 && l.TaxCodeId is not null).GroupBy(l => taxCodes[l.TaxCodeId!.Value].AccountId!.Value))
         {
-            lines.Add(new DraftLine(vat.Key, -sign * vat.Sum(l => l.TaxAmount), text));
+            lines.Add(new DraftLine(vat.Key, -sign * vat.Sum(l => C(l.TaxAmount)), text));
         }
         foreach (var cost in _lines.Where(l => l.CostAmount != 0))
         {
@@ -136,9 +166,11 @@ public sealed class SalesInvoice
         }
         foreach (var other in _lines.Where(l => l.OtherTaxAmount != 0).GroupBy(l => taxCodes[l.OtherTaxCodeId!.Value].AccountId!.Value))
         {
-            lines.Add(new DraftLine(other.Key, -sign * other.Sum(l => l.OtherTaxAmount), $"{text} (other tax)"));
+            lines.Add(new DraftLine(other.Key, -sign * other.Sum(l => C(l.OtherTaxAmount)), $"{text} (other tax)"));
         }
-        lines.Add(new DraftLine(ReceivableAccountId, sign * GrossTotal, text, PartyId: CustomerId));
+        var receivable = -lines.Sum(l => l.Amount);
+        BaseTotal = sign * receivable;
+        lines.Add(new DraftLine(ReceivableAccountId, receivable, text, PartyId: CustomerId));
         return new JournalDraft(Date, lines, Reference, text);
     }
 }
