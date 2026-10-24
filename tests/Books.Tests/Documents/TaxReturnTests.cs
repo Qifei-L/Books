@@ -67,7 +67,7 @@ public sealed class TaxReturnTests(TestHost host)
     }
 
     [Fact]
-    public async Task Tax_accounts_reconcile_and_manual_postings_are_listed()
+    public async Task A_manual_vat_correction_counts_in_the_return_and_opens_from_its_box()
     {
         var s = await SeedAsync();
         var matched = await GetAsync(s, "tax-returns/2026-10");
@@ -78,12 +78,17 @@ public sealed class TaxReturnTests(TestHost host)
         })).DataAsync(HttpStatusCode.Created);
 
         var october = await GetAsync(s, "tax-returns/2026-10");
+        var drilldown = await GetAsync(s, "tax-returns/2026-10/boxes/output_vat");
 
         Assert.All(matched.GetProperty("reconciliation").EnumerateArray(), r => Assert.True(r.GetProperty("matches").GetBoolean()));
+        Assert.Equal(("95.00", "389500"), Boxes(october)["output_vat"]);           // 90.00 from documents + 5.00 journal, at 4100
+        Assert.Equal("-5.00", Boxes(october)["net_vat"].Usd);
         var vat = october.GetProperty("reconciliation").EnumerateArray().Single(r => Get(r, "usage") == "output_vat");
-        Assert.Equal(("95.00", "90.00", "5.00", false), (Get(vat, "ledger_amount"), Get(vat, "return_amount"), Get(vat, "difference"), vat.GetProperty("matches").GetBoolean()));
+        Assert.Equal(("95.00", "95.00", true), (Get(vat, "ledger_amount"), Get(vat, "return_amount"), vat.GetProperty("matches").GetBoolean()));
         var other = Assert.Single(vat.GetProperty("other_postings").EnumerateArray());
         Assert.Equal(("ADJ-1", "journal", "5.00"), (Get(other, "reference"), Get(other, "source"), Get(other, "amount")));
+        var journal = drilldown.GetProperty("lines").EnumerateArray().Single(l => Get(l, "document_type") == "journal");
+        Assert.Equal(("ADJ-1", "5.00", "4100"), (Get(journal, "reference"), Get(journal, "amount"), Get(journal, "tax_currency_rate")));
     }
 
     [Fact]
@@ -133,6 +138,15 @@ public sealed class TaxReturnTests(TestHost host)
             lines = new[] { new { account_id = s.Books.Sales, amount = "999.00", tax_code_id = s.Taxes["VAT 10% (sales)"] } },
         })).DataAsync(HttpStatusCode.Created);
         return s;
+    }
+
+    /// <summary>Deletes the month's drafts, which would otherwise block filing.</summary>
+    internal static async Task DeleteDraftsAsync(SalesInvoiceTests.Setup s)
+    {
+        foreach (var draft in (await GetAsync(s, "sales-invoices")).EnumerateArray().Where(d => Get(d, "status") == "draft"))
+        {
+            await (await s.Books.Admin.WriteAsync(HttpMethod.Delete, $"{s.Url}/{draft.Id()}", null, ifMatch: long.Parse(Get(draft, "version")))).DataAsync();
+        }
     }
 
     internal static Dictionary<string, (string Usd, string? Khr)> Boxes(JsonElement taxReturn) =>
