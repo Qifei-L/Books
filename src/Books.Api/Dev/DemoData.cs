@@ -84,7 +84,7 @@ public static class DemoData
         async Task<Guid> Party(string name, bool customer, string? taxId, int? terms, string? contact) =>
             Data(await partyService.CreateAsync(principal, Meta(), orgId, ledgerId,
                 new PartyInput(name, taxId, customer, !customer, null, null, "Phnom Penh", contact, terms, true), ct)).GetProperty("id").GetGuid();
-        var customers = new[]
+        Guid[] customers =
         {
             await Party("Mekong Retail Co., Ltd.", true, "K001-901234567", 30, "Dara"),
             await Party("Angkor Hotels Plc", true, "K002-902345678", 15, "Sophea"),
@@ -143,6 +143,17 @@ public static class DemoData
             [Line(utilities, "Office electricity", 310m, "VAT 10% (purchases)"), Line(utilities, "Warehouse electricity (no VAT invoice)", 95m, "VAT 10% (purchases)", valid: false)]), true, ct);
         await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(edc, null, DateOnly.Parse("2026-10-20"), null, "EDC-CR-12", "Meter reading correction",
             [Line(utilities, "Overcharge refund", 20m, "VAT 10% (purchases)")]), true, ct, debitNote: true);
+        // Sales (M6): invoices with VAT 10% and a zero-rated export service, a credit note, and a draft left for review.
+        var salesInvoices = services.GetRequiredService<SalesInvoiceService>();
+        SalesLineInput Sale(Guid account, string description, decimal amount, string tax) => new(account, description, null, null, null, amount, taxes[tax], null, null);
+        var mekongInvoice = Data(await salesInvoices.CreateAsync(principal, Meta(), orgId, ledgerId, new SalesInvoiceInput(customers[0], null, DateOnly.Parse("2026-10-05"), null,
+            "INV-2026-1005", "Goods October", [Sale(sales, "Trading goods", 2_000m, "VAT 10% (sales)")]), true, ct)).GetProperty("id").GetGuid();
+        await salesInvoices.CreateAsync(principal, Meta(), orgId, ledgerId, new SalesInvoiceInput(customers[1], null, DateOnly.Parse("2026-10-15"), null,
+            "INV-2026-1015", "Advisory October", [Sale(service, "Advisory hours", 1_500m, "VAT 10% (sales)"), Sale(service, "Offshore review (export)", 600m, "VAT 0% (zero-rated)")]), true, ct);
+        await salesInvoices.CreateAsync(principal, Meta(), orgId, ledgerId, new SalesInvoiceInput(customers[0], null, DateOnly.Parse("2026-10-22"), null,
+            "CN-2026-01", "Damaged goods returned", [Sale(sales, "Return of 10 pcs", 200m, "VAT 10% (sales)")], mekongInvoice), true, ct, creditNote: true);
+        await salesInvoices.CreateAsync(principal, Meta(), orgId, ledgerId, new SalesInvoiceInput(customers[2], null, DateOnly.Parse("2026-10-28"), null,
+            null, "Catering supplies (draft for review)", [Sale(sales, "Trading goods", 340m, "VAT 10% (sales)")]), false, ct);
         var ledgerVersion = long.Parse((await companies.GetLedgerAsync(principal, orgId, ledgerId, ct)).Version);
         await settings.CloseAsync(principal, Meta(ledgerVersion), orgId, ledgerId, DateOnly.Parse("2026-09-30"), ct);
         await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(landlord, null, DateOnly.Parse("2026-09-15"), null, "PPP-2026-09B", "Late September repair bill",

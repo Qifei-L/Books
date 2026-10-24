@@ -33,7 +33,8 @@ builder.Services.AddMcpServer()
     .WithTools<BooksReadTools>()
     .WithTools<BooksJournalTools>()
     .WithTools<BooksSetupTools>()
-    .WithTools<BooksPurchaseTools>();
+    .WithTools<BooksPurchaseTools>()
+    .WithTools<BooksSalesTools>();
 
 var app = builder.Build();
 

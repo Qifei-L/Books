@@ -20,9 +20,9 @@ public sealed class McpReadToolTests(TestHost host)
 
         var tools = (await mcp.ListToolsAsync(cancellationToken: Ct)).ToDictionary(t => t.Name);
 
-        Assert.Equal(["delete_journal", "get_ap_aging", "get_balance_sheet", "get_gl_detail", "get_profit_and_loss", "get_supplier_statement", "get_trial_balance",
-            "list_accounts", "list_bank_accounts", "list_items", "list_journals", "list_ledgers", "list_organizations", "list_parties", "list_purchase_invoices",
-            "list_tax_codes", "list_transfers", "save_journal", "save_purchase_drafts"],
+        Assert.Equal(["delete_journal", "get_ap_aging", "get_ar_aging", "get_balance_sheet", "get_customer_statement", "get_gl_detail", "get_profit_and_loss",
+            "get_supplier_statement", "get_trial_balance", "list_accounts", "list_bank_accounts", "list_items", "list_journals", "list_ledgers", "list_organizations",
+            "list_parties", "list_purchase_invoices", "list_sales_invoices", "list_tax_codes", "list_transfers", "save_journal", "save_purchase_drafts", "save_sales_drafts"],
             tools.Keys.Order());
         Assert.All(tools.Where(t => t.Key.StartsWith("list_") || t.Key.StartsWith("get_")), t => Assert.True(t.Value.ProtocolTool.Annotations?.ReadOnlyHint));
         Assert.False(tools["save_journal"].ProtocolTool.Annotations?.ReadOnlyHint ?? false);
