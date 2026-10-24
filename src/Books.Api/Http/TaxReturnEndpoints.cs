@@ -17,10 +17,21 @@ public static class TaxReturnEndpoints
             PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.ReturnAsync(await principals.GetAsync(ct), orgId, ledgerId, period, Override(khrRate, khrReason), ct)));
 
+        ledger.MapGet("/tax-returns", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.FiledAsync(await principals.GetAsync(ct), orgId, ledgerId, ct)));
+
+        // Filing keeps the return as filed and closes the ledger through the month end (administrators only).
+        ledger.MapPost("/tax-returns/{period}/file", async (Guid orgId, Guid ledgerId, string period, FileRequest? body,
+            PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.FileAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, period,
+                Override(body?.KhrRate, body?.KhrReason), ct)));
+
         ledger.MapGet("/tax-returns/{period}/boxes/{key}", async (Guid orgId, Guid ledgerId, string period, string key, string? khrRate, string? khrReason,
             PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.BoxLinesAsync(await principals.GetAsync(ct), orgId, ledgerId, period, key, Override(khrRate, khrReason), ct)));
     }
+
+    public sealed record FileRequest(string? KhrRate, string? KhrReason);
 
     internal static ReturnRateOverride? Override(string? rate, string? reason) =>
         rate is null && reason is null ? null

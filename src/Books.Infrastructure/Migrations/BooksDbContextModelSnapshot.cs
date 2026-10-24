@@ -661,6 +661,56 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("document_tax_currencies", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.FiledTaxReturn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("FiledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("filed_at");
+
+                    b.Property<Guid>("FiledBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("filed_by");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<DateOnly>("Period")
+                        .HasColumnType("date")
+                        .HasColumnName("period");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("snapshot");
+
+                    b.HasKey("Id")
+                        .HasName("pk_filed_tax_returns");
+
+                    b.HasIndex("FiledBy")
+                        .HasDatabaseName("ix_filed_tax_returns_filed_by");
+
+                    b.HasIndex("LedgerId", "Period")
+                        .IsUnique()
+                        .HasDatabaseName("ix_filed_tax_returns_ledger_id_period");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_filed_tax_returns_org_id_ledger_id");
+
+                    b.ToTable("filed_tax_returns", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_filed_tax_returns_period", "EXTRACT(DAY FROM period) = 1");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.PurchaseInvoice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2148,6 +2198,24 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_document_tax_currencies_ledgers_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.FiledTaxReturn", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("FiledBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_filed_tax_returns_users_filed_by");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_filed_tax_returns_ledgers_org_id_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.PurchaseInvoice", b =>
