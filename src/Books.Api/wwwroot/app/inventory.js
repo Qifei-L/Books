@@ -143,6 +143,8 @@ async function itemForm(item, accounts, taxCodes) {
     [accounts, taxCodes] = accounts ? [accounts, taxCodes] : await Promise.all([api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/tax-codes`)]);
     const lineAccounts = accounts.filter((a) => a.postable && a.active && !a.is_control && !a.is_bank);
     const vat = taxCodes.filter((t) => t.active && ["vat_output", "vat_input", "vat_zero_rated", "non_vat"].includes(t.kind));
+    const of = (type, usage) => accounts.filter((a) => a.postable && a.active && a.type === type && (!usage || a.usages.includes(usage)));
+    const used = item?.used ?? false;
     const form = openForm(item ? `Edit ${item.name}` : "New item", `
       <div class="grid">
         <label class="wide">Name <input name="name" value="${esc(item?.name ?? "")}" required></label>
@@ -153,11 +155,21 @@ async function itemForm(item, accounts, taxCodes) {
         <label class="wide">Description <input name="description" value="${esc(item?.description ?? "")}"></label>
         ${item ? `<label class="check"><input type="checkbox" name="active" ${item.active ? "checked" : ""}> Active</label>` : ""}
       </div>
-      <p class="muted small">A tracked item is bought into the inventory account and sold at its average cost; purchases and sales of it need a quantity.</p>
+      <div class="grid" data-inventory>
+        <label class="wide">Inventory account (asset) <select name="inventory_account_id" ${used ? "disabled" : ""}>${options(of("assets", "inventory"), item?.inventory_account_id, (a) => `${a.code} ${a.name}`, "Ledger's inventory account")}</select></label>
+        <label class="wide">Income account <select name="income_account_id">${options(of("income"), item?.income_account_id, (a) => `${a.code} ${a.name}`, "Account on each sales line")}</select></label>
+        <label class="wide">Cost of sales account (expense) <select name="cost_of_sales_account_id">${options(of("cost_and_expense"), item?.cost_of_sales_account_id, (a) => `${a.code} ${a.name}`, "Ledger's cost of sales account")}</select></label>
+      </div>
+      <p class="muted small">A tracked item is bought into its inventory account, sold into its income account at its average cost, and the cost goes to its cost of sales account; purchases and sales of it need a quantity.
+        ${used ? "This item has postings, so its stock stays in its inventory account and tracking cannot be turned off; income and cost of sales accounts apply to documents saved from now on." : ""}</p>
       <p class="actions"><span class="spacer"></span>
         <button type="button" class="secondary" data-cancel>Cancel</button>
         <button type="submit">Save</button>
       </p>`);
+    const showAccounts = () => form.querySelector("[data-inventory]").classList.toggle("hidden", !form.elements.track_inventory.checked);
+    form.elements.track_inventory.onchange = showAccounts;
+    form.elements.track_inventory.disabled = used;
+    showAccounts();
     form.onsubmit = (event) => {
       event.preventDefault();
       busy(form, async () => {
@@ -167,6 +179,10 @@ async function itemForm(item, accounts, taxCodes) {
         const body = {
           name: f.name.value.trim(), unit: text(f.unit.value), description: text(f.description.value), default_account_id: text(f.default_account_id.value),
           default_tax_code_id: text(f.default_tax_code_id.value), track_inventory: f.track_inventory.checked, active: item ? f.active.checked : true,
+          ...(f.track_inventory.checked ? {
+            inventory_account_id: text(f.inventory_account_id.value), income_account_id: text(f.income_account_id.value),
+            cost_of_sales_account_id: text(f.cost_of_sales_account_id.value),
+          } : {}),
         };
         const url = `${ledgerUrl()}/items`;
         await (item ? write("PUT", `${url}/${item.id}`, body, item.version) : write("POST", url, body));

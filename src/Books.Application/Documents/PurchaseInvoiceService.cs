@@ -191,7 +191,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
                     {
                         throw BooksProblem.Invalid($"Line {i}: {item.Name} is an inventory item; give its quantity.");
                     }
-                    accountId = await Inventory.AccountAsync(db, ledger.Id, Usage.Inventory, ct);
+                    accountId = (await Inventory.ItemAccountsAsync(db, ledger.Id, item, ct)).Inventory;
                 }
             }
             var net = line.Amount ?? (line is { Quantity: { } q, UnitPrice: { } p }

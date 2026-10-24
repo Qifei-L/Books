@@ -3005,6 +3005,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("category_id");
 
+                    b.Property<Guid?>("CostOfSalesAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cost_of_sales_account_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -3021,6 +3025,14 @@ namespace Books.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("description");
+
+                    b.Property<Guid?>("IncomeAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("income_account_id");
+
+                    b.Property<Guid?>("InventoryAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inventory_account_id");
 
                     b.Property<Guid>("LedgerId")
                         .HasColumnType("uuid")
@@ -3058,11 +3070,20 @@ namespace Books.Infrastructure.Migrations
                     b.HasIndex("LedgerId", "CategoryId")
                         .HasDatabaseName("ix_items_ledger_id_category_id");
 
+                    b.HasIndex("LedgerId", "CostOfSalesAccountId")
+                        .HasDatabaseName("ix_items_ledger_id_cost_of_sales_account_id");
+
                     b.HasIndex("LedgerId", "DefaultAccountId")
                         .HasDatabaseName("ix_items_ledger_id_default_account_id");
 
                     b.HasIndex("LedgerId", "DefaultTaxCodeId")
                         .HasDatabaseName("ix_items_ledger_id_default_tax_code_id");
+
+                    b.HasIndex("LedgerId", "IncomeAccountId")
+                        .HasDatabaseName("ix_items_ledger_id_income_account_id");
+
+                    b.HasIndex("LedgerId", "InventoryAccountId")
+                        .HasDatabaseName("ix_items_ledger_id_inventory_account_id");
 
                     b.HasIndex("OrgId", "LedgerId")
                         .HasDatabaseName("ix_items_org_id_ledger_id");
@@ -4263,6 +4284,13 @@ namespace Books.Infrastructure.Migrations
 
                     b.HasOne("Books.Domain.Ledgers.Account", null)
                         .WithMany()
+                        .HasForeignKey("LedgerId", "CostOfSalesAccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_items_accounts_ledger_id_cost_of_sales_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
                         .HasForeignKey("LedgerId", "DefaultAccountId")
                         .HasPrincipalKey("LedgerId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -4274,6 +4302,20 @@ namespace Books.Infrastructure.Migrations
                         .HasPrincipalKey("LedgerId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_items_tax_codes_ledger_id_default_tax_code_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "IncomeAccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_items_accounts_ledger_id_income_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "InventoryAccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_items_accounts_ledger_id_inventory_account_id");
 
                     b.HasOne("Books.Domain.Ledgers.Ledger", null)
                         .WithMany()

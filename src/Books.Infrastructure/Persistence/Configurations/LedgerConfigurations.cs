@@ -232,6 +232,12 @@ internal sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
         b.HasOne<TaxCode>().WithMany()
             .HasForeignKey(x => new { x.LedgerId, x.DefaultTaxCodeId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
+        foreach (var account in new[] { nameof(Item.InventoryAccountId), nameof(Item.IncomeAccountId), nameof(Item.CostOfSalesAccountId) })
+        {
+            b.HasOne<Account>().WithMany()
+                .HasForeignKey(nameof(Item.LedgerId), account).HasPrincipalKey(nameof(Account.LedgerId), nameof(Account.Id))
+                .OnDelete(DeleteBehavior.Restrict);
+        }
     }
 }
 

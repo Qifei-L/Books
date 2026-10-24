@@ -67,14 +67,36 @@ public sealed class Item
     /// </summary>
     public bool TrackInventory { get; private set; }
 
+    /// <summary>
+    /// Inventory items, Manager.io style: the asset account its stock is held in (one with the Inventory usage), the
+    /// income account its sales post to, and the expense account its cost of sales posts to. Null uses the ledger's.
+    /// </summary>
+    public Guid? InventoryAccountId { get; private set; }
+
+    public Guid? IncomeAccountId { get; private set; }
+    public Guid? CostOfSalesAccountId { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
 
     /// <summary>Replaces all details. References are checked against the same ledger by the caller and the database.</summary>
     public void Set(string name, string? description, string? unit, ItemCategory? category, Account? defaultAccount, TaxCode? defaultTaxCode, bool active, bool isNew = false,
-        bool trackInventory = false)
+        bool trackInventory = false, Account? inventoryAccount = null, Account? incomeAccount = null, Account? costOfSalesAccount = null)
     {
+        if (!trackInventory && (inventoryAccount ?? incomeAccount ?? costOfSalesAccount) is not null)
+        {
+            throw new DomainException("Inventory, income and cost of sales accounts are for inventory items; set track_inventory.");
+        }
+        if ((inventoryAccount is not null && (inventoryAccount.LedgerId != LedgerId || inventoryAccount.Type != AccountType.Assets))
+            || (incomeAccount is not null && (incomeAccount.LedgerId != LedgerId || incomeAccount.Type != AccountType.Income))
+            || (costOfSalesAccount is not null && (costOfSalesAccount.LedgerId != LedgerId || costOfSalesAccount.Type != AccountType.CostAndExpense)))
+        {
+            throw new DomainException("The inventory account must be an asset, the income account income and the cost of sales account an expense of this ledger.");
+        }
         TrackInventory = trackInventory;
+        InventoryAccountId = inventoryAccount?.Id;
+        IncomeAccountId = incomeAccount?.Id;
+        CostOfSalesAccountId = costOfSalesAccount?.Id;
         if ((category is not null && category.LedgerId != LedgerId)
             || (defaultAccount is not null && defaultAccount.LedgerId != LedgerId)
             || (defaultTaxCode is not null && defaultTaxCode.LedgerId != LedgerId))
