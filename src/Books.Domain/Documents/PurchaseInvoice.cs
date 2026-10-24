@@ -11,13 +11,15 @@ namespace Books.Domain.Documents;
 public sealed class PurchaseInvoice
 {
     public const string Kind = "purchase_invoice";
+    public const string DebitNoteKind = "purchase_debit_note";
 
     private readonly List<PurchaseInvoiceLine> _lines = [];
 
     private PurchaseInvoice() { }
 
-    public PurchaseInvoice(Guid id, Guid orgId, Guid ledgerId, long invoiceNo, Guid createdBy, DateTimeOffset createdAt)
+    public PurchaseInvoice(Guid id, Guid orgId, Guid ledgerId, long invoiceNo, Guid createdBy, DateTimeOffset createdAt, bool isDebitNote = false)
     {
+        IsDebitNote = isDebitNote;
         Id = id;
         OrgId = orgId;
         LedgerId = ledgerId;
@@ -34,6 +36,17 @@ public sealed class PurchaseInvoice
     public long InvoiceNo { get; private set; }
 
     public Guid SupplierId { get; private set; }
+
+    /// <summary>
+    /// A debit note: the supplier's credit for returns or allowances. Same lines, opposite posting: it reduces the
+    /// expense, the VAT and the payable. Numbered in its own series.
+    /// </summary>
+    public bool IsDebitNote { get; private set; }
+
+    /// <summary>For a debit note, the invoice it corrects (optional, same supplier).</summary>
+    public Guid? OriginalInvoiceId { get; private set; }
+
+    public string SourceKind => IsDebitNote ? DebitNoteKind : Kind;
 
     /// <summary>An active control account carrying the Payable usage (Account Usage, owner decision).</summary>
     public Guid PayableAccountId { get; private set; }
@@ -62,8 +75,13 @@ public sealed class PurchaseInvoice
     public decimal PayableTotal => GrossTotal - WithholdingTotal;
 
     public void Set(Guid supplierId, Guid payableAccountId, DateOnly date, DateOnly dueDate, string? reference, string? description,
-        IEnumerable<PurchaseInvoiceLine> lines, bool isNew)
+        IEnumerable<PurchaseInvoiceLine> lines, bool isNew, Guid? originalInvoiceId = null)
     {
+        if (originalInvoiceId is not null && !IsDebitNote)
+        {
+            throw new DomainException("Only a debit note refers to an original invoice.");
+        }
+        OriginalInvoiceId = originalInvoiceId;
         if (dueDate < date)
         {
             throw new DomainException("due_date must not be before the invoice date.");
@@ -109,18 +127,20 @@ public sealed class PurchaseInvoice
     /// </summary>
     public JournalDraft ToJournal(IReadOnlyDictionary<Guid, TaxCode> taxCodes)
     {
-        var text = Description ?? $"Purchase invoice {InvoiceNo}";
-        var lines = _lines.Select(l => new DraftLine(l.AccountId, l.NetAmount, l.Description ?? text, l.LineId, ItemId: l.ItemId, Quantity: l.Quantity)).ToList();
+        // A debit note posts every amount with the opposite sign.
+        var sign = IsDebitNote ? -1 : 1;
+        var text = Description ?? (IsDebitNote ? $"Debit note {InvoiceNo}" : $"Purchase invoice {InvoiceNo}");
+        var lines = _lines.Select(l => new DraftLine(l.AccountId, sign * l.NetAmount, l.Description ?? text, l.LineId, ItemId: l.ItemId, Quantity: l.Quantity)).ToList();
         foreach (var vat in _lines.Where(l => l.TaxAmount != 0 && l.TaxCodeId is not null)
                      .GroupBy(l => VatAccount(taxCodes[l.TaxCodeId!.Value], l.ValidTaxInvoice)))
         {
-            lines.Add(new DraftLine(vat.Key, vat.Sum(l => l.TaxAmount), text));
+            lines.Add(new DraftLine(vat.Key, sign * vat.Sum(l => l.TaxAmount), text));
         }
         foreach (var wht in _lines.Where(l => l.WithholdingAmount != 0).GroupBy(l => taxCodes[l.WithholdingCodeId!.Value].AccountId!.Value))
         {
-            lines.Add(new DraftLine(wht.Key, -wht.Sum(l => l.WithholdingAmount), $"{text} (withholding)"));
+            lines.Add(new DraftLine(wht.Key, -sign * wht.Sum(l => l.WithholdingAmount), $"{text} (withholding)"));
         }
-        lines.Add(new DraftLine(PayableAccountId, -PayableTotal, text, PartyId: SupplierId));
+        lines.Add(new DraftLine(PayableAccountId, -sign * PayableTotal, text, PartyId: SupplierId));
         return new JournalDraft(Date, lines, Reference, text);
     }
 

@@ -15,7 +15,7 @@ public static class PurchaseEndpoints
 
     public sealed record InvoiceRequest(
         Guid SupplierId, Guid? PayableAccountId, DateOnly Date, DateOnly? DueDate, string? Reference, string? Description,
-        IReadOnlyList<LineRequest> Lines, bool Post = true);
+        IReadOnlyList<LineRequest> Lines, bool Post = true, Guid? OriginalInvoiceId = null);
 
     public static void MapPurchaseEndpoints(this RouteGroupBuilder api)
     {
@@ -30,6 +30,21 @@ public static class PurchaseEndpoints
         invoices.MapPut("/{invoiceId:guid}", async (Guid orgId, Guid ledgerId, Guid invoiceId, InvoiceRequest body, PrincipalAccessor principals, PurchaseInvoiceService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.UpdateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, invoiceId, Input(body), body.Post, ct)));
 
+        // Debit notes share the invoice model and endpoints' shape, with their own list and number series.
+        var notes = api.MapGroup("/organizations/{orgId:guid}/ledgers/{ledgerId:guid}/debit-notes");
+
+        notes.MapGet("", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, PurchaseInvoiceService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.ListAsync(await principals.GetAsync(ct), orgId, ledgerId, ct, debitNotes: true)));
+
+        notes.MapPost("", async (Guid orgId, Guid ledgerId, InvoiceRequest body, PrincipalAccessor principals, PurchaseInvoiceService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.CreateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, Input(body), body.Post, ct, debitNote: true)));
+
+        notes.MapPut("/{invoiceId:guid}", async (Guid orgId, Guid ledgerId, Guid invoiceId, InvoiceRequest body, PrincipalAccessor principals, PurchaseInvoiceService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.UpdateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, invoiceId, Input(body), body.Post, ct)));
+
+        notes.MapDelete("/{invoiceId:guid}", async (Guid orgId, Guid ledgerId, Guid invoiceId, PrincipalAccessor principals, PurchaseInvoiceService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.DeleteAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), orgId, ledgerId, invoiceId, ct)));
+
         invoices.MapDelete("/{invoiceId:guid}", async (Guid orgId, Guid ledgerId, Guid invoiceId, PrincipalAccessor principals, PurchaseInvoiceService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.DeleteAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), orgId, ledgerId, invoiceId, ct)));
     }
@@ -39,7 +54,8 @@ public static class PurchaseEndpoints
         (body.Lines ?? throw BooksProblem.Invalid("lines is required.")).Select((l, i) => new PurchaseLineInput(
             l.AccountId, l.Description, l.ItemId, Number(l.Quantity, i, "quantity", signed: true), Number(l.UnitPrice, i, "unit_price"),
             Number(l.Amount, i, "amount", signed: true), l.TaxCodeId, Number(l.TaxAmount, i, "tax_amount", signed: true), l.TaxReason,
-            l.ValidTaxInvoice ?? true, l.WithholdingCodeId)).ToList());
+            l.ValidTaxInvoice ?? true, l.WithholdingCodeId)).ToList(),
+        body.OriginalInvoiceId);
 
     private static decimal? Number(string? value, int index, string field, bool signed = false) =>
         string.IsNullOrWhiteSpace(value) ? null

@@ -58,8 +58,11 @@ internal sealed class PurchaseInvoiceConfiguration : IEntityTypeConfiguration<Pu
         b.Ignore(x => x.GrossTotal);
         b.Ignore(x => x.PayableTotal);
         b.HasAlternateKey(x => new { x.LedgerId, x.Id });
-        b.HasIndex(x => new { x.LedgerId, x.InvoiceNo }).IsUnique();
+        b.Ignore(x => x.SourceKind);
+        // Invoices and debit notes are numbered in separate series.
+        b.HasIndex(x => new { x.LedgerId, x.IsDebitNote, x.InvoiceNo }).IsUnique();
         b.HasIndex(x => new { x.LedgerId, x.SupplierId });
+        b.HasOne<PurchaseInvoice>().WithMany().HasForeignKey(x => x.OriginalInvoiceId).OnDelete(DeleteBehavior.Restrict);
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
         b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
         b.HasOne<Ledger>().WithMany()

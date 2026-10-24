@@ -19,8 +19,10 @@ public sealed record PurchaseLineInput(
 
 /// <param name="PayableAccountId">Omit to use the ledger's only Payable account.</param>
 /// <param name="DueDate">Omit for invoice date + the supplier's payment terms.</param>
+/// <param name="OriginalInvoiceId">Debit notes only: the invoice being corrected.</param>
 public sealed record PurchaseInvoiceInput(
-    Guid SupplierId, Guid? PayableAccountId, DateOnly Date, DateOnly? DueDate, string? Reference, string? Description, IReadOnlyList<PurchaseLineInput> Lines);
+    Guid SupplierId, Guid? PayableAccountId, DateOnly Date, DateOnly? DueDate, string? Reference, string? Description, IReadOnlyList<PurchaseLineInput> Lines,
+    Guid? OriginalInvoiceId = null);
 
 public sealed record PurchaseLineDto(
     Guid LineId, Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string NetAmount,
@@ -28,7 +30,7 @@ public sealed record PurchaseLineDto(
     Guid? WithholdingCodeId, string WithholdingAmount);
 
 public sealed record PurchaseInvoiceDto(
-    Guid Id, Guid LedgerId, long InvoiceNo, Guid SupplierId, Guid PayableAccountId, DateOnly Date, DateOnly DueDate,
+    Guid Id, Guid LedgerId, string Type, long InvoiceNo, Guid? OriginalInvoiceId, Guid SupplierId, Guid PayableAccountId, DateOnly Date, DateOnly DueDate,
     string? Reference, string? Description, IReadOnlyList<PurchaseLineDto> Lines,
     string NetTotal, string TaxTotal, string GrossTotal, string WithholdingTotal, string PayableTotal,
     string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version);
@@ -39,19 +41,20 @@ public sealed record PurchaseInvoiceDto(
 /// </summary>
 public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, ReadRunner reads, DocumentPosting posting)
 {
-    public Task<IReadOnlyList<PurchaseInvoiceDto>> ListAsync(Principal principal, Guid orgId, Guid ledgerId, CancellationToken ct) =>
-        reads.RunAsync(principal, orgId, async scope =>
+    public Task<IReadOnlyList<PurchaseInvoiceDto>> ListAsync(Principal principal, Guid orgId, Guid ledgerId, CancellationToken ct, bool debitNotes = false) =>
+        reads.RunAsync<IReadOnlyList<PurchaseInvoiceDto>>(principal, orgId, async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Read, ct);
-            return await LoadAsync(ledgerId, null, ct);
+            return (await LoadAsync(ledgerId, null, ct)).Where(i => (i.Type == "debit_note") == debitNotes).ToList();
         }, ct);
 
-    public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, PurchaseInvoiceInput input, bool post, CancellationToken ct) =>
+    public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, PurchaseInvoiceInput input, bool post, CancellationToken ct, bool debitNote = false) =>
         writes.RunAsync(principal, new WriteRequest(post ? "purchase_invoice.save" : "purchase_invoice.save_draft", orgId, meta), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
-            var invoice = new PurchaseInvoice(Guid.CreateVersion7(), orgId, ledgerId, await posting.NextNumberAsync(ledgerId, PurchaseInvoice.Kind, ct), principal.UserId, scope.Now);
+            var series = debitNote ? PurchaseInvoice.DebitNoteKind : PurchaseInvoice.Kind;
+            var invoice = new PurchaseInvoice(Guid.CreateVersion7(), orgId, ledgerId, await posting.NextNumberAsync(ledgerId, series, ct), principal.UserId, scope.Now, debitNote);
             var issues = await SetAsync(invoice, ledger, input, isNew: true, ct);
             db.PurchaseInvoices.Add(invoice);
             var status = await SaveAsync(scope, ledger, invoice, issues, post, ct);
@@ -118,7 +121,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
             invoice.KeptAsDraft(issues.Count == 0 ? null : BooksJson.Serialize(issues));
             return post ? "not_posted" : "draft";
         }
-        var outcome = await posting.PostAsync(scope, ledger, PurchaseInvoice.Kind, invoice.Id, invoice.JournalId, invoice.ToJournal(taxCodes), ct);
+        var outcome = await posting.PostAsync(scope, ledger, invoice.SourceKind, invoice.Id, invoice.JournalId, invoice.ToJournal(taxCodes), ct);
         if (outcome.Journal is { } journal)
         {
             invoice.PostedAs(journal.Id);
@@ -196,8 +199,13 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
                 line.TaxCodeId, tax, line.ValidTaxInvoice, line.WithholdingCodeId, withholding));
         }
 
+        if (input.OriginalInvoiceId is { } original
+            && !await db.PurchaseInvoices.AnyAsync(i => i.LedgerId == ledger.Id && i.Id == original && !i.IsDebitNote && i.SupplierId == supplier.Id, ct))
+        {
+            throw BooksProblem.Invalid("original_invoice_id must be a purchase invoice of the same supplier.");
+        }
         var dueDate = input.DueDate ?? input.Date.AddDays(supplier.PaymentTermsDays ?? 0);
-        invoice.Set(supplier.Id, payable, input.Date, dueDate, input.Reference, input.Description, lines, isNew);
+        invoice.Set(supplier.Id, payable, input.Date, dueDate, input.Reference, input.Description, lines, isNew, input.OriginalInvoiceId);
         return issues;
     }
 
@@ -237,11 +245,11 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
         static string? Q(decimal? v) => v?.ToString("0.####", CultureInfo.InvariantCulture);
         var rows = await db.PurchaseInvoices.AsNoTracking().Include(i => i.Lines)
             .Where(i => i.LedgerId == ledgerId && (id == null || i.Id == id))
-            .OrderByDescending(i => i.InvoiceNo)
+            .OrderByDescending(i => i.Date).ThenByDescending(i => i.InvoiceNo)
             .Select(i => new { i, JournalNo = db.Journals.Where(j => j.Id == i.JournalId).Select(j => (long?)j.JournalNo).FirstOrDefault() })
             .ToListAsync(ct);
         return rows.Select(x => new PurchaseInvoiceDto(
-            x.i.Id, x.i.LedgerId, x.i.InvoiceNo, x.i.SupplierId, x.i.PayableAccountId, x.i.Date, x.i.DueDate, x.i.Reference, x.i.Description,
+            x.i.Id, x.i.LedgerId, x.i.IsDebitNote ? "debit_note" : "invoice", x.i.InvoiceNo, x.i.OriginalInvoiceId, x.i.SupplierId, x.i.PayableAccountId, x.i.Date, x.i.DueDate, x.i.Reference, x.i.Description,
             x.i.Lines.OrderBy(l => l.LineNo).Select(l => new PurchaseLineDto(l.LineId, l.AccountId, l.Description, l.ItemId, Q(l.Quantity), Q(l.UnitPrice),
                 F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason, l.ValidTaxInvoice,
                 l.WithholdingCodeId, F(l.WithholdingAmount))).ToList(),
