@@ -22,7 +22,16 @@ public sealed record ReturnBoxAmount(string Key, string Section, string Label, b
 public sealed record TaxReturnDto(
     string Period, DateOnly From, DateOnly To, string TaxPack, string ReturnName, string Currency, string? TaxCurrency,
     string TaxCurrencyBasis, string? OverrideRate, string? OverrideReason,
-    IReadOnlyList<ReturnBoxAmount> Boxes, IReadOnlyList<TaxLineDto> AdjustedLines, IReadOnlyList<JournalIssue> Issues);
+    IReadOnlyList<ReturnBoxAmount> Boxes, IReadOnlyList<ReconciliationRow> Reconciliation, IReadOnlyList<TaxLineDto> AdjustedLines, IReadOnlyList<JournalIssue> Issues);
+
+/// <summary>A posting on a tax account in the month that does not come from a purchase or sales document.</summary>
+public sealed record OtherPosting(long JournalNo, DateOnly Date, string Account, string? Reference, string? Description, string? Source, string Amount);
+
+/// <param name="LedgerAmount">The month's movement on the accounts with this usage (credit positive for VAT output and withholding, debit for input VAT).</param>
+/// <param name="ReturnAmount">What the month's documents put on those accounts.</param>
+public sealed record ReconciliationRow(
+    string Usage, string Label, IReadOnlyList<string> Accounts, string LedgerAmount, string ReturnAmount, string Difference, bool Matches,
+    IReadOnlyList<OtherPosting> OtherPostings);
 
 public sealed record TaxLineDto(
     string DocumentType, Guid DocumentId, long DocumentNo, DateOnly Date, string Party, string? Reference, int LineNo, string? Description,
@@ -140,7 +149,47 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads)
         }
         var boxes = definition.Boxes.Select(b => new ReturnBoxAmount(b.Key, b.Section, b.Label, b.Information,
             F(usd[b.Key], currency.MinorUnits), taxCurrency is null ? null : F(khr[b.Key], taxCurrency.MinorUnits), counts[b.Key])).ToList();
-        return new ReturnCalculation(ledger, definition, period, from, to, currency, taxCurrency, rate, lines, boxes, usd, issues, parties);
+        var reconciliation = await ReconcileAsync(ledgerId, from, to, lines, currency.MinorUnits, ct);
+        return new ReturnCalculation(ledger, definition, period, from, to, currency, taxCurrency, rate, lines, boxes, reconciliation, usd, issues, parties);
+    }
+
+    private sealed record Posting(string Usage, string Code, long JournalNo, DateOnly AccountingDate, string? Reference, string? Description, string? SourceKind, decimal Amount);
+
+    private static readonly string[] DocumentKinds = [PurchaseInvoice.Kind, PurchaseInvoice.DebitNoteKind, SalesInvoice.Kind, SalesInvoice.CreditNoteKind];
+
+    /// <summary>
+    /// Compares the month's documents with the tax accounts' movement. Manual journals and other postings on those
+    /// accounts are listed, because the return does not include them.
+    /// </summary>
+    private async Task<List<ReconciliationRow>> ReconcileAsync(Guid ledgerId, DateOnly from, DateOnly to, IReadOnlyList<TaxLine> lines, int minor, CancellationToken ct)
+    {
+        var postings = await db.Database.SqlQuery<Posting>($"""
+            SELECT u.usage AS usage, a.code AS code, j.journal_no AS journal_no, r.accounting_date AS accounting_date, r.reference AS reference,
+                   r.description AS description, j.source_kind AS source_kind, l.amount AS amount
+            FROM journals j
+            JOIN journal_revisions r ON r.id = j.effective_revision_id
+            JOIN journal_lines l ON l.revision_id = r.id
+            JOIN accounts a ON a.id = l.account_id
+            JOIN account_usages u ON u.account_id = l.account_id AND u.usage IN ('output_vat', 'input_vat', 'withholding_payable')
+            WHERE j.ledger_id = {ledgerId} AND r.accounting_date >= {from} AND r.accounting_date <= {to}
+            ORDER BY r.accounting_date, j.journal_no
+            """).ToListAsync(ct);
+        (string Usage, string Label, int Sign, decimal Expected)[] usages =
+        [
+            ("output_vat", "Output VAT", -1, lines.Where(l => l.IsSale && l.TaxKind == TaxKind.VatOutput).Sum(l => l.Tax)),
+            ("input_vat", "Deductible input VAT", 1, lines.Where(l => l.IsPurchase && l.TaxKind == TaxKind.VatInput && l.ValidTaxInvoice).Sum(l => l.Tax)),
+            ("withholding_payable", "Withholding tax payable", -1, lines.Where(l => l.IsPurchase).Sum(l => l.Withholding)),
+        ];
+        return usages.Select(u =>
+        {
+            var mine = postings.Where(p => p.Usage == u.Usage).ToList();
+            var ledgerAmount = u.Sign * mine.Sum(p => p.Amount);
+            var others = mine.Where(p => p.SourceKind is null || !DocumentKinds.Contains(p.SourceKind))
+                .Select(p => new OtherPosting(p.JournalNo, p.AccountingDate, p.Code, p.Reference, p.Description, p.SourceKind ?? "journal", F(u.Sign * p.Amount, minor)))
+                .ToList();
+            return new ReconciliationRow(u.Usage, u.Label, mine.Select(p => p.Code).Distinct().Order().ToList(),
+                F(ledgerAmount, minor), F(u.Expected, minor), F(ledgerAmount - u.Expected, minor), ledgerAmount == u.Expected, others);
+        }).ToList();
     }
 
     private static TaxReturnDefinition Definition(string? taxPack) =>
@@ -152,13 +201,14 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads)
 /// <summary>A calculated month: the document lines, the boxes and what the response and filing need.</summary>
 internal sealed record ReturnCalculation(
     Ledger Ledger, TaxReturnDefinition Definition, string Period, DateOnly From, DateOnly To, Currency Currency, Currency? TaxCurrency,
-    ReturnRateOverride? Override, IReadOnlyList<TaxLine> Lines, IReadOnlyList<ReturnBoxAmount> Boxes, IReadOnlyDictionary<string, decimal> Usd,
+    ReturnRateOverride? Override, IReadOnlyList<TaxLine> Lines, IReadOnlyList<ReturnBoxAmount> Boxes, IReadOnlyList<ReconciliationRow> Reconciliation,
+    IReadOnlyDictionary<string, decimal> Usd,
     List<JournalIssue> Issues, IReadOnlyDictionary<Guid, string> Parties)
 {
     public TaxReturnDto ToDto() => new(
         Period, From, To, Definition.TaxPack, Definition.Name, Currency.Code, TaxCurrency?.Code,
         Override is null ? "document_snapshots" : "override", Override?.Rate.ToString("0.##########", CultureInfo.InvariantCulture), Override?.Reason,
-        Boxes, Lines.Where(l => l.TaxAdjusted).Select(l => LineDto(l, l.Tax)).ToList(), Issues);
+        Boxes, Reconciliation, Lines.Where(l => l.TaxAdjusted).Select(l => LineDto(l, l.Tax)).ToList(), Issues);
 
     public TaxLineDto LineDto(TaxLine l, decimal amount) => new(
         l.DocumentKind, l.DocumentId, l.DocumentNo, l.Date, Parties.GetValueOrDefault(l.PartyId, "?"), l.Reference, l.LineNo, l.Description,

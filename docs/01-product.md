@@ -51,7 +51,8 @@ Replace our Manager.io bookkeeping with a system that:
 | 9 | M6 Sales | AR documents, KHR totals (tax currency slot), AR aging, MCP batch tools |
 | 10–11 | M7 Bank | Payments and receipts, statement lines through MCP batch import, matching, reconciliation |
 | 12 | M8 Tax reporting | VAT/WHT monthly summary and detail, filed-period snapshot |
-| 13–14 | M9 Migration | Manager.io import and automated reconciliation |
-| 15–18 | M10 Parallel run | One month side by side, then cut over |
+| 13 | M9 Invoice printing | Sales invoices and credit notes as PDF, with the KHR total |
+| 14–15 | M10 Inventory | Inventory items, stock movements from purchases and sales, cost of sales |
+| 16 | M11 Other monthly taxes | Monthly taxes beyond VAT, WHT and prepayment, as confirmed with an adviser |
 
 MCP tools ship with each milestone, not at the end.
