@@ -1,0 +1,252 @@
+using System.Globalization;
+using System.Text.Json;
+using Books.Application.Access;
+using Books.Application.Common;
+using Books.Application.Journals;
+using Books.Domain.Access;
+using Books.Domain.Documents;
+using Books.Domain.Journals;
+using Books.Domain.Ledgers;
+using Microsoft.EntityFrameworkCore;
+
+namespace Books.Application.Documents;
+
+/// <param name="Amount">Net amount; when omitted it is quantity × unit price, rounded to the currency.</param>
+/// <param name="TaxOverride">A VAT amount entered by a person instead of the calculated one.</param>
+public sealed record PurchaseLineInput(
+    Guid AccountId, string? Description, Guid? ItemId, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
+    Guid? TaxCodeId, decimal? TaxOverride, string? TaxReason, bool ValidTaxInvoice, Guid? WithholdingCodeId);
+
+/// <param name="PayableAccountId">Omit to use the ledger's only Payable account.</param>
+/// <param name="DueDate">Omit for invoice date + the supplier's payment terms.</param>
+public sealed record PurchaseInvoiceInput(
+    Guid SupplierId, Guid? PayableAccountId, DateOnly Date, DateOnly? DueDate, string? Reference, string? Description, IReadOnlyList<PurchaseLineInput> Lines);
+
+public sealed record PurchaseLineDto(
+    Guid LineId, Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string NetAmount,
+    Guid? TaxCodeId, string TaxCalculated, string TaxAmount, bool TaxAdjusted, string? TaxReason, bool ValidTaxInvoice,
+    Guid? WithholdingCodeId, string WithholdingAmount);
+
+public sealed record PurchaseInvoiceDto(
+    Guid Id, Guid LedgerId, long InvoiceNo, Guid SupplierId, Guid PayableAccountId, DateOnly Date, DateOnly DueDate,
+    string? Reference, string? Description, IReadOnlyList<PurchaseLineDto> Lines,
+    string NetTotal, string TaxTotal, string GrossTotal, string WithholdingTotal, string PayableTotal,
+    string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version);
+
+/// <summary>
+/// Purchase invoices. Save posts when valid; otherwise the invoice is kept as a draft with the reasons. A posted
+/// invoice whose change cannot be posted stays unchanged (rule 28). AI clients may save drafts only.
+/// </summary>
+public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, ReadRunner reads, DocumentPosting posting)
+{
+    public Task<IReadOnlyList<PurchaseInvoiceDto>> ListAsync(Principal principal, Guid orgId, Guid ledgerId, CancellationToken ct) =>
+        reads.RunAsync(principal, orgId, async scope =>
+        {
+            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Read, ct);
+            return await LoadAsync(ledgerId, null, ct);
+        }, ct);
+
+    public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, PurchaseInvoiceInput input, bool post, CancellationToken ct) =>
+        writes.RunAsync(principal, new WriteRequest(post ? "purchase_invoice.save" : "purchase_invoice.save_draft", orgId, meta), async scope =>
+        {
+            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
+            var invoice = new PurchaseInvoice(Guid.CreateVersion7(), orgId, ledgerId, await posting.NextNumberAsync(ledgerId, PurchaseInvoice.Kind, ct), principal.UserId, scope.Now);
+            var issues = await SetAsync(invoice, ledger, input, isNew: true, ct);
+            db.PurchaseInvoices.Add(invoice);
+            var status = await SaveAsync(scope, ledger, invoice, issues, post, ct);
+            scope.Audit($"purchase_invoice.{status}", "purchase_invoice", invoice.Id, new { invoice_no = invoice.InvoiceNo, journal_id = invoice.JournalId, issues = invoice.Issues });
+            await db.SaveChangesAsync(ct);
+            return WriteResult.Of(status == "not_posted" ? 422 : 201, (await LoadAsync(ledgerId, invoice.Id, ct)).Single(), invoice.Version);
+        }, ct);
+
+    public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid invoiceId, PurchaseInvoiceInput input, bool post, CancellationToken ct) =>
+        writes.RunAsync(principal, new WriteRequest(post ? "purchase_invoice.save" : "purchase_invoice.save_draft", orgId, meta), async scope =>
+        {
+            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            var invoice = await FindAsync(ledgerId, invoiceId, ct);
+            scope.CheckVersion(invoice.Version);
+            var wasPosted = invoice.Status == DocumentStatus.Posted;
+            if (wasPosted && !post)
+            {
+                throw BooksProblem.Conflict("DOCUMENT_POSTED", "A posted document cannot go back to draft; save it or delete it.");
+            }
+            var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
+            var before = (await LoadAsync(ledgerId, invoice.Id, ct)).Single();
+            db.PurchaseInvoiceLines.RemoveRange(invoice.Lines);
+            var issues = await SetAsync(invoice, ledger, input, isNew: false, ct);
+            var status = await SaveAsync(scope, ledger, invoice, issues, post, ct);
+            if (wasPosted && status == "not_posted")
+            {
+                throw new BooksProblem(422, "DOCUMENT_INVALID", "The change cannot be posted; the invoice and its posting are unchanged.")
+                {
+                    Issues = JsonSerializer.Deserialize<List<JournalIssue>>(invoice.Issues!, BooksJson.Options),
+                };
+            }
+            await db.SaveChangesAsync(ct);
+            var after = (await LoadAsync(ledgerId, invoice.Id, ct)).Single();
+            scope.Audit($"purchase_invoice.{status}", "purchase_invoice", invoice.Id, new { before, after });
+            return WriteResult.Of(status == "not_posted" ? 422 : 200, after, invoice.Version);
+        }, ct);
+
+    public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid invoiceId, CancellationToken ct) =>
+        writes.RunAsync(principal, new WriteRequest("purchase_invoice.delete", orgId, meta), async scope =>
+        {
+            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            var invoice = await FindAsync(ledgerId, invoiceId, ct);
+            scope.CheckVersion(invoice.Version);
+            if (invoice.Status == DocumentStatus.Posted)
+            {
+                await posting.DeleteAsync(scope, await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct), invoice.JournalId!.Value, ct);
+            }
+            invoice.Delete();
+            scope.Audit("purchase_invoice.deleted", "purchase_invoice", invoice.Id, new { invoice_no = invoice.InvoiceNo });
+            return WriteResult.Of(200, new { id = invoice.Id, deleted = true }, invoice.Version);
+        }, ct);
+
+    /// <summary>Posts or keeps as draft: posted, draft (on purpose) or not_posted (kept as draft with reasons).</summary>
+    private async Task<string> SaveAsync(WriteScope scope, Ledger ledger, PurchaseInvoice invoice, List<JournalIssue> documentIssues, bool post, CancellationToken ct)
+    {
+        if (post)
+        {
+            JournalService.RefuseAgentPosting(scope.Principal, touchesPosting: true);
+        }
+        var taxCodes = await TaxCodesAsync(invoice, ct);
+        if (!post || documentIssues.Count > 0)
+        {
+            var issues = documentIssues.Concat(await posting.CheckAsync(ledger, invoice.ToJournal(taxCodes), ct)).ToList();
+            invoice.KeptAsDraft(issues.Count == 0 ? null : BooksJson.Serialize(issues));
+            return post ? "not_posted" : "draft";
+        }
+        var outcome = await posting.PostAsync(scope, ledger, PurchaseInvoice.Kind, invoice.Id, invoice.JournalId, invoice.ToJournal(taxCodes), ct);
+        if (outcome.Journal is { } journal)
+        {
+            invoice.PostedAs(journal.Id);
+            return "posted";
+        }
+        invoice.KeptAsDraft(BooksJson.Serialize(outcome.Issues));
+        return "not_posted";
+    }
+
+    /// <summary>
+    /// Checks references (unknown or wrong-kind ones are 400) and builds the lines with tax per line. Returns
+    /// document-level issues that keep the invoice a draft, such as a tax code not yet effective on the date.
+    /// </summary>
+    private async Task<List<JournalIssue>> SetAsync(PurchaseInvoice invoice, Ledger ledger, PurchaseInvoiceInput input, bool isNew, CancellationToken ct)
+    {
+        var issues = new List<JournalIssue>();
+        var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
+        var supplier = await db.Parties.SingleOrDefaultAsync(p => p.LedgerId == ledger.Id && p.Id == input.SupplierId, ct)
+            ?? throw BooksProblem.Invalid("supplier_id must be a party of this ledger.");
+        if (!supplier.IsSupplier || !supplier.Active)
+        {
+            issues.Add(new JournalIssue("NOT_AN_ACTIVE_SUPPLIER", "The party is not an active supplier."));
+        }
+        var payable = await PayableAccountAsync(ledger.Id, input.PayableAccountId, ct);
+
+        var lines = new List<PurchaseInvoiceLine>();
+        var codes = await db.TaxCodes.AsNoTracking().Where(t => t.LedgerId == ledger.Id).ToDictionaryAsync(t => t.Id, ct);
+        foreach (var (line, i) in (input.Lines ?? throw BooksProblem.Invalid("lines is required.")).Select((l, i) => (l, i + 1)))
+        {
+            if (!await db.Accounts.AnyAsync(a => a.LedgerId == ledger.Id && a.Id == line.AccountId, ct))
+            {
+                throw BooksProblem.Invalid($"Line {i}: account_id must be an account of this ledger.");
+            }
+            if (line.ItemId is { } itemId && !await db.Items.AnyAsync(x => x.LedgerId == ledger.Id && x.Id == itemId, ct))
+            {
+                throw BooksProblem.Invalid($"Line {i}: item_id must be an item of this ledger.");
+            }
+            var net = line.Amount ?? (line is { Quantity: { } q, UnitPrice: { } p }
+                ? decimal.Round(q * p, minor, MidpointRounding.AwayFromZero)
+                : throw BooksProblem.Invalid($"Line {i}: give an amount, or a quantity and a unit price."));
+            LineTax? tax = null;
+            if (line.TaxCodeId is { } taxId)
+            {
+                var code = codes.GetValueOrDefault(taxId) ?? throw BooksProblem.Invalid($"Line {i}: tax_code_id must be a tax code of this ledger.");
+                if (code.Kind is not (TaxKind.VatInput or TaxKind.VatZeroRated or TaxKind.NonVat))
+                {
+                    throw BooksProblem.Invalid($"Line {i}: purchase lines take input VAT, zero-rated or non-VAT codes.");
+                }
+                if (code.Kind != TaxKind.VatInput && line.TaxOverride is not null and not 0)
+                {
+                    throw BooksProblem.Invalid($"Line {i}: zero-rated and non-VAT lines have no tax to override.");
+                }
+                if (!code.AppliesOn(input.Date))
+                {
+                    issues.Add(new JournalIssue("TAX_CODE_NOT_EFFECTIVE", $"{code.Name} does not apply on {input.Date:yyyy-MM-dd}.", i));
+                }
+                tax = TaxCalculator.ForLine(net, code.Rate, minor, line.TaxOverride, line.TaxReason);
+            }
+            var withholding = 0m;
+            if (line.WithholdingCodeId is { } whtId)
+            {
+                var code = codes.GetValueOrDefault(whtId) ?? throw BooksProblem.Invalid($"Line {i}: withholding_code_id must be a tax code of this ledger.");
+                if (code.Kind != TaxKind.Withholding)
+                {
+                    throw BooksProblem.Invalid($"Line {i}: withholding_code_id must be a withholding code.");
+                }
+                if (!code.AppliesOn(input.Date))
+                {
+                    issues.Add(new JournalIssue("TAX_CODE_NOT_EFFECTIVE", $"{code.Name} does not apply on {input.Date:yyyy-MM-dd}.", i));
+                }
+                // Withholding is calculated per line on the net amount (VAT excluded) and totalled on the invoice.
+                withholding = TaxCalculator.ForLine(net, code.Rate, minor).Amount;
+            }
+            lines.Add(new PurchaseInvoiceLine(line.AccountId, line.Description, line.ItemId, line.Quantity, line.UnitPrice, net,
+                line.TaxCodeId, tax, line.ValidTaxInvoice, line.WithholdingCodeId, withholding));
+        }
+
+        var dueDate = input.DueDate ?? input.Date.AddDays(supplier.PaymentTermsDays ?? 0);
+        invoice.Set(supplier.Id, payable, input.Date, dueDate, input.Reference, input.Description, lines, isNew);
+        return issues;
+    }
+
+    /// <summary>The given account must carry the Payable usage; when omitted, the ledger must have exactly one.</summary>
+    private async Task<Guid> PayableAccountAsync(Guid ledgerId, Guid? accountId, CancellationToken ct)
+    {
+        var payables = await db.AccountUsages.Where(u => u.LedgerId == ledgerId && u.Usage == Usage.Payable).Select(u => u.AccountId).ToListAsync(ct);
+        if (accountId is { } id)
+        {
+            return payables.Contains(id) ? id : throw BooksProblem.Invalid("payable_account_id must be an account with the Payable usage.");
+        }
+        return payables.Count switch
+        {
+            1 => payables[0],
+            0 => throw BooksProblem.Invalid("This ledger has no Accounts Payable account yet; apply the Cambodia template or give an account the Payable usage."),
+            _ => throw BooksProblem.Invalid("This ledger has several Payable accounts; choose one with payable_account_id."),
+        };
+    }
+
+    private async Task<Dictionary<Guid, TaxCode>> TaxCodesAsync(PurchaseInvoice invoice, CancellationToken ct)
+    {
+        var ids = invoice.Lines.SelectMany(l => new[] { l.TaxCodeId, l.WithholdingCodeId }).OfType<Guid>().Distinct().ToList();
+        return await db.TaxCodes.AsNoTracking().Where(t => ids.Contains(t.Id)).ToDictionaryAsync(t => t.Id, ct);
+    }
+
+    private async Task<PurchaseInvoice> FindAsync(Guid ledgerId, Guid invoiceId, CancellationToken ct)
+    {
+        var invoice = await db.PurchaseInvoices.Include(i => i.Lines).SingleOrDefaultAsync(i => i.LedgerId == ledgerId && i.Id == invoiceId, ct)
+            ?? throw BooksProblem.NotFound();
+        return invoice.Status == DocumentStatus.Deleted ? throw BooksProblem.Conflict("DOCUMENT_DELETED", "This invoice was deleted.") : invoice;
+    }
+
+    private async Task<IReadOnlyList<PurchaseInvoiceDto>> LoadAsync(Guid ledgerId, Guid? id, CancellationToken ct)
+    {
+        var minor = Currencies.Require(await db.Ledgers.Where(l => l.Id == ledgerId).Select(l => l.BaseCurrency).SingleAsync(ct)).MinorUnits;
+        string F(decimal v) => v.ToString("F" + minor, CultureInfo.InvariantCulture);
+        static string? Q(decimal? v) => v?.ToString("0.####", CultureInfo.InvariantCulture);
+        var rows = await db.PurchaseInvoices.AsNoTracking().Include(i => i.Lines)
+            .Where(i => i.LedgerId == ledgerId && (id == null || i.Id == id))
+            .OrderByDescending(i => i.InvoiceNo)
+            .Select(i => new { i, JournalNo = db.Journals.Where(j => j.Id == i.JournalId).Select(j => (long?)j.JournalNo).FirstOrDefault() })
+            .ToListAsync(ct);
+        return rows.Select(x => new PurchaseInvoiceDto(
+            x.i.Id, x.i.LedgerId, x.i.InvoiceNo, x.i.SupplierId, x.i.PayableAccountId, x.i.Date, x.i.DueDate, x.i.Reference, x.i.Description,
+            x.i.Lines.OrderBy(l => l.LineNo).Select(l => new PurchaseLineDto(l.LineId, l.AccountId, l.Description, l.ItemId, Q(l.Quantity), Q(l.UnitPrice),
+                F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason, l.ValidTaxInvoice,
+                l.WithholdingCodeId, F(l.WithholdingAmount))).ToList(),
+            F(x.i.NetTotal), F(x.i.TaxTotal), F(x.i.GrossTotal), F(x.i.WithholdingTotal), F(x.i.PayableTotal),
+            Text.Of(x.i.Status), x.i.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.i.Issues, BooksJson.Options)!,
+            x.i.JournalId, x.JournalNo, x.i.Version.ToString())).ToList();
+    }
+}

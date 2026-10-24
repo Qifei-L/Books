@@ -68,7 +68,8 @@ public sealed class AccountUsageService(IBooksDb db, WriteRunner writes)
             Usage.OutputVat or Usage.InputVat or Usage.WithholdingPayable =>
                 await db.TaxCodes.AnyAsync(t => t.AccountId == account.Id, ct),
             Usage.NonDeductibleVat => await db.TaxCodes.AnyAsync(t => t.NonDeductibleAccountId == account.Id, ct),
-            // Payable and Receivable: open documents are checked from M5.2, when purchase invoices exist.
+            // Until payments exist every posted invoice is open; M5.4 narrows this to unpaid invoices.
+            Usage.Payable => await db.PurchaseInvoices.AnyAsync(i => i.PayableAccountId == account.Id && i.Status == Books.Domain.Documents.DocumentStatus.Posted, ct),
             _ => false,
         };
         if (inUse)
