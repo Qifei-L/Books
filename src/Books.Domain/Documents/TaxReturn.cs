@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Books.Domain.Access;
 using Books.Domain.Ledgers;
 
@@ -23,7 +24,8 @@ public sealed record WithholdingCategory(string Key, string Label);
 /// A tax pack's monthly return as data (owner decision): versions take effect from a month, administrators publish
 /// them, AI clients may draft them. Only this fixed vocabulary is allowed, so a definition can be checked before use.
 /// </summary>
-public sealed record ReturnDefinitionSpec(string Name, IReadOnlyList<WithholdingCategory> WithholdingCategories, IReadOnlyList<BoxSpec> Boxes);
+public sealed record ReturnDefinitionSpec(
+    string Name, [property: JsonPropertyName("withholding_categories")] IReadOnlyList<WithholdingCategory> WithholdingCategories, IReadOnlyList<BoxSpec> Boxes);
 
 /// <summary>A box adds up document lines (Lines) or is calculated from earlier boxes (Formula).</summary>
 public sealed record BoxSpec(string Key, string Section, string Label, LineRule? Lines = null, FormulaRule? Formula = null, bool Information = false);
@@ -33,7 +35,10 @@ public sealed record BoxSpec(string Key, string Section, string Label, LineRule?
 /// <param name="ValidTaxInvoice">Purchases: only lines with (true) or without (false) a valid tax invoice; omit for both.</param>
 /// <param name="WithholdingCategory">Only lines whose withholding code has this category; omit for any.</param>
 /// <param name="Amount">net, tax or withholding.</param>
-public sealed record LineRule(string Side, IReadOnlyList<string>? TaxKinds = null, bool? ValidTaxInvoice = null, string? WithholdingCategory = null, string Amount = "net");
+public sealed record LineRule(
+    string Side, [property: JsonPropertyName("tax_kinds")] IReadOnlyList<string>? TaxKinds = null,
+    [property: JsonPropertyName("valid_tax_invoice")] bool? ValidTaxInvoice = null,
+    [property: JsonPropertyName("withholding_category")] string? WithholdingCategory = null, string Amount = "net");
 
 /// <summary>The sum of earlier boxes, each added or subtracted, optionally times a percent and rounded to the currency.</summary>
 public sealed record FormulaRule(IReadOnlyList<FormulaTerm> Terms, decimal? Percent = null);
