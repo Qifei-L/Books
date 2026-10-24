@@ -111,9 +111,9 @@ public sealed class PurchaseInvoiceTests(TestHost host)
         public Guid Account(string code) => Codes[code];
     }
 
-    internal async Task<Setup> SetUpAsync()
+    internal async Task<Setup> SetUpAsync(string? subject = null)
     {
-        var books = await JournalBooks.CreateAsync(host);
+        var books = await JournalBooks.CreateAsync(host, subject: subject);
         var ledgerUrl = $"/api/v1/organizations/{books.OrgId}/ledgers/{books.LedgerId}";
         await (await books.Admin.PostAsync($"{ledgerUrl}/templates/cambodia-2026", new { })).DataAsync();
         var rent = (await AccountTests.CreateAsync(books.Admin, books.OrgId, books.LedgerId, "5000", "Rent", "cost_and_expense")).Id();

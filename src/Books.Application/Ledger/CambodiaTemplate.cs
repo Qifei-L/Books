@@ -100,8 +100,9 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
         }, ct);
 
     /// <summary>
-    /// An account already serving the usage or purpose is reused; otherwise one with the same code and type.
-    /// The same code with another type is a conflict the administrator must resolve.
+    /// An account already serving the usage or purpose is reused. A matching code alone is a coincidence, not
+    /// intent, so a code taken by another account is a conflict the administrator resolves (rename, or give the
+    /// intended account the usage first).
     /// </summary>
     private async Task<Account?> ExistingAsync(Guid ledgerId, AccountSpec spec, CancellationToken ct)
     {
@@ -120,10 +121,10 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
             return await db.Accounts.SingleAsync(a => a.Id == assigned, ct);
         }
         var code = spec.Code.ToLowerInvariant();
-        var sameCode = await db.Accounts.SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Code.ToLower() == code, ct);
-        return sameCode is null || sameCode.Type == spec.Type
-            ? sameCode
-            : throw BooksProblem.Conflict("TEMPLATE_CONFLICT", $"Code {spec.Code} is already used by an account of another type; rename it, then apply the template.");
+        return await db.Accounts.AnyAsync(a => a.LedgerId == ledgerId && a.Code.ToLower() == code, ct)
+            ? throw BooksProblem.Conflict("TEMPLATE_CONFLICT",
+                $"Code {spec.Code} is already used by another account; rename it, or give the intended account its usage, then apply the template.")
+            : null;
     }
 
     private async Task<AccountGroup> GroupAsync(Ledger ledger, AccountSpec spec, DateTimeOffset now, CancellationToken ct)

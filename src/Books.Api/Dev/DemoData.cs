@@ -50,49 +50,37 @@ public static class DemoData
         var ledgerId = Data(await companies.CreateAsync(principal, Meta(), orgId, new CreateCompany("Demo Trading Co., Ltd.", "USD", 1), ct))
             .GetProperty("ledger").GetProperty("id").GetGuid();
 
-        async Task<Guid> Group(string name, AccountType type) =>
-            Data(await groups.CreateAsync(principal, Meta(), orgId, ledgerId, name, type, null, ct)).GetProperty("id").GetGuid();
-        var current = await Group("Current assets", AccountType.Assets);
-        var liabilities = await Group("Current liabilities", AccountType.Liabilities);
-        var equity = await Group("Equity", AccountType.Equity);
-        var revenue = await Group("Revenue", AccountType.Income);
-        var expenses = await Group("Operating expenses", AccountType.CostAndExpense);
+        // Tax accounts, AP/AR, system purposes and the tax codes come from the Cambodia starter template.
+        await services.GetRequiredService<CambodiaTemplate>().ApplyAsync(principal, Meta(), orgId, ledgerId, ct);
+        var chart = (await accounts.ListAsync(principal, orgId, ledgerId, ct)).ToDictionary(a => a.Code, a => a.Id);
+        var taxes = (await taxCodes.ListAsync(principal, orgId, ledgerId, ct)).ToDictionary(t => t.Name, t => t.Id);
+        var groupIds = (await groups.ListAsync(principal, orgId, ledgerId, ct)).ToDictionary(g => g.Name, g => g.Id);
+        var current = groupIds["Current assets"];
+        var equity = groupIds["Equity"];
+        var expenses = groupIds["Operating expenses"];
+        var revenue = Data(await groups.CreateAsync(principal, Meta(), orgId, ledgerId, "Revenue", AccountType.Income, null, ct)).GetProperty("id").GetGuid();
 
-        async Task<Guid> Account(string code, string name, AccountType type, Guid group, bool bank = false) =>
-            Data(await accounts.CreateAsync(principal, Meta(), orgId, ledgerId, new CreateAccount(code, name, type, group, false, bank, null), ct))
+        async Task<Guid> Account(string code, string name, AccountType type, Guid group) =>
+            Data(await accounts.CreateAsync(principal, Meta(), orgId, ledgerId, new CreateAccount(code, name, type, group, false, false, null), ct))
                 .GetProperty("id").GetGuid();
         var cash = await Account("1000", "Cash on hand", AccountType.Assets, current);
-        var bank = await Account("1100", "ABA Bank USD", AccountType.Assets, current, bank: true);
-        var vat = await Account("2000", "VAT payable", AccountType.Liabilities, liabilities);
-        var suspense = await Account("2999", "Suspense", AccountType.Liabilities, liabilities);
+        var bank = await Account("1100", "ABA Bank USD", AccountType.Assets, current);
+        var acleda = await Account("1110", "ACLEDA Bank USD", AccountType.Assets, current);
         var capital = await Account("3000", "Owner capital", AccountType.Equity, equity);
-        var retained = await Account("3100", "Retained earnings", AccountType.Equity, equity);
-        var clearing = await Account("3900", "Opening balance clearing", AccountType.Equity, equity);
         var sales = await Account("4000", "Sales", AccountType.Income, revenue);
         var service = await Account("4100", "Service income", AccountType.Income, revenue);
         var rent = await Account("5000", "Rent", AccountType.CostAndExpense, expenses);
         var salaries = await Account("5100", "Salaries", AccountType.CostAndExpense, expenses);
         var utilities = await Account("5200", "Utilities", AccountType.CostAndExpense, expenses);
-        var acleda = await Account("1200", "ACLEDA Bank USD", AccountType.Assets, current, bank: true);
-        var vatInput = await Account("1300", "VAT receivable (input)", AccountType.Assets, current);
-        var wht = await Account("2100", "Withholding tax payable", AccountType.Liabilities, liabilities);
         var bankCharges = await Account("5300", "Bank charges", AccountType.CostAndExpense, expenses);
-        var nonDeductible = await Account("5400", "Non-deductible VAT", AccountType.CostAndExpense, expenses);
+        var vat = chart["2100"];
+        var suspense = chart["2999"];
+        var clearing = chart["3900"];
+        var vat10 = taxes["VAT 10% (sales)"];
+        var fuel4 = taxes["VAT 4% fuel (sales)"];
 
-        // Ledger setup added in M4: bank details, Cambodian tax codes, parties, items and monthly NBC rates.
         await banks.CreateAsync(principal, Meta(), orgId, ledgerId, bank, "ABA Bank", "000 123 456", ct);
         await banks.CreateAsync(principal, Meta(), orgId, ledgerId, acleda, "ACLEDA Bank", "0001-01-234567-1-1", ct);
-        async Task<Guid> Tax(string name, TaxKind kind, decimal rate, Guid? account, string? from = null, Guid? nonDeductibleAccount = null) =>
-            Data(await taxCodes.CreateAsync(principal, Meta(), orgId, ledgerId,
-                new TaxCodeInput(name, kind, rate, account, from is null ? null : DateOnly.Parse(from), null, true, nonDeductibleAccount), ct)).GetProperty("id").GetGuid();
-        var vat10 = await Tax("VAT 10% (sales)", TaxKind.VatOutput, 10m, vat);
-        await Tax("VAT 10% (purchases)", TaxKind.VatInput, 10m, vatInput, nonDeductibleAccount: nonDeductible);
-        await Tax("VAT 0% (zero-rated)", TaxKind.VatZeroRated, 0m, null);
-        await Tax("Non-VAT", TaxKind.NonVat, 0m, null);
-        var fuel4 = await Tax("VAT 4% fuel (sales)", TaxKind.VatOutput, 4m, vat, "2026-03-01");
-        await Tax("WHT 15% services, interest, royalties", TaxKind.Withholding, 15m, wht);
-        await Tax("WHT 10% rent", TaxKind.Withholding, 10m, wht);
-        await Tax("WHT 14% non-resident", TaxKind.Withholding, 14m, wht);
         async Task<Guid> Party(string name, bool customer, string? taxId, int? terms, string? contact) =>
             Data(await partyService.CreateAsync(principal, Meta(), orgId, ledgerId,
                 new PartyInput(name, taxId, customer, !customer, null, null, "Phnom Penh", contact, terms, true), ct)).GetProperty("id").GetGuid();
@@ -102,8 +90,8 @@ public static class DemoData
             await Party("Angkor Hotels Plc", true, "K002-902345678", 15, "Sophea"),
             await Party("Riverside Café", true, null, 0, null),
         };
-        await Party("Phnom Penh Property Ltd.", false, "K003-903456789", 0, "Vuthy");
-        await Party("Electricité du Cambodge", false, "E000-100000001", 7, null);
+        var landlord = await Party("Phnom Penh Property Ltd.", false, "K003-903456789", 15, "Vuthy");
+        var edc = await Party("Electricité du Cambodge", false, "E000-100000001", 7, null);
         var consulting = Data(await items.CreateCategoryAsync(principal, Meta(), orgId, ledgerId, "Consulting", ct)).GetProperty("id").GetGuid();
         var goods = Data(await items.CreateCategoryAsync(principal, Meta(), orgId, ledgerId, "Goods", ct)).GetProperty("id").GetGuid();
         await items.CreateAsync(principal, Meta(), orgId, ledgerId, new ItemInput("Advisory hour", "Senior consultant time", "hour", consulting, service, vat10), ct);
@@ -113,12 +101,6 @@ public static class DemoData
         {
             var monthEnd = new DateOnly(2026, month, 1).AddMonths(1).AddDays(-1);
             await banks.SetRateAsync(principal, Meta(), orgId, monthEnd, "USD", "KHR", 4_050m + month * 7, "NBC", ct);
-        }
-
-        long ledgerVersion = 1;
-        foreach (var (purpose, account) in new[] { (SystemPurpose.RetainedEarnings, retained), (SystemPurpose.OpeningBalanceClearing, clearing), (SystemPurpose.Suspense, suspense) })
-        {
-            await purposes.AssignAsync(principal, Meta(ledgerVersion++), orgId, ledgerId, purpose, account, ct);
         }
 
         async Task Post(string date, string reference, string description, params (Guid Account, decimal Amount)[] lines) =>
@@ -150,7 +132,22 @@ public static class DemoData
             new JournalDraft(DateOnly.Parse("2026-10-30"), [new DraftLine(rent, 1_200m), new DraftLine(bank, -1_200m)], "RENT-11", "November rent (draft)"), false, ct);
         await transfers.CreateAsync(principal, Meta(), orgId, ledgerId,
             new BankTransferInput(DateOnly.Parse("2026-10-20"), bank, acleda, 3_000m, 2m, bankCharges, "TT-2026-014", "Move funds to ACLEDA"), true, ct);
+        // Purchases (M5): rent with withholding, electricity with and without a valid tax invoice, a debit note,
+        // and an invoice dated in the closed period, which stays a draft with the reason.
+        var purchases = services.GetRequiredService<PurchaseInvoiceService>();
+        PurchaseLineInput Line(Guid account, string description, decimal amount, string? tax, bool valid = true, string? wht = null) =>
+            new(account, description, null, null, null, amount, tax is null ? null : taxes[tax], null, null, valid, wht is null ? null : taxes[wht]);
+        await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(landlord, null, DateOnly.Parse("2026-10-01"), null, "PPP-2026-10", "October office rent",
+            [Line(rent, "Office rent October", 1_200m, "VAT 10% (purchases)", wht: "WHT 10% rent")]), true, ct);
+        await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(edc, null, DateOnly.Parse("2026-10-12"), null, "EDC-884512", "Electricity September",
+            [Line(utilities, "Office electricity", 310m, "VAT 10% (purchases)"), Line(utilities, "Warehouse electricity (no VAT invoice)", 95m, "VAT 10% (purchases)", valid: false)]), true, ct);
+        await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(edc, null, DateOnly.Parse("2026-10-20"), null, "EDC-CR-12", "Meter reading correction",
+            [Line(utilities, "Overcharge refund", 20m, "VAT 10% (purchases)")]), true, ct, debitNote: true);
+        var ledgerVersion = long.Parse((await companies.GetLedgerAsync(principal, orgId, ledgerId, ct)).Version);
         await settings.CloseAsync(principal, Meta(ledgerVersion), orgId, ledgerId, DateOnly.Parse("2026-09-30"), ct);
+        await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(landlord, null, DateOnly.Parse("2026-09-15"), null, "PPP-2026-09B", "Late September repair bill",
+            [Line(rent, "Repairs", 250m, "Non-VAT")]), true, ct);
+
         return orgId;
     }
 

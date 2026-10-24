@@ -133,9 +133,9 @@ internal sealed record JournalBooks(TestHost Host, HttpClient Admin, Guid OrgId,
 {
     public string JournalsUrl => $"/api/v1/organizations/{OrgId}/ledgers/{LedgerId}/journals";
 
-    public static async Task<JournalBooks> CreateAsync(TestHost host, string currency = "USD")
+    public static async Task<JournalBooks> CreateAsync(TestHost host, string currency = "USD", string? subject = null)
     {
-        var admin = host.Client(Ids.Subject("admin"));
+        var admin = host.Client(subject ?? Ids.Subject("admin"));
         var orgId = await admin.CreateOrganizationAsync();
         var ledgerId = (await (await admin.PostAsync($"/api/v1/organizations/{orgId}/companies", new { name = "Books Co", base_currency = currency }))
             .DataAsync(HttpStatusCode.Created)).Id("ledger");
