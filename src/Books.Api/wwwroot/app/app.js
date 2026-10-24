@@ -130,6 +130,7 @@ function openGl(accountId, from, to) {
 const SOURCES = {
   purchase_invoice: "Purchase invoice", purchase_debit_note: "Debit note", sales_invoice: "Sales invoice", sales_credit_note: "Credit note",
   payment: "Payment", receipt: "Receipt", bank_transfer: "Bank transfer", pay_run: "Pay run", stock_adjustment: "Stock adjustment",
+  fx_revaluation: "Exchange revaluation", fx_revaluation_reversal: "Revaluation reversal",
 };
 
 async function openJournal(id) {

@@ -10,7 +10,8 @@ public sealed record CompanyDto(Guid Id, Guid OrgId, string Name, Guid LedgerId,
 
 public sealed record LedgerDto(
     Guid Id, Guid OrgId, Guid CompanyId, string CompanyName, string BaseCurrency, int FyStartMonth,
-    DateOnly? ClosedThrough, string EffectiveAccess, string Version, DateTimeOffset CreatedAt, string? TaxPack = null);
+    DateOnly? ClosedThrough, string EffectiveAccess, string Version, DateTimeOffset CreatedAt, string? TaxPack = null,
+    IReadOnlyList<string>? Warnings = null);
 
 public sealed record CreateCompany(string Name, string? BaseCurrency, int? FyStartMonth);
 

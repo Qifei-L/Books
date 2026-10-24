@@ -44,6 +44,8 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<PayRun> PayRuns => Set<PayRun>();
     public DbSet<PayRunLine> PayRunLines => Set<PayRunLine>();
     public DbSet<StockAdjustment> StockAdjustments => Set<StockAdjustment>();
+    public DbSet<FxRevaluation> FxRevaluations => Set<FxRevaluation>();
+    public DbSet<FxRevaluationLine> FxRevaluationLines => Set<FxRevaluationLine>();
     public DbSet<StockAdjustmentLine> StockAdjustmentLines => Set<StockAdjustmentLine>();
     public DbSet<FixedAsset> FixedAssets => Set<FixedAsset>();
     public DbSet<DepreciationRun> DepreciationRuns => Set<DepreciationRun>();

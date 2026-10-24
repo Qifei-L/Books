@@ -52,8 +52,7 @@ public sealed class StatementService(IBooksDb db, ReadRunner reads)
         reads.SnapshotAsync(principal, orgId, async scope =>
         {
             var ledger = await LedgerAsync(scope, ledgerId, DateOnly.MinValue, asOf, ct);
-            var chart = await Chart.LoadAsync(db, ledgerId, ct);
-            var sums = await SumsAsync(ledgerId, DateOnly.MinValue, asOf, ct);
+            var (chart, sums) = await FoldRevaluationAsync(ledgerId, await Chart.LoadAsync(db, ledgerId, ct), await SumsAsync(ledgerId, DateOnly.MinValue, asOf, ct), ct);
             var fyStart = ReportService.FiscalYearStart(asOf, ledger.FyStartMonth);
             var currentYear = await SumsAsync(ledgerId, fyStart, asOf, ct);
             var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
@@ -78,6 +77,34 @@ public sealed class StatementService(IBooksDb db, ReadRunner reads)
             var liabilitiesAndEquity = Parse(sections[1].Total) + Parse(sections[2].Total);
             return new BalanceSheet(asOf, ledger.BaseCurrency, sections, Format(assets, minor), Format(liabilitiesAndEquity, minor), assets == liabilitiesAndEquity);
         }, ct);
+
+    /// <summary>
+    /// Owner decision (M12.2b): receivables and payables show as one line each. The exchange revaluation accounts
+    /// beside them are added into the ledger's Receivable and Payable account when it has exactly one, and not shown.
+    /// </summary>
+    private async Task<(Chart, IReadOnlyDictionary<Guid, decimal>)> FoldRevaluationAsync(Guid ledgerId, Chart chart, IReadOnlyDictionary<Guid, decimal> sums, CancellationToken ct)
+    {
+        var usages = await db.AccountUsages.AsNoTracking().Where(u => u.LedgerId == ledgerId
+                && (u.Usage == Usage.Receivable || u.Usage == Usage.Payable || u.Usage == Usage.ReceivableRevaluation || u.Usage == Usage.PayableRevaluation))
+            .Select(u => new { u.AccountId, u.Usage }).ToListAsync(ct);
+        var folded = sums.ToDictionary(s => s.Key, s => s.Value);
+        var hidden = new HashSet<Guid>();
+        foreach (var (revaluation, control) in new[] { (Usage.ReceivableRevaluation, Usage.Receivable), (Usage.PayableRevaluation, Usage.Payable) })
+        {
+            var targets = usages.Where(u => u.Usage == control).Select(u => u.AccountId).ToList();
+            if (targets.Count != 1)
+            {
+                continue;
+            }
+            foreach (var account in usages.Where(u => u.Usage == revaluation).Select(u => u.AccountId))
+            {
+                folded[targets[0]] = folded.GetValueOrDefault(targets[0]) + folded.GetValueOrDefault(account);
+                folded.Remove(account);
+                hidden.Add(account);
+            }
+        }
+        return (chart.Without(hidden), folded);
+    }
 
     private async Task<Ledger> LedgerAsync(OrgScope scope, Guid ledgerId, DateOnly from, DateOnly to, CancellationToken ct)
     {
@@ -108,6 +135,9 @@ public sealed class StatementService(IBooksDb db, ReadRunner reads)
     private sealed class Chart(Dictionary<Guid, Account> accounts, List<AccountGroup> groups)
     {
         public Dictionary<Guid, Account> Accounts => accounts;
+
+        public Chart Without(IReadOnlySet<Guid> hidden) =>
+            hidden.Count == 0 ? this : new(accounts.Where(a => !hidden.Contains(a.Key)).ToDictionary(a => a.Key, a => a.Value), groups);
 
         public static async Task<Chart> LoadAsync(IBooksDb db, Guid ledgerId, CancellationToken ct) => new(
             await db.Accounts.AsNoTracking().Where(a => a.LedgerId == ledgerId).ToDictionaryAsync(a => a.Id, ct),

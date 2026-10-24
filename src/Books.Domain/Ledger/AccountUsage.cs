@@ -25,6 +25,9 @@ public enum Usage
 
     // Exchange differences (M12.2): realized when a foreign-currency invoice is settled, unrealized at year-end revaluation.
     FxRealized, FxUnrealized,
+
+    // Year-end revaluation of open foreign-currency invoices, kept beside the control accounts so aging still equals them.
+    ReceivableRevaluation, PayableRevaluation,
 }
 
 public static class Usages
@@ -37,6 +40,8 @@ public static class Usages
         Usage.Receivable or Usage.Bank or Usage.InputVat or Usage.Inventory or Usage.FixedAsset or Usage.AccumulatedDepreciation => [AccountType.Assets],
         Usage.NonDeductibleVat or Usage.SalaryExpense or Usage.NssfExpense or Usage.CostOfSales or Usage.DepreciationExpense => [AccountType.CostAndExpense],
         Usage.FxRealized or Usage.FxUnrealized => [AccountType.CostAndExpense, AccountType.Income],
+        Usage.ReceivableRevaluation => [AccountType.Assets],
+        Usage.PayableRevaluation => [AccountType.Liabilities],
         _ => throw new ArgumentOutOfRangeException(nameof(usage)),
     };
 

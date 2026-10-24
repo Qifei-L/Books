@@ -125,6 +125,7 @@ public sealed class BankReconciliationService(IBooksDb db, WriteRunner writes, R
             JOIN journal_lines l ON l.revision_id = r.id AND l.account_id = {accountId}
             WHERE j.ledger_id = {ledgerId} AND r.accounting_date <= {asOf}
             GROUP BY j.id, j.journal_no, r.accounting_date, r.reference, r.description, j.source_kind
+            HAVING SUM(COALESCE(l.currency_amount, l.amount)) <> 0
             ORDER BY r.accounting_date, j.journal_no
             """).ToListAsync(ct);
 }

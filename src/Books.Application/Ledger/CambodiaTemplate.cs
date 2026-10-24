@@ -22,11 +22,13 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
     private static readonly AccountSpec[] Accounts =
     [
         new("1200", "Accounts receivable", AccountType.Assets, "Current assets", [Usage.Receivable]),
+        new("1290", "Receivables, exchange revaluation", AccountType.Assets, "Current assets", [Usage.ReceivableRevaluation]),
         new("1300", "VAT input (deductible)", AccountType.Assets, "Current assets", [Usage.InputVat]),
         new("1400", "Inventory on hand", AccountType.Assets, "Current assets", [Usage.Inventory]),
         new("1500", "Property and equipment, at cost", AccountType.Assets, "Non-current assets", [Usage.FixedAsset]),
         new("1590", "Accumulated depreciation", AccountType.Assets, "Non-current assets", [Usage.AccumulatedDepreciation]),
         new("2000", "Accounts payable", AccountType.Liabilities, "Current liabilities", [Usage.Payable]),
+        new("2090", "Payables, exchange revaluation", AccountType.Liabilities, "Current liabilities", [Usage.PayableRevaluation]),
         new("2100", "VAT output payable", AccountType.Liabilities, "Current liabilities", [Usage.OutputVat]),
         new("2200", "Withholding tax payable", AccountType.Liabilities, "Current liabilities", [Usage.WithholdingPayable]),
         new("2300", "Salaries payable", AccountType.Liabilities, "Current liabilities", [Usage.SalariesPayable]),

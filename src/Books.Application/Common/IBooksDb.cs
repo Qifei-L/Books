@@ -45,6 +45,8 @@ public interface IBooksDb
     DbSet<PayRun> PayRuns { get; }
     DbSet<PayRunLine> PayRunLines { get; }
     DbSet<StockAdjustment> StockAdjustments { get; }
+    DbSet<FxRevaluation> FxRevaluations { get; }
+    DbSet<FxRevaluationLine> FxRevaluationLines { get; }
     DbSet<StockAdjustmentLine> StockAdjustmentLines { get; }
     DbSet<FixedAsset> FixedAssets { get; }
     DbSet<DepreciationRun> DepreciationRuns { get; }
