@@ -31,28 +31,44 @@ public sealed class BooksPurchaseTools(PrincipalAccessor principals, PurchaseInv
     public Task<CallToolResult> List(Guid org_id, Guid ledger_id, CancellationToken ct) =>
         BooksReadTools.RunAsync(async () => await invoices.ListAsync(await principals.GetAsync(ct), org_id, ledger_id, ct));
 
-    [McpServerTool(Name = "save_purchase_invoice_draft", Idempotent = true)]
-    [Description("Saves a supplier invoice as a draft for a person to review and post. Read the supplier invoice carefully: "
-        + "amounts are net of VAT; set valid_tax_invoice only if a valid VAT tax invoice was received. The result lists issues that would block posting.")]
-    public Task<CallToolResult> SaveDraft(
+    public sealed record PurchaseDocument(
+        [property: JsonPropertyName("type"), Description("invoice, or debit_note for a supplier's credit.")] string Type,
+        [property: JsonPropertyName("supplier_id"), Description("Supplier party ID from list_parties.")] Guid SupplierId,
+        [property: JsonPropertyName("date"), Description("Document date, yyyy-MM-dd.")] DateOnly Date,
+        [property: JsonPropertyName("lines")] PurchaseLine[] Lines,
+        [property: JsonPropertyName("reference"), Description("The supplier's own document number.")] string? Reference = null,
+        [property: JsonPropertyName("description")] string? Description = null,
+        [property: JsonPropertyName("due_date"), Description("Omit for date + the supplier's payment terms.")] DateOnly? DueDate = null,
+        [property: JsonPropertyName("original_invoice_id"), Description("Debit notes: the invoice being corrected, if known.")] Guid? OriginalInvoiceId = null,
+        [property: JsonPropertyName("tax_currency_rate"), Description("Only to override the rate table, for example the KHR rate printed on the invoice.")] string? TaxCurrencyRate = null,
+        [property: JsonPropertyName("tax_currency_reason"), Description("Required with tax_currency_rate.")] string? TaxCurrencyReason = null);
+
+    [McpServerTool(Name = "save_purchase_drafts", Idempotent = true)]
+    [Description("Saves up to 100 supplier invoices and debit notes as drafts for a person to review and post, all or none. "
+        + "Amounts are net of VAT; set valid_tax_invoice only if a valid VAT tax invoice was received. If any document has an input error, "
+        + "nothing is saved and every error is listed by document number; fix them and resend the whole batch with a new idempotency_key. "
+        + "Saved drafts list issues that would block posting.")]
+    public Task<CallToolResult> SaveDrafts(
         Guid org_id, Guid ledger_id,
-        [Description("A new UUID per intended change; reuse it to retry safely.")] Guid idempotency_key,
-        [Description("Supplier party ID from list_parties.")] Guid supplier_id,
-        [Description("Invoice date, yyyy-MM-dd.")] DateOnly date,
-        PurchaseLine[] lines,
-        [Description("The supplier's invoice number.")] string? reference = null,
-        string? description = null,
+        [Description("A new UUID per batch; reuse it to retry the same batch safely.")] Guid idempotency_key,
+        PurchaseDocument[] documents,
         CancellationToken ct = default) =>
-        WriteAsync(async () =>
+        McpWrites.RunAsync(async () =>
         {
-            var request = new PurchaseEndpoints.InvoiceRequest(supplier_id, null, date, null, reference, description,
-                lines.Select(l => new PurchaseEndpoints.LineRequest(l.AccountId, l.Description, l.ItemId, null, null, l.Amount, l.TaxCodeId, null, null, l.ValidTaxInvoice, l.WithholdingCodeId)).ToList(),
-                Post: false);
-            var fingerprint = JsonSerializer.Serialize(new { tool = "save_purchase_invoice_draft", org_id, ledger_id, request }, BooksJson.Options);
-            var meta = new WriteMeta(idempotency_key, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint))), null,
-                http.HttpContext?.TraceIdentifier ?? Guid.NewGuid().ToString("N"));
-            return await invoices.CreateAsync(await principals.GetAsync(ct), meta, org_id, ledger_id, PurchaseEndpoints.Input(request), post: false, ct);
+            var inputs = McpWrites.ParseAll(documents, d => (Input(d), d.Type switch
+            {
+                "invoice" => false,
+                "debit_note" => true,
+                _ => throw BooksProblem.Invalid("type must be invoice or debit_note."),
+            }));
+            var meta = McpWrites.Meta(http, "save_purchase_drafts", idempotency_key, new { org_id, ledger_id, documents });
+            return await invoices.CreateDraftsAsync(await principals.GetAsync(ct), meta, org_id, ledger_id, inputs, ct);
         });
+
+    private static PurchaseInvoiceInput Input(PurchaseDocument d) =>
+        PurchaseEndpoints.Input(new PurchaseEndpoints.InvoiceRequest(d.SupplierId, null, d.Date, d.DueDate, d.Reference, d.Description,
+            (d.Lines ?? []).Select(l => new PurchaseEndpoints.LineRequest(l.AccountId, l.Description, l.ItemId, null, null, l.Amount, l.TaxCodeId, null, null, l.ValidTaxInvoice, l.WithholdingCodeId)).ToList(),
+            Post: false, d.OriginalInvoiceId, d.TaxCurrencyRate, d.TaxCurrencyReason));
 
     [McpServerTool(Name = "get_ap_aging", ReadOnly = true, Idempotent = true)]
     [Description("Accounts payable aging by supplier and days past due, with a check against the payable balance.")]
@@ -63,8 +79,40 @@ public sealed class BooksPurchaseTools(PrincipalAccessor principals, PurchaseInv
     [Description("A supplier's statement: opening balance, invoices and debit notes with running balance.")]
     public Task<CallToolResult> Statement(Guid org_id, Guid ledger_id, Guid supplier_id, DateOnly from, DateOnly to, CancellationToken ct) =>
         BooksReadTools.RunAsync(async () => await payables.StatementAsync(await principals.GetAsync(ct), org_id, ledger_id, supplier_id, from, to, ct));
+}
 
-    private static async Task<CallToolResult> WriteAsync(Func<Task<WriteResult>> write)
+/// <summary>Shared plumbing for MCP writes: request metadata from tool arguments, and results in the API's shape.</summary>
+internal static class McpWrites
+{
+    public static WriteMeta Meta(IHttpContextAccessor http, string tool, Guid idempotencyKey, object arguments)
+    {
+        var fingerprint = JsonSerializer.Serialize(new { tool, arguments }, BooksJson.Options);
+        return new WriteMeta(idempotencyKey, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint))), null,
+            http.HttpContext?.TraceIdentifier ?? Guid.NewGuid().ToString("N"));
+    }
+
+    /// <summary>Converts every document's arguments, reporting all format errors at once (the batch is all or none).</summary>
+    public static List<T> ParseAll<TIn, T>(IReadOnlyList<TIn> documents, Func<TIn, T> parse)
+    {
+        var parsed = new List<T>();
+        var errors = new List<BatchError>();
+        for (var i = 0; i < documents.Count; i++)
+        {
+            try
+            {
+                parsed.Add(parse(documents[i]));
+            }
+            catch (BooksProblem problem) when (problem.Status == 400)
+            {
+                errors.Add(new BatchError(i + 1, problem.Code, problem.Message));
+            }
+        }
+        return errors.Count == 0
+            ? parsed
+            : throw new BooksProblem(400, "BATCH_REJECTED", $"{errors.Count} of {documents.Count} documents have errors; nothing was saved.") { Issues = errors };
+    }
+
+    public static async Task<CallToolResult> RunAsync(Func<Task<WriteResult>> write)
     {
         try
         {
