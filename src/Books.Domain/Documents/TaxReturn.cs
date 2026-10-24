@@ -221,7 +221,7 @@ public static class TaxReturns
         new("r5_rent", "WT 03 I.5 Rental or lease of movable and immovable property (10%)"),
         new("n1_interest", "WT 03 II.1 Non-resident: interest (14%)"),
         new("n2_royalty_rent", "WT 03 II.2 Non-resident: royalty, rental and income from the use of property (14%)"),
-        new("n3_management", "WT 03 II.3 Non-resident: management fee and technical services (14%)"),
+        new("n3_management", "WT 03 II.3 Non-resident: management fee and technical services (14%); the template's single non-resident 14% code reports here"),
         new("n4_dividend", "WT 03 II.4 Non-resident: dividend (14%)"),
     ];
 
