@@ -10,7 +10,7 @@ public sealed record CompanyDto(Guid Id, Guid OrgId, string Name, Guid LedgerId,
 
 public sealed record LedgerDto(
     Guid Id, Guid OrgId, Guid CompanyId, string CompanyName, string BaseCurrency, int FyStartMonth,
-    DateOnly? ClosedThrough, string EffectiveAccess, string Version, DateTimeOffset CreatedAt);
+    DateOnly? ClosedThrough, string EffectiveAccess, string Version, DateTimeOffset CreatedAt, string? TaxPack = null);
 
 public sealed record CreateCompany(string Name, string? BaseCurrency, int? FyStartMonth);
 
@@ -92,5 +92,5 @@ public sealed class CompanyService(IBooksDb db, WriteRunner writes, ReadRunner r
     private static CompanyDto ToDto(Company c, Ledger l) => new(c.Id, c.OrgId, c.Name, l.Id, c.Version.ToString(), c.CreatedAt);
 
     internal static LedgerDto ToDto(Ledger l, Company c, LedgerAccess access) =>
-        new(l.Id, l.OrgId, l.CompanyId, c.Name, l.BaseCurrency, l.FyStartMonth, l.ClosedThrough, Text.Of(access), l.Version.ToString(), l.CreatedAt);
+        new(l.Id, l.OrgId, l.CompanyId, c.Name, l.BaseCurrency, l.FyStartMonth, l.ClosedThrough, Text.Of(access), l.Version.ToString(), l.CreatedAt, l.TaxPack);
 }

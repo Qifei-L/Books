@@ -51,6 +51,9 @@ public static class LedgerEndpoints
         org.MapPut("/ledgers/{ledgerId:guid}/purposes/{purpose}", async (Guid orgId, Guid ledgerId, string purpose, PurposeRequest body, PrincipalAccessor principals, AccountPurposeService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.AssignAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, ParsePurpose(purpose), body.AccountId, ct)));
 
+        org.MapPost("/ledgers/{ledgerId:guid}/templates/cambodia-2026", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, CambodiaTemplate template, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await template.ApplyAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), orgId, ledgerId, ct)));
+
         org.MapGet("/ledgers/{ledgerId:guid}", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, CompanyService service, HttpContext http, CancellationToken ct) =>
         {
             var ledger = await service.GetLedgerAsync(await principals.GetAsync(ct), orgId, ledgerId, ct);

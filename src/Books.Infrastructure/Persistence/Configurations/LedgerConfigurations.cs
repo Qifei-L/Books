@@ -26,6 +26,7 @@ internal sealed class LedgerConfiguration : IEntityTypeConfiguration<Ledger>
         b.ToTable("ledgers", t => t.HasCheckConstraint("ck_ledgers_fy_start_month", "fy_start_month BETWEEN 1 AND 12"));
         b.Property(x => x.Id).ValueGeneratedNever();
         b.Property(x => x.BaseCurrency).HasMaxLength(3).IsFixedLength();
+        b.Property(x => x.TaxPack).HasMaxLength(50);
         b.HasAlternateKey(x => new { x.OrgId, x.Id });
         b.HasAlternateKey(x => new { x.OrgId, x.CompanyId });
         b.HasIndex(x => x.CompanyId).IsUnique();
