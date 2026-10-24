@@ -12,7 +12,7 @@ namespace Books.Domain.Documents;
 public sealed record TaxLine(
     string DocumentKind, Guid DocumentId, long DocumentNo, DateOnly Date, Guid PartyId, string? Reference, int LineNo, string? Description,
     Guid AccountId, Guid? TaxCodeId, TaxKind? TaxKind, decimal Net, decimal Tax, decimal TaxCalculated, string? TaxReason, bool ValidTaxInvoice,
-    string? WithholdingCategory, decimal Withholding, decimal? KhrRate, string? PostingUsage = null, bool PartyTaxable = false)
+    string? WithholdingCategory, decimal Withholding, decimal? KhrRate, string? PostingUsage = null, bool PartyTaxable = false, PayRunLine? Payroll = null)
 {
     public const string JournalKind = "journal";
 
@@ -38,7 +38,15 @@ public sealed record ReturnDefinitionSpec(
 /// boxes (Formula).
 /// </summary>
 public sealed record BoxSpec(
-    string Key, string Section, string Label, LineRule? Lines = null, FormulaRule? Formula = null, bool Information = false, PostingRule? Postings = null);
+    string Key, string Section, string Label, LineRule? Lines = null, FormulaRule? Formula = null, bool Information = false, PostingRule? Postings = null,
+    PayrollRule? Payroll = null);
+
+/// <summary>
+/// Employee lines of the month's posted pay runs (payroll results imported from the payroll system).
+/// </summary>
+/// <param name="Amount">gross, fringe_benefits, salary_tax, fringe_benefit_tax, nssf_employee or nssf_employer.</param>
+/// <param name="Resident">Only residents (true) or non-residents (false); omit for both.</param>
+public sealed record PayrollRule(string Amount, bool? Resident = null);
 
 /// <summary>
 /// Journal postings, not from purchase or sales documents, on the accounts carrying a usage (output_vat, input_vat or
@@ -118,6 +126,20 @@ public static class TaxReturns
             {
                 errors.Add($"{at}: section and label are required.");
             }
+            if (box.Payroll is { } payroll)
+            {
+                if (box.Lines is not null || box.Postings is not null || box.Formula is not null)
+                {
+                    errors.Add($"{at}: a payroll box takes no lines, postings or formula.");
+                    continue;
+                }
+                if (!PayrollAmounts.Contains(payroll.Amount))
+                {
+                    errors.Add($"{at}: payroll amount must be one of {string.Join(", ", PayrollAmounts)}.");
+                }
+                boxes.Add(new ReturnBox(box.Key, box.Section, box.Label, Payroll(payroll), Information: box.Information));
+                continue;
+            }
             if ((box.Lines is null && box.Postings is null) == (box.Formula is null))
             {
                 errors.Add($"{at}: give lines and/or postings, or a formula.");
@@ -195,6 +217,21 @@ public static class TaxReturns
             : throw new DomainException(string.Join(" ", errors));
     }
 
+    public static readonly string[] PayrollAmounts = ["gross", "fringe_benefits", "salary_tax", "fringe_benefit_tax", "nssf_employee", "nssf_employer"];
+
+    private static Func<TaxLine, decimal?> Payroll(PayrollRule rule) =>
+        l => l.Payroll is { } p && (rule.Resident is not { } resident || p.Resident == resident)
+            ? rule.Amount switch
+            {
+                "gross" => p.Gross,
+                "fringe_benefits" => p.FringeBenefits,
+                "salary_tax" => p.SalaryTax,
+                "fringe_benefit_tax" => p.FringeBenefitTax,
+                "nssf_employee" => p.NssfEmployee,
+                _ => p.NssfEmployer,
+            }
+            : null;
+
     /// <summary>The tax account usages a box can take journal postings from.</summary>
     public static readonly string[] PostingUsages = ["output_vat", "input_vat", "withholding_payable"];
 
@@ -234,6 +271,7 @@ public static class TaxReturns
     private const string Resident = "WT 03 I. Withholding tax on residents";
     private const string NonResident = "WT 03 II. Withholding tax on non-residents";
     private const string WithholdingTotal = "WT 03 Withholding tax";
+    private const string Salary = "TOS 01 Tax on salary";
 
     private static BoxSpec Wht(WithholdingCategory c, bool tax, string section) =>
         new($"wt03_{c.Key}{(tax ? "" : "_base")}", section, $"{c.Label}: {(tax ? "withholding tax" : "amount to be paid")}",
@@ -278,6 +316,14 @@ public static class TaxReturns
         new("wt03_journals", WithholdingTotal, "Withholding tax posted by journals", Postings: new PostingRule("withholding_payable")),
         new("wt03_total", WithholdingTotal, "Withholding tax payable (TTR001 line 03)",
             Formula: new FormulaRule([new("wt03_resident_total"), new("wt03_nonresident_total"), new("wt03_journals")])),
+        new("tos_resident_gross", Salary, "Salaries of resident employees", Payroll: new PayrollRule("gross", true)),
+        new("tos_resident_tax", Salary, "Tax on salary, resident employees", Payroll: new PayrollRule("salary_tax", true)),
+        new("tos_nonresident_gross", Salary, "Salaries of non-resident employees", Payroll: new PayrollRule("gross", false)),
+        new("tos_nonresident_tax", Salary, "Tax on salary, non-resident employees", Payroll: new PayrollRule("salary_tax", false)),
+        new("tos_fringe_benefits", Salary, "Fringe benefits", Payroll: new PayrollRule("fringe_benefits")),
+        new("tos_fringe_benefit_tax", Salary, "Tax on fringe benefits", Payroll: new PayrollRule("fringe_benefit_tax")),
+        new("tos_total", Salary, "Tax on salary payable (TTR001 lines 01 and 02)",
+            Formula: new FormulaRule([new("tos_resident_tax"), new("tos_nonresident_tax"), new("tos_fringe_benefit_tax")])),
     ]);
 }
 

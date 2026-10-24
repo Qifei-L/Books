@@ -52,7 +52,9 @@ Replace our Manager.io bookkeeping with a system that:
 | 10–11 | M7 Bank | Payments and receipts, statement lines through MCP batch import, matching, reconciliation |
 | 12 | M8 Tax reporting | VAT/WHT monthly summary and detail, filed-period snapshot |
 | 13 | M9 Invoice printing | Sales invoices and credit notes as PDF, with the KHR total |
-| 14–15 | M10 Inventory | Inventory items, stock movements from purchases and sales, cost of sales |
-| 16 | M11 Other monthly taxes | Monthly taxes beyond VAT, WHT and prepayment, as confirmed with an adviser |
+| 14–15 | M10 Inventory and fixed assets | Inventory items, stock movements from purchases and sales, cost of sales; fixed asset register and depreciation |
+| 16 | M11 Other monthly taxes | Tax on salary from imported payroll results (TOS 01); specific tax, accommodation tax and public lighting tax (T7 01) |
+| 17–18 | M12 Multi-currency | Foreign-currency bank accounts, documents and parties; exchange differences |
+| 19 | M13 Attachments | Files attached to documents and journals (invoices, receipts, statements), shared by every document type |
 
 MCP tools ship with each milestone, not at the end.

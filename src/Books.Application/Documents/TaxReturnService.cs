@@ -216,7 +216,15 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
                 l.TaxCodeId, Kind(l.TaxCodeId), l.NetAmount, l.TaxAmount, l.TaxCalculated, l.TaxReason, l.ValidTaxInvoice,
                 l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, l.WithholdingAmount, rate?.Rate ?? monthEnd,
                 PartyTaxable: p.PartyId is { } party && taxable.Contains(party))));
-        lines = lines.Concat(journalLines).Concat(paymentLines).OrderBy(l => l.Date).ThenBy(l => l.DocumentKind).ThenBy(l => l.DocumentNo).ThenBy(l => l.LineNo).ToList();
+        // Payroll results: the month's posted pay runs; salary tax uses the rate of the 15th (04-cambodia-tax).
+        var payRuns = await db.PayRuns.AsNoTracking().Include(r => r.Lines)
+            .Where(r => r.LedgerId == ledgerId && r.Status == DocumentStatus.Posted && r.Period == from).ToListAsync(ct);
+        var fifteenth = slot is null || payRuns.Count == 0 ? null : await db.ExchangeRates.AsNoTracking()
+            .Where(r => r.OrgId == ledger.OrgId && r.FromCurrency == ledger.BaseCurrency && r.ToCurrency == slot.Currency && r.Date <= from.AddDays(14))
+            .OrderByDescending(r => r.Date).Select(r => (decimal?)r.Rate).FirstOrDefaultAsync(ct);
+        var payrollLines = payRuns.SelectMany(r => r.Lines.Select(l => new TaxLine(PayRun.Kind, r.Id, r.PayRunNo, r.Date, Guid.Empty, r.Reference, l.LineNo,
+            $"{l.EmployeeCode} {l.Name}", Guid.Empty, null, null, 0, 0, 0, null, true, null, 0, rate?.Rate ?? fifteenth, Payroll: l)));
+        lines = lines.Concat(journalLines).Concat(paymentLines).Concat(payrollLines).OrderBy(l => l.Date).ThenBy(l => l.DocumentKind).ThenBy(l => l.DocumentNo).ThenBy(l => l.LineNo).ToList();
 
         var issues = new List<JournalIssue>();
         var taxLines = (List<TaxLine>)lines;
