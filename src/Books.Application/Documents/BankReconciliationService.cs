@@ -31,7 +31,9 @@ public sealed class BankReconciliationService(IBooksDb db, WriteRunner writes, R
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Read, ct);
             var account = await BankAccountAsync(ledgerId, accountId, ct);
-            var currency = await db.Ledgers.Where(l => l.Id == ledgerId).Select(l => l.BaseCurrency).SingleAsync(ct);
+            // A bank account in another currency reconciles in that currency (M12.2).
+            var currency = await db.BankAccounts.Where(b => b.AccountId == accountId).Select(b => b.Currency).SingleOrDefaultAsync(ct)
+                ?? await db.Ledgers.Where(l => l.Id == ledgerId).Select(l => l.BaseCurrency).SingleAsync(ct);
             var minor = Currencies.Require(currency).MinorUnits;
             string F(decimal v) => v.ToString("F" + minor, CultureInfo.InvariantCulture);
             var postings = await PostingsAsync(ledgerId, accountId, asOf, ct);
@@ -110,11 +112,14 @@ public sealed class BankReconciliationService(IBooksDb db, WriteRunner writes, R
             : throw BooksProblem.Invalid("The account has no Bank usage.");
     }
 
-    /// <summary>Effective postings on the account up to the date, one per journal (summed when a journal hits it twice).</summary>
+    /// <summary>
+    /// Effective postings on the account up to the date, one per journal (summed when a journal hits it twice), in the
+    /// bank account's currency: lines on a foreign-currency account carry it.
+    /// </summary>
     private async Task<List<Posting>> PostingsAsync(Guid ledgerId, Guid accountId, DateOnly asOf, CancellationToken ct) =>
         await db.Database.SqlQuery<Posting>($"""
             SELECT j.id AS journal_id, j.journal_no AS journal_no, r.accounting_date AS accounting_date, r.reference AS reference,
-                   r.description AS description, j.source_kind AS source_kind, SUM(l.amount) AS amount
+                   r.description AS description, j.source_kind AS source_kind, SUM(COALESCE(l.currency_amount, l.amount)) AS amount
             FROM journals j
             JOIN journal_revisions r ON r.id = j.effective_revision_id
             JOIN journal_lines l ON l.revision_id = r.id AND l.account_id = {accountId}

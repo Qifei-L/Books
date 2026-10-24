@@ -23,7 +23,7 @@ async function renderSetup() {
     <h3 style="margin-top:16px">Bank transfers ${canEdit() ? `<button class="secondary small" onclick="transferForm()">New</button>` : ""}</h3>
     <table><tr><th>No.</th><th>Date</th><th>From</th><th>To</th><th class="num">Amount</th><th class="num">Fee</th><th>Journal</th></tr>
     ${shownTransfers.map((t) => `<tr ${canEdit() ? `class="click" data-transfer="${t.id}"` : ""}><td>${t.transfer_no}</td><td>${t.date}</td><td>${esc(accountName(t.from_account_id))}</td><td>${esc(accountName(t.to_account_id))}</td>
-      <td class="num">${t.amount}</td><td class="num">${t.fee_amount}</td>
+      <td class="num">${t.amount}${t.to_amount ? ` → ${t.to_amount}` : ""}</td><td class="num">${t.fee_amount}</td>
       <td>${t.status === "posted" ? `posted, journal No. ${t.journal_no}` : `<span class="pill draft">${t.status}</span> ${t.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>
 
     <h3 style="margin-top:16px">Tax codes ${isAdmin() ? `<button class="secondary small" onclick="taxCodeForm()">New</button>` : ""}</h3>
@@ -65,7 +65,8 @@ async function bankForm(b) {
   const accounts = await api(`${ledgerUrl()}/accounts`);
   const candidates = accounts.filter((a) => a.type === "assets" && a.postable && !a.is_control && !a.is_bank && a.usages.length === 0);
   simpleForm(b ? `Edit ${b.code} ${b.name}` : "New bank account", `
-    ${b ? "" : `<label class="wide">Account <select name="account_id">${options(candidates, null, (a) => `${a.code} ${a.name}`, "Choose an asset account")}</select></label>`}
+    ${b ? "" : `<label class="wide">Account <select name="account_id">${options(candidates, null, (a) => `${a.code} ${a.name}`, "Choose an asset account")}</select></label>
+      <label>Currency <select name="currency">${[...new Set([state.ledger.base_currency, "USD", "KHR"])].map((c) => `<option>${c}</option>`).join("")}</select></label>`}
     <label>Bank <input name="bank_name" value="${esc(b?.bank_name ?? "")}" required></label>
     <label>Account number <input name="account_number" value="${esc(b?.account_number ?? "")}"></label>`,
   async (f) => {
@@ -74,9 +75,9 @@ async function bankForm(b) {
     if (b) await write("PUT", `${url}/${b.account_id}`, { bank_name: f.bank_name.value.trim(), account_number: orNull(f.account_number.value) }, b.version);
     else {
       if (!f.account_id.value) throw new Error("Choose the account; create it in the chart first if it does not exist.");
-      await write("POST", url, { account_id: f.account_id.value, bank_name: f.bank_name.value.trim(), account_number: orNull(f.account_number.value) });
+      await write("POST", url, { account_id: f.account_id.value, bank_name: f.bank_name.value.trim(), account_number: orNull(f.account_number.value), currency: f.currency.value });
     }
-  }, `<p class="muted small">A bank account is an asset account in the chart, marked as a bank so payments, receipts and statements can use it.</p>`);
+  }, `<p class="muted small">A bank account is an asset account in the chart, marked as a bank so payments, receipts and statements can use it. Its currency is fixed once set; an account already posted to in ${state.ledger.base_currency} cannot become a foreign-currency account.</p>`);
 }
 
 async function transferForm(t) {
@@ -87,9 +88,11 @@ async function transferForm(t) {
     const form = openForm(t ? `Edit transfer ${t.transfer_no}` : "New bank transfer", `
       <div class="grid">
         <label>Date <input type="date" name="date" value="${t?.date ?? today()}"></label>
-        <label class="wide">From <select name="from_account_id">${options(bankRows, t?.from_account_id, (b) => `${b.code} ${b.name}`)}</select></label>
-        <label class="wide">To <select name="to_account_id">${options(bankRows, t?.to_account_id ?? bankRows[1]?.id, (b) => `${b.code} ${b.name}`)}</select></label>
-        <label>Amount <input name="amount" class="num" inputmode="decimal" value="${t?.amount ?? ""}"></label>
+        <label class="wide">From <select name="from_account_id">${options(bankRows, t?.from_account_id, (b) => `${b.code} ${b.name} · ${b.currency}`)}</select></label>
+        <label class="wide">To <select name="to_account_id">${options(bankRows, t?.to_account_id ?? bankRows[1]?.id, (b) => `${b.code} ${b.name} · ${b.currency}`)}</select></label>
+        <label>Amount sent <input name="amount" class="num" inputmode="decimal" value="${t?.amount ?? ""}"></label>
+        <label data-fx>Amount received <input name="to_amount" class="num" inputmode="decimal" value="${t?.to_amount ?? ""}"></label>
+        <label data-fx>Rate of sending account <input name="from_rate" class="num" inputmode="decimal" value="${t?.from_rate ?? ""}" placeholder="rate of the date"></label>
         <label>Bank fee <input name="fee_amount" class="num" inputmode="decimal" value="${t && t.fee_amount !== "0.00" ? t.fee_amount : ""}"></label>
         <label class="wide">Fee account <select name="fee_account_id">${options(expense, t?.fee_account_id, (a) => `${a.code} ${a.name}`, "None")}</select></label>
         <label>Reference <input name="reference" value="${esc(t?.reference ?? "")}"></label>
@@ -102,12 +105,23 @@ async function transferForm(t) {
         <button type="submit" class="secondary" data-post="false">Save draft</button>
         <button type="submit" data-post="true">Save and post</button>
       </p>`);
+    // Between currencies: what arrives is entered; the sending side converts at its rate (M12.2).
+    const currencyOf = (id) => banks.find((b) => b.account_id === id)?.currency;
+    const showFx = () => {
+      const between = currencyOf(form.elements.from_account_id.value) !== currencyOf(form.elements.to_account_id.value);
+      for (const l of form.querySelectorAll("[data-fx]")) l.classList.toggle("hidden", !between);
+    };
+    form.elements.from_account_id.onchange = showFx;
+    form.elements.to_account_id.onchange = showFx;
+    showFx();
     const url = `${ledgerUrl()}/transfers`;
     onSave(form, async (post) => {
       const f = form.elements;
+      const between = currencyOf(f.from_account_id.value) !== currencyOf(f.to_account_id.value);
       const body = {
         date: f.date.value, from_account_id: f.from_account_id.value, to_account_id: f.to_account_id.value, amount: orNull(f.amount.value) ?? "",
         fee_amount: orNull(f.fee_amount.value), fee_account_id: orNull(f.fee_account_id.value), reference: orNull(f.reference.value), description: orNull(f.description.value), post,
+        ...(between ? { to_amount: orNull(f.to_amount.value), from_rate: currencyOf(f.from_account_id.value) === state.ledger.base_currency ? null : orNull(f.from_rate.value) } : {}),
       };
       await (t ? write("PUT", `${url}/${t.id}`, body, t.version) : write("POST", url, body));
       $("form-dialog").close();

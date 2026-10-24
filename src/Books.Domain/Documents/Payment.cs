@@ -57,7 +57,27 @@ public sealed class Payment
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
 
+    /// <summary>The bank account's currency; amounts on the lines are in it. Empty on documents saved before M12.2 (the ledger's).</summary>
+    public string Currency { get; private set; } = "";
+
+    /// <summary>Units of <see cref="Currency"/> per one unit of the ledger's currency; null in the ledger's currency.</summary>
+    public decimal? ExchangeRate { get; private set; }
+
     public IReadOnlyList<PaymentLine> Lines => _lines;
+
+    /// <summary>An amount in the payment's currency converted to the ledger's, rounded to its minor units.</summary>
+    public decimal ToBase(decimal amount, int minorUnits) =>
+        ExchangeRate is { } rate ? Math.Round(amount / rate, minorUnits, MidpointRounding.AwayFromZero) : amount;
+
+    public void SetCurrency(string currency, decimal? rate, string baseCurrency)
+    {
+        if (currency != baseCurrency && rate is not > 0)
+        {
+            throw new DomainException($"A payment in {currency} needs its exchange rate to {baseCurrency}.");
+        }
+        Currency = currency;
+        ExchangeRate = currency == baseCurrency ? null : rate;
+    }
 
     /// <summary>What leaves or arrives in the bank: the sum of the lines' totals.</summary>
     public decimal Total => _lines.Sum(l => l.Total);
@@ -107,34 +127,45 @@ public sealed class Payment
 
     /// <summary>
     /// Posting adapter. A payment debits what it pays and credits the bank; a receipt the opposite. Invoice and
-    /// party-balance lines post to the control account naming the party; account lines post their net amount, VAT
-    /// (input VAT or non-deductible for payments, output VAT for receipts) and, on payments, withholding tax payable.
+    /// party-balance lines post their control amount to the control account naming the party; account lines post
+    /// their net amount, VAT (input VAT or non-deductible for payments, output VAT for receipts) and, on payments,
+    /// withholding tax payable. In another currency every amount is converted at the payment's rate and the bank line
+    /// takes the rounding; a line settling an invoice at another rate than the invoice's posts the difference to
+    /// <paramref name="fxRealizedAccount"/> (M12.2).
     /// </summary>
-    public JournalDraft ToJournal(IReadOnlyDictionary<Guid, TaxCode> taxCodes)
+    public JournalDraft ToJournal(IReadOnlyDictionary<Guid, TaxCode> taxCodes, int minorUnits = 2, Guid? fxRealizedAccount = null)
     {
+        decimal B(decimal amount) => ToBase(amount, minorUnits);
         var sign = IsReceipt ? -1 : 1;
         var text = Description ?? (IsReceipt ? $"Receipt {PaymentNo}" : $"Payment {PaymentNo}");
         var lines = new List<DraftLine>();
+        var difference = 0m;
         foreach (var l in _lines)
         {
             if (l.Kind == PaymentLineKind.Account)
             {
-                lines.Add(new DraftLine(l.AccountId!.Value, sign * l.NetAmount, l.Description ?? text, l.LineId, PartyId, l.ItemId, l.Quantity));
+                lines.Add(new DraftLine(l.AccountId!.Value, sign * B(l.NetAmount), l.Description ?? text, l.LineId, PartyId, l.ItemId, l.Quantity));
             }
             else
             {
-                lines.Add(new DraftLine(l.ControlAccountId!.Value, sign * l.NetAmount, l.Description ?? text, l.LineId, PartyId));
+                lines.Add(new DraftLine(l.ControlAccountId!.Value, sign * l.ControlAmount, l.Description ?? text, l.LineId, PartyId));
+                difference += B(l.NetAmount) - l.ControlAmount;
             }
         }
         foreach (var vat in _lines.Where(l => l.TaxAmount != 0 && l.TaxCodeId is not null).GroupBy(l => VatAccount(taxCodes[l.TaxCodeId!.Value], l.ValidTaxInvoice)))
         {
-            lines.Add(new DraftLine(vat.Key, sign * vat.Sum(l => l.TaxAmount), text));
+            lines.Add(new DraftLine(vat.Key, sign * vat.Sum(l => B(l.TaxAmount)), text));
         }
         foreach (var wht in _lines.Where(l => l.WithholdingAmount != 0).GroupBy(l => taxCodes[l.WithholdingCodeId!.Value].AccountId!.Value))
         {
-            lines.Add(new DraftLine(wht.Key, -sign * wht.Sum(l => l.WithholdingAmount), $"{text} (withholding)"));
+            lines.Add(new DraftLine(wht.Key, -sign * wht.Sum(l => B(l.WithholdingAmount)), $"{text} (withholding)"));
         }
-        lines.Add(new DraftLine(BankAccountId, -sign * Total, text, PartyId: PartyId));
+        if (difference != 0)
+        {
+            lines.Add(new DraftLine(fxRealizedAccount ?? throw new DomainException("Settling at another rate needs an account with the FX realized usage."),
+                sign * difference, $"{text} (exchange difference)"));
+        }
+        lines.Add(new DraftLine(BankAccountId, -lines.Sum(l => l.Amount), text, PartyId: PartyId, CurrencyAmount: ExchangeRate is null ? null : -sign * Total));
         return new JournalDraft(Date, lines, Reference, text);
     }
 
@@ -161,11 +192,16 @@ public sealed class PaymentLine
         ValidTaxInvoice = true;
     }
 
-    public static PaymentLine ForInvoice(Guid invoiceId, Guid controlAccountId, string? description, decimal amount) =>
-        new(PaymentLineKind.Invoice, description, amount) { InvoiceId = invoiceId, ControlAccountId = controlAccountId };
+    /// <param name="settledAmount">The part of the invoice settled, in the invoice's currency; null when the invoice and payment are both in the ledger's.</param>
+    /// <param name="controlAmount">What leaves the control account, in the ledger's currency at the invoice's rate; the amount when omitted.</param>
+    public static PaymentLine ForInvoice(Guid invoiceId, Guid controlAccountId, string? description, decimal amount, decimal? settledAmount = null, decimal? controlAmount = null) =>
+        new(PaymentLineKind.Invoice, description, amount)
+        {
+            InvoiceId = invoiceId, ControlAccountId = controlAccountId, SettledAmount = settledAmount, ControlAmount = controlAmount ?? amount,
+        };
 
-    public static PaymentLine ForParty(Guid controlAccountId, string? description, decimal amount) =>
-        new(PaymentLineKind.Party, description, amount) { ControlAccountId = controlAccountId };
+    public static PaymentLine ForParty(Guid controlAccountId, string? description, decimal amount, decimal? controlAmount = null) =>
+        new(PaymentLineKind.Party, description, amount) { ControlAccountId = controlAccountId, ControlAmount = controlAmount ?? amount };
 
     public static PaymentLine ForAccount(
         Guid accountId, string? description, Guid? itemId, decimal? quantity, decimal? unitPrice, decimal netAmount,
@@ -196,8 +232,14 @@ public sealed class PaymentLine
     public decimal? Quantity { get; private set; }
     public decimal? UnitPrice { get; private set; }
 
-    /// <summary>The line's amount: VAT excluded on account lines.</summary>
+    /// <summary>The line's amount in the payment's currency: VAT excluded on account lines.</summary>
     public decimal NetAmount { get; private set; }
+
+    /// <summary>Invoice and party lines: the amount posted to the control account, in the ledger's currency (M12.2).</summary>
+    public decimal ControlAmount { get; private set; }
+
+    /// <summary>Invoice lines in another currency: the amount of the invoice settled, in the invoice's currency.</summary>
+    public decimal? SettledAmount { get; private set; }
 
     public Guid? TaxCodeId { get; private set; }
     public decimal TaxCalculated { get; private set; }

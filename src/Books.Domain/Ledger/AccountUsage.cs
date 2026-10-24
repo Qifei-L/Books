@@ -22,6 +22,9 @@ public enum Usage
 
     // Fixed assets: cost, accumulated depreciation (a contra asset) and the monthly expense.
     FixedAsset, AccumulatedDepreciation, DepreciationExpense,
+
+    // Exchange differences (M12.2): realized when a foreign-currency invoice is settled, unrealized at year-end revaluation.
+    FxRealized, FxUnrealized,
 }
 
 public static class Usages
@@ -33,6 +36,7 @@ public static class Usages
             or Usage.OtherTaxPayable => [AccountType.Liabilities],
         Usage.Receivable or Usage.Bank or Usage.InputVat or Usage.Inventory or Usage.FixedAsset or Usage.AccumulatedDepreciation => [AccountType.Assets],
         Usage.NonDeductibleVat or Usage.SalaryExpense or Usage.NssfExpense or Usage.CostOfSales or Usage.DepreciationExpense => [AccountType.CostAndExpense],
+        Usage.FxRealized or Usage.FxUnrealized => [AccountType.CostAndExpense, AccountType.Income],
         _ => throw new ArgumentOutOfRangeException(nameof(usage)),
     };
 

@@ -25,7 +25,8 @@ public sealed class BooksBankTools(
         [property: JsonPropertyName("description")] string? Description = null,
         [property: JsonPropertyName("tax_code_id"), Description("Account lines: VAT code.")] Guid? TaxCodeId = null,
         [property: JsonPropertyName("valid_tax_invoice"), Description("Payments with input VAT: true only if a valid tax invoice was received.")] bool ValidTaxInvoice = true,
-        [property: JsonPropertyName("withholding_code_id"), Description("Payments: WHT code when tax is withheld.")] Guid? WithholdingCodeId = null);
+        [property: JsonPropertyName("withholding_code_id"), Description("Payments: WHT code when tax is withheld.")] Guid? WithholdingCodeId = null,
+        [property: JsonPropertyName("settled_amount"), Description("Lines naming an invoice in another currency than the bank's: how much of the invoice this settles, in the invoice's currency; omit to convert at the day's rate.")] string? SettledAmount = null);
 
     public sealed record PaymentDocument(
         [property: JsonPropertyName("type"), Description("payment (money out) or receipt (money in).")] string Type,
@@ -34,7 +35,8 @@ public sealed class BooksBankTools(
         [property: JsonPropertyName("lines")] PaymentLine[] Lines,
         [property: JsonPropertyName("party_id"), Description("Supplier or customer; required to settle invoices or balances.")] Guid? PartyId = null,
         [property: JsonPropertyName("reference")] string? Reference = null,
-        [property: JsonPropertyName("description")] string? Description = null);
+        [property: JsonPropertyName("description")] string? Description = null,
+        [property: JsonPropertyName("exchange_rate"), Description("Bank accounts in another currency: its units per one unit of the ledger's currency; omit for the rate of the date.")] string? ExchangeRate = null);
 
     public sealed record AdjustmentLine(
         [property: JsonPropertyName("item_id"), Description("An inventory item from list_items (track_inventory true).")] Guid ItemId,
@@ -149,7 +151,7 @@ public sealed class BooksBankTools(
         {
             var inputs = McpWrites.ParseAll(documents, d => (PaymentEndpoints.Input(new PaymentEndpoints.PaymentRequest(d.BankAccountId, d.PartyId, d.Date, d.Reference, d.Description,
                 (d.Lines ?? []).Select(l => new PaymentEndpoints.LineRequest(l.InvoiceId, l.AccountId, l.Description, null, null, null, l.Amount, l.TaxCodeId, null, null,
-                    l.ValidTaxInvoice, l.WithholdingCodeId)).ToList(), Post: false)),
+                    l.ValidTaxInvoice, l.WithholdingCodeId, l.SettledAmount)).ToList(), Post: false, ExchangeRate: d.ExchangeRate)),
                 d.Type switch
                 {
                     "payment" => false,

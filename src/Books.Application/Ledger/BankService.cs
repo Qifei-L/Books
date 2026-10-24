@@ -21,7 +21,8 @@ public sealed class BankService(IBooksDb db, WriteRunner writes, ReadRunner read
             return await LoadAsync(ledgerId, null, ct);
         }, ct);
 
-    public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid accountId, string bankName, string? accountNumber, CancellationToken ct) =>
+    public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid accountId, string bankName, string? accountNumber, CancellationToken ct,
+        string? currency = null) =>
         writes.RunAsync(principal, new WriteRequest("bank_account.create", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
@@ -32,7 +33,12 @@ public sealed class BankService(IBooksDb db, WriteRunner writes, ReadRunner read
             {
                 throw BooksProblem.Conflict("BANK_ACCOUNT_EXISTS", "This account already has bank details.");
             }
-            var bank = new BankAccount(ledger, account, bankName, accountNumber, scope.Now);
+            if (currency is not null && Currencies.Require(currency).Code != ledger.BaseCurrency
+                && await db.JournalLines.AnyAsync(l => l.LedgerId == ledgerId && l.AccountId == accountId, ct))
+            {
+                throw BooksProblem.Conflict("ACCOUNT_IN_USE", "An account with postings in the ledger's currency cannot become a foreign-currency bank account.");
+            }
+            var bank = new BankAccount(ledger, account, bankName, accountNumber, scope.Now, currency);
             await usages.EnsureAsync(account, Usage.Bank, ct);
             db.BankAccounts.Add(bank);
             await db.SaveChangesAsync(ct);

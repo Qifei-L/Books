@@ -13,22 +13,28 @@ namespace Books.Application.Documents;
 
 /// <summary>A line settles <paramref name="InvoiceId"/>, posts to <paramref name="AccountId"/>, or (neither) goes to the party's balance.</summary>
 /// <param name="Amount">Net amount on account lines (VAT excluded); may be negative. Omit on account lines to use quantity × unit price.</param>
+/// <param name="SettledAmount">Invoice lines in another currency: the amount of the invoice settled, in the invoice's currency; omit when it is the line's amount converted at the day's rate.</param>
 public sealed record PaymentLineInput(
     Guid? InvoiceId, Guid? AccountId, string? Description, Guid? ItemId, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
-    Guid? TaxCodeId = null, decimal? TaxOverride = null, string? TaxReason = null, bool ValidTaxInvoice = true, Guid? WithholdingCodeId = null);
+    Guid? TaxCodeId = null, decimal? TaxOverride = null, string? TaxReason = null, bool ValidTaxInvoice = true, Guid? WithholdingCodeId = null,
+    decimal? SettledAmount = null);
 
 /// <param name="ControlAccountId">Party lines: the Payable or Receivable account; omit to use the ledger's only one.</param>
+/// <param name="ExchangeRate">For a bank account in another currency: its units per one unit of the ledger's; omit for the rate of the date.</param>
 public sealed record PaymentInput(
-    Guid BankAccountId, Guid? PartyId, DateOnly Date, string? Reference, string? Description, IReadOnlyList<PaymentLineInput> Lines, Guid? ControlAccountId = null);
+    Guid BankAccountId, Guid? PartyId, DateOnly Date, string? Reference, string? Description, IReadOnlyList<PaymentLineInput> Lines, Guid? ControlAccountId = null,
+    decimal? ExchangeRate = null);
 
 public sealed record PaymentLineDto(
     Guid LineId, string Kind, Guid? InvoiceId, Guid? AccountId, Guid? ControlAccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice,
     string Amount, Guid? TaxCodeId, string TaxCalculated, string TaxAmount, bool TaxAdjusted, string? TaxReason, bool ValidTaxInvoice,
-    Guid? WithholdingCodeId, string WithholdingAmount, string Total);
+    Guid? WithholdingCodeId, string WithholdingAmount, string Total, string? SettledAmount = null, string? ControlAmount = null);
 
+/// <param name="Currency">The bank account's currency; amounts are in it.</param>
 public sealed record PaymentDto(
     Guid Id, Guid LedgerId, string Type, long PaymentNo, Guid BankAccountId, Guid? PartyId, DateOnly Date, string? Reference, string? Description,
-    IReadOnlyList<PaymentLineDto> Lines, string Total, string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version);
+    IReadOnlyList<PaymentLineDto> Lines, string Total, string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version,
+    string Currency = "", string? ExchangeRate = null);
 
 /// <summary>
 /// Payments and receipts (owner decision, Manager.io style). Save posts when valid; otherwise the document is kept as
@@ -132,13 +138,18 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
             JournalService.RefuseAgentPosting(scope.Principal, touchesPosting: true);
         }
         var taxCodes = await TaxCodesAsync(payment, ct);
+        var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
+        var fx = payment.Lines.Any(l => l.Kind != PaymentLineKind.Account && payment.ToBase(l.NetAmount, minor) != l.ControlAmount)
+            ? await Inventory.AccountAsync(db, ledger.Id, Usage.FxRealized, ct)
+            : (Guid?)null;
+        var draft = payment.ToJournal(taxCodes, minor, fx);
         if (!post || documentIssues.Count > 0)
         {
-            var issues = documentIssues.Concat(await posting.CheckAsync(ledger, payment.ToJournal(taxCodes), ct)).ToList();
+            var issues = documentIssues.Concat(await posting.CheckAsync(ledger, draft, ct)).ToList();
             payment.KeptAsDraft(issues.Count == 0 ? null : BooksJson.Serialize(issues));
             return post ? "not_posted" : "draft";
         }
-        var outcome = await posting.PostAsync(scope, ledger, payment.SourceKind, payment.Id, payment.JournalId, payment.ToJournal(taxCodes), ct);
+        var outcome = await posting.PostAsync(scope, ledger, payment.SourceKind, payment.Id, payment.JournalId, draft, ct);
         if (outcome.Journal is { } journal)
         {
             payment.PostedAs(journal.Id);
@@ -156,11 +167,24 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
     {
         var issues = new List<JournalIssue>();
         var receipt = payment.IsReceipt;
-        var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
+        var baseMinor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
         if (!await db.AccountUsages.AnyAsync(u => u.LedgerId == ledger.Id && u.AccountId == input.BankAccountId && u.Usage == Usage.Bank, ct))
         {
             throw BooksProblem.Invalid("bank_account_id must be an account with the Bank usage.");
         }
+        // The payment is in the bank account's currency, at the rate given or the rate of the date (M12.2).
+        var currency = await db.BankAccounts.Where(b => b.LedgerId == ledger.Id && b.AccountId == input.BankAccountId).Select(b => b.Currency).SingleOrDefaultAsync(ct)
+            ?? ledger.BaseCurrency;
+        var rate = await Rates.ForDocumentAsync(db, ledger, currency, input.ExchangeRate, input.Date, ct);
+        try
+        {
+            payment.SetCurrency(currency, rate, ledger.BaseCurrency);
+        }
+        catch (DomainException e)
+        {
+            throw BooksProblem.Invalid(e.Message);
+        }
+        var minor = Currencies.Require(currency).MinorUnits;
         var party = input.PartyId is { } partyId
             ? await db.Parties.SingleOrDefaultAsync(p => p.LedgerId == ledger.Id && p.Id == partyId, ct)
                 ?? throw BooksProblem.Invalid("party_id must be a party of this ledger.")
@@ -183,21 +207,50 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
                 usedUsages.Add(usage);
                 if (line.InvoiceId is { } invoiceId)
                 {
-                    var control = usage == Usage.Receivable
+                    var invoice = usage == Usage.Receivable
                         ? await db.SalesInvoices.Where(x => x.LedgerId == ledger.Id && x.Id == invoiceId && !x.IsCreditNote && x.Status == DocumentStatus.Posted && x.CustomerId == input.PartyId)
-                            .Select(x => (Guid?)x.ReceivableAccountId).SingleOrDefaultAsync(ct)
+                            .Select(x => new { Control = x.ReceivableAccountId, x.Currency, x.ExchangeRate }).SingleOrDefaultAsync(ct)
                         : await db.PurchaseInvoices.Where(x => x.LedgerId == ledger.Id && x.Id == invoiceId && !x.IsDebitNote && x.Status == DocumentStatus.Posted && x.SupplierId == input.PartyId)
-                            .Select(x => (Guid?)x.PayableAccountId).SingleOrDefaultAsync(ct);
-                    if (control is null || (line.AccountId is { } given && given != control))
+                            .Select(x => new { Control = x.PayableAccountId, x.Currency, x.ExchangeRate }).SingleOrDefaultAsync(ct);
+                    if (invoice is null || (line.AccountId is { } given && given != invoice.Control))
                     {
                         throw BooksProblem.Invalid($"Line {i}: invoice_id must be a posted {(usage == Usage.Receivable ? "sales" : "purchase")} invoice of the document's party, on that account.");
                     }
-                    lines.Add(PaymentLine.ForInvoice(invoiceId, control.Value, line.Description, amount));
+                    var invoiceCurrency = invoice.Currency == "" ? ledger.BaseCurrency : invoice.Currency;
+                    if (invoiceCurrency == ledger.BaseCurrency && currency == ledger.BaseCurrency)
+                    {
+                        if (line.SettledAmount is not null)
+                        {
+                            throw BooksProblem.Invalid($"Line {i}: settled_amount applies only when the invoice or the payment is in another currency.");
+                        }
+                        lines.Add(PaymentLine.ForInvoice(invoiceId, invoice.Control, line.Description, amount));
+                    }
+                    else
+                    {
+                        // Settled in the invoice's currency; it leaves the control account at the invoice's rate, and the
+                        // difference from what the bank moved is realized exchange gain or loss (owner decision M12.2).
+                        var settled = line.SettledAmount ?? (invoiceCurrency == currency ? amount
+                            : Math.Round(payment.ToBase(amount, 10) * (await Rates.ForDocumentAsync(db, ledger, invoiceCurrency, null, input.Date, ct) ?? 1m),
+                                Currencies.Require(invoiceCurrency).MinorUnits, MidpointRounding.AwayFromZero));
+                        var control = invoice.ExchangeRate is { } invoiceRate ? Math.Round(settled / invoiceRate, baseMinor, MidpointRounding.AwayFromZero) : settled;
+                        lines.Add(PaymentLine.ForInvoice(invoiceId, invoice.Control, line.Description, amount, settled, control));
+                    }
                 }
                 else
                 {
+                    if (line.SettledAmount is not null)
+                    {
+                        throw BooksProblem.Invalid($"Line {i}: settled_amount applies only to lines naming an invoice.");
+                    }
+                    // Owner decision (M12.2): where another currency is involved the line names the invoice, so the
+                    // exchange difference is realized on it instead of staying in the party's balance.
+                    if (currency != ledger.BaseCurrency || await HasForeignInvoicesAsync(ledger, input.PartyId, usage, ct))
+                    {
+                        throw BooksProblem.Invalid($"Line {i}: name the invoice this settles (invoice_id); a payment in another currency, or a party with invoices "
+                            + "in another currency, settles invoice by invoice so the exchange difference is realized.");
+                    }
                     var control = line.AccountId ?? (partyControl ??= await ControlAccountAsync(ledger.Id, usage, input.ControlAccountId, ct));
-                    lines.Add(PaymentLine.ForParty(control, line.Description, amount));
+                    lines.Add(PaymentLine.ForParty(control, line.Description, amount, payment.ToBase(amount, baseMinor)));
                 }
             }
             else
@@ -269,6 +322,14 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
         return issues;
     }
 
+    /// <summary>Whether the party has posted invoices on this side (sales for receivables, purchases for payables) in another currency.</summary>
+    private async Task<bool> HasForeignInvoicesAsync(Ledger ledger, Guid? partyId, Usage usage, CancellationToken ct) =>
+        partyId is { } party && (usage == Usage.Receivable
+            ? await db.SalesInvoices.AnyAsync(x => x.LedgerId == ledger.Id && x.CustomerId == party && x.Status == DocumentStatus.Posted
+                && x.Currency != "" && x.Currency != ledger.BaseCurrency, ct)
+            : await db.PurchaseInvoices.AnyAsync(x => x.LedgerId == ledger.Id && x.SupplierId == party && x.Status == DocumentStatus.Posted
+                && x.Currency != "" && x.Currency != ledger.BaseCurrency, ct));
+
     /// <summary>The given account must carry the usage; when omitted, the ledger must have exactly one.</summary>
     private async Task<Guid> ControlAccountAsync(Guid ledgerId, Usage usage, Guid? accountId, CancellationToken ct)
     {
@@ -301,20 +362,29 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
 
     private async Task<IReadOnlyList<PaymentDto>> LoadAsync(Guid ledgerId, Guid? id, CancellationToken ct)
     {
-        var minor = Currencies.Require(await db.Ledgers.Where(l => l.Id == ledgerId).Select(l => l.BaseCurrency).SingleAsync(ct)).MinorUnits;
-        string F(decimal v) => v.ToString("F" + minor, CultureInfo.InvariantCulture);
+        var baseCurrency = await db.Ledgers.Where(l => l.Id == ledgerId).Select(l => l.BaseCurrency).SingleAsync(ct);
+        var baseMinor = Currencies.Require(baseCurrency).MinorUnits;
         static string? Q(decimal? v) => v?.ToString("0.####", CultureInfo.InvariantCulture);
         var rows = await db.Payments.AsNoTracking().Include(p => p.Lines)
             .Where(p => p.LedgerId == ledgerId && (id == null || p.Id == id))
             .OrderByDescending(p => p.Date).ThenByDescending(p => p.PaymentNo)
             .Select(p => new { p, JournalNo = db.Journals.Where(j => j.Id == p.JournalId).Select(j => (long?)j.JournalNo).FirstOrDefault() })
             .ToListAsync(ct);
-        return rows.Select(x => new PaymentDto(
-            x.p.Id, x.p.LedgerId, x.p.IsReceipt ? "receipt" : "payment", x.p.PaymentNo, x.p.BankAccountId, x.p.PartyId, x.p.Date, x.p.Reference, x.p.Description,
-            x.p.Lines.OrderBy(l => l.LineNo).Select(l => new PaymentLineDto(l.LineId, Text.Of(l.Kind), l.InvoiceId, l.AccountId, l.ControlAccountId, l.Description,
-                l.ItemId, Q(l.Quantity), Q(l.UnitPrice), F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason,
-                l.ValidTaxInvoice, l.WithholdingCodeId, F(l.WithholdingAmount), F(l.Total))).ToList(),
-            F(x.p.Total), Text.Of(x.p.Status), x.p.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.p.Issues, BooksJson.Options)!,
-            x.p.JournalId, x.JournalNo, x.p.Version.ToString(CultureInfo.InvariantCulture))).ToList();
+        return rows.Select(x =>
+        {
+            var currency = x.p.Currency == "" ? baseCurrency : x.p.Currency;
+            var minor = Currencies.Require(currency).MinorUnits;
+            string F(decimal v) => v.ToString("F" + minor, CultureInfo.InvariantCulture);
+            string B(decimal v) => v.ToString("F" + baseMinor, CultureInfo.InvariantCulture);
+            return new PaymentDto(
+                x.p.Id, x.p.LedgerId, x.p.IsReceipt ? "receipt" : "payment", x.p.PaymentNo, x.p.BankAccountId, x.p.PartyId, x.p.Date, x.p.Reference, x.p.Description,
+                x.p.Lines.OrderBy(l => l.LineNo).Select(l => new PaymentLineDto(l.LineId, Text.Of(l.Kind), l.InvoiceId, l.AccountId, l.ControlAccountId, l.Description,
+                    l.ItemId, Q(l.Quantity), Q(l.UnitPrice), F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason,
+                    l.ValidTaxInvoice, l.WithholdingCodeId, F(l.WithholdingAmount), F(l.Total), Q(l.SettledAmount),
+                    l.Kind == PaymentLineKind.Account ? null : B(l.ControlAmount))).ToList(),
+                F(x.p.Total), Text.Of(x.p.Status), x.p.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.p.Issues, BooksJson.Options)!,
+                x.p.JournalId, x.JournalNo, x.p.Version.ToString(CultureInfo.InvariantCulture), currency,
+                x.p.ExchangeRate?.ToString("0.##########", CultureInfo.InvariantCulture));
+        }).ToList();
     }
 }

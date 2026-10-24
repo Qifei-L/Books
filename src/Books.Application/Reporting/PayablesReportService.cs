@@ -170,7 +170,7 @@ internal static class OpenItems
     public static IEnumerable<Credit> PaymentCredits(IEnumerable<Payment> payments, IReadOnlySet<Guid> controlAccounts, bool receiptsReduce) =>
         payments.SelectMany(p => p.Lines.Where(l => l.Kind != PaymentLineKind.Account && controlAccounts.Contains(l.ControlAccountId!.Value))
             .Select(l => new Credit(p.PartyId!.Value, p.Date, p.IsReceipt ? "receipt" : "payment", p.PaymentNo, p.Reference, l.InvoiceId,
-                p.IsReceipt == receiptsReduce ? l.NetAmount : -l.NetAmount)));
+                p.IsReceipt == receiptsReduce ? l.ControlAmount : -l.ControlAmount)));
 
     /// <summary>Not due, 1–30, 31–60, 61–90 and over 90 days past the due date.</summary>
     public static decimal[] Buckets(DateOnly asOf, IEnumerable<OpenItem> open)

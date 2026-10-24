@@ -25,7 +25,8 @@ public sealed class BooksJournalTools(PrincipalAccessor principals, JournalServi
         [property: JsonPropertyName("debit"), Description("Decimal string such as \"100.00\", or omit.")] string? Debit,
         [property: JsonPropertyName("credit"), Description("Decimal string such as \"100.00\", or omit.")] string? Credit,
         [property: JsonPropertyName("description")] string? Description,
-        [property: JsonPropertyName("party_id"), Description("Optional customer or supplier ID.")] Guid? PartyId = null);
+        [property: JsonPropertyName("party_id"), Description("Optional customer or supplier ID.")] Guid? PartyId = null,
+        [property: JsonPropertyName("currency_amount"), Description("Lines on a bank account in another currency (for example KHR): the amount in that currency.")] string? CurrencyAmount = null);
 
     [McpServerTool(Name = "list_journals", ReadOnly = true, Idempotent = true)]
     [Description("Recent journals of a ledger: posted ones, plus your own drafts and failed saves.")]
@@ -52,7 +53,7 @@ public sealed class BooksJournalTools(PrincipalAccessor principals, JournalServi
         WriteAsync(async () =>
         {
             var request = new JournalEndpoints.JournalRequest(accounting_date,
-                lines.Select(l => new JournalEndpoints.LineRequest(l.AccountId, l.Debit, l.Credit, l.Description, l.PartyId)).ToList(), post, reference, description);
+                lines.Select(l => new JournalEndpoints.LineRequest(l.AccountId, l.Debit, l.Credit, l.Description, l.PartyId, CurrencyAmount: l.CurrencyAmount)).ToList(), post, reference, description);
             var draft = JournalEndpoints.ToDraft(request);
             var meta = Meta("save_journal", idempotency_key, expected_version, new { org_id, ledger_id, journal_id, request });
             var principal = await principals.GetAsync(ct);

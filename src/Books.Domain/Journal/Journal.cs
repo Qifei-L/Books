@@ -129,15 +129,18 @@ public sealed class JournalRevision
 }
 
 /// <summary>
-/// A journal line in the ledger's base currency (owner decision: base currency only in v1).
+/// A journal line in the ledger's base currency; lines on a bank account in another currency also keep that
+/// currency's amount (M12.2).
 /// One signed amount: debit positive, credit negative. <see cref="LineId"/> stays the same across revisions.
 /// </summary>
 public sealed class JournalLine
 {
     private JournalLine() { }
 
-    public JournalLine(JournalRevision revision, int lineNo, Guid lineId, Guid accountId, string? description, decimal amount, Guid? partyId = null, Guid? itemId = null, decimal? quantity = null)
+    public JournalLine(JournalRevision revision, int lineNo, Guid lineId, Guid accountId, string? description, decimal amount, Guid? partyId = null, Guid? itemId = null, decimal? quantity = null,
+        decimal? currencyAmount = null)
     {
+        CurrencyAmount = currencyAmount;
         RevisionId = revision.Id;
         OrgId = revision.OrgId;
         LedgerId = revision.LedgerId;
@@ -168,4 +171,7 @@ public sealed class JournalLine
 
     public string? Description { get; private set; }
     public decimal Amount { get; private set; }
+
+    /// <summary>On a bank account in another currency: the movement in that currency; null otherwise (M12.2).</summary>
+    public decimal? CurrencyAmount { get; private set; }
 }

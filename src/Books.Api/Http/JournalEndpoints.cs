@@ -9,7 +9,9 @@ namespace Books.Api.Http;
 public static class JournalEndpoints
 {
     /// <param name="Debit">Decimal string such as "100.00"; a line has a debit or a credit, not both.</param>
-    public sealed record LineRequest(Guid AccountId, string? Debit, string? Credit, string? Description, Guid? PartyId = null, Guid? ItemId = null, string? Quantity = null);
+    /// <param name="CurrencyAmount">Lines on a bank account in another currency: the amount in that currency, on the same side.</param>
+    public sealed record LineRequest(Guid AccountId, string? Debit, string? Credit, string? Description, Guid? PartyId = null, Guid? ItemId = null, string? Quantity = null,
+        string? CurrencyAmount = null);
 
     /// <param name="Post">true = Save (post now); false = Save Draft.</param>
     public sealed record JournalRequest(DateOnly AccountingDate, IReadOnlyList<LineRequest> Lines, bool Post, string? Reference, string? Description);
@@ -53,7 +55,8 @@ public static class JournalEndpoints
                 : decimal.TryParse(line.Quantity, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var q)
                     ? q
                     : throw BooksProblem.Invalid($"Line {i + 1} quantity must be a decimal string.");
-            return new DraftLine(line.AccountId, debit - credit, line.Description, PartyId: line.PartyId, ItemId: line.ItemId, Quantity: quantity);
+            decimal? currencyAmount = string.IsNullOrWhiteSpace(line.CurrencyAmount) ? null : Math.Sign(debit - credit) * Parse(line.CurrencyAmount, i, "currency_amount");
+            return new DraftLine(line.AccountId, debit - credit, line.Description, PartyId: line.PartyId, ItemId: line.ItemId, Quantity: quantity, CurrencyAmount: currencyAmount);
         }).ToList();
         return new JournalDraft(body.AccountingDate, lines, body.Reference, body.Description);
     }
