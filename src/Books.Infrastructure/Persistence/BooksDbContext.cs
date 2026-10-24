@@ -36,6 +36,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<DocumentTaxCurrency> DocumentTaxCurrencies => Set<DocumentTaxCurrency>();
     public DbSet<SalesInvoice> SalesInvoices => Set<SalesInvoice>();
     public DbSet<SalesInvoiceLine> SalesInvoiceLines => Set<SalesInvoiceLine>();
+    public DbSet<InvoiceSettings> InvoiceSettings => Set<InvoiceSettings>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentLine> PaymentLines => Set<PaymentLine>();
     public DbSet<BankClearing> BankClearings => Set<BankClearing>();

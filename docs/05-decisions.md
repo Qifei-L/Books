@@ -76,6 +76,7 @@
 | 2026-10-24 | Bank accounts are "cash and bank" accounts: petty cash is set up like a bank account (bank name "Cash"). Unclearing is not limited to administrators. Payroll systems report KHR, so pay runs keep the lines' currency with its rate (default: the rate of the 15th) and post the converted totals; the Cambodia template sets up the payroll accounts through payroll usages. |
 | 2026-10-24 | Planned M14: information shared within an organization (customers and suppliers, items, tax codes, return definitions and templates) so companies in one organization do not keep separate copies; which of these become shared is to be confirmed. |
 | 2026-10-24 | Invoice printing (M9): Khmer and English; three fixed styles (commercial invoice, tax invoice including State Charge, and invoices mixing VAT 0% and non-VAT); invoice numbers with a per-ledger prefix; QuestPDF (community licence: revenue under USD 1M) with a Khmer font; CamInvoice later. |
+| 2026-10-24 | Invoice printing details (M9.1): the style follows the lines' tax codes (any VAT above 0% → tax invoice; only 0% or non-VAT → zero/non-VAT; no codes → commercial) and can be chosen per print; State Charge relabels the VAT line; the seller block (Khmer and English names and addresses, VATTIN, contact) and the prefixes (default INV- and CN-) are per-ledger settings changed by administrators; drafts print marked DRAFT; the KHR total comes from the invoice's tax currency snapshot. |
 
 ## Proposed defaults (accept or change)
 

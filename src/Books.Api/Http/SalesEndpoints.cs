@@ -17,6 +17,10 @@ public static class SalesEndpoints
         IReadOnlyList<LineRequest> Lines, bool Post = true, Guid? OriginalInvoiceId = null, string? TaxCurrencyRate = null, string? TaxCurrencyReason = null,
         string? Currency = null, string? ExchangeRate = null);
 
+    public sealed record InvoiceSettingsRequest(
+        string? NameKhmer, string? NameEnglish, string? TaxId, string? AddressKhmer, string? AddressEnglish, string? Phone, string? Email,
+        string? InvoicePrefix, string? CreditNotePrefix);
+
     public static void MapSalesEndpoints(this RouteGroupBuilder api)
     {
         // Invoices and credit notes share one model and endpoint shape, with their own lists and number series.
@@ -33,9 +37,28 @@ public static class SalesEndpoints
             group.MapPut("/{invoiceId:guid}", async (Guid orgId, Guid ledgerId, Guid invoiceId, InvoiceRequest body, PrincipalAccessor principals, SalesInvoiceService service, HttpContext http, CancellationToken ct) =>
                 WriteHttp.Result(http, await service.UpdateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, invoiceId, Input(body), body.Post, ct)));
 
+            // style: tax, zero_non_vat or commercial (omit to choose from the lines' tax codes); stateCharge labels VAT as state charge.
+            group.MapGet("/{invoiceId:guid}/pdf", async (Guid orgId, Guid ledgerId, Guid invoiceId, string? style, bool? stateCharge, PrincipalAccessor principals,
+                InvoicePrintService service, HttpContext http, CancellationToken ct) =>
+            {
+                var print = await service.GetAsync(await principals.GetAsync(ct), orgId, ledgerId, invoiceId, creditNotes, style, stateCharge ?? false, ct);
+                http.Response.Headers["Invoice-Style"] = print.Style;
+                return Results.File(InvoicePdf.Render(print), InvoicePdf.ContentType, $"{print.Number}.pdf");
+            });
+
             group.MapDelete("/{invoiceId:guid}", async (Guid orgId, Guid ledgerId, Guid invoiceId, PrincipalAccessor principals, SalesInvoiceService service, HttpContext http, CancellationToken ct) =>
                 WriteHttp.Result(http, await service.DeleteAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), orgId, ledgerId, invoiceId, ct)));
         }
+
+        var settings = api.MapGroup("/organizations/{orgId:guid}/ledgers/{ledgerId:guid}/invoice-settings");
+
+        settings.MapGet("", async (Guid orgId, Guid ledgerId, PrincipalAccessor principals, InvoiceSettingsService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.GetAsync(await principals.GetAsync(ct), orgId, ledgerId, ct)));
+
+        settings.MapPut("", async (Guid orgId, Guid ledgerId, InvoiceSettingsRequest body, PrincipalAccessor principals, InvoiceSettingsService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.SetAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId,
+                new InvoiceSettingsInput(body.NameKhmer, body.NameEnglish, body.TaxId, body.AddressKhmer, body.AddressEnglish, body.Phone, body.Email,
+                    body.InvoicePrefix, body.CreditNotePrefix), ct)));
     }
 
     internal static SalesInvoiceInput Input(InvoiceRequest body) => new(

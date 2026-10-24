@@ -1056,6 +1056,73 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("fixed_assets", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.InvoiceSettings", b =>
+                {
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("AddressEnglish")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("address_english");
+
+                    b.Property<string>("AddressKhmer")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("address_khmer");
+
+                    b.Property<string>("CreditNotePrefix")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("credit_note_prefix");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("InvoicePrefix")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("invoice_prefix");
+
+                    b.Property<string>("NameEnglish")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name_english");
+
+                    b.Property<string>("NameKhmer")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name_khmer");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("phone");
+
+                    b.Property<string>("TaxId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("tax_id");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("LedgerId")
+                        .HasName("pk_invoice_settings");
+
+                    b.ToTable("invoice_settings", (string)null);
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.PayRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3258,6 +3325,16 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_fixed_assets_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.InvoiceSettings", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_invoice_settings_ledgers_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.PayRun", b =>

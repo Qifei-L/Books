@@ -37,6 +37,7 @@ public interface IBooksDb
     DbSet<DocumentTaxCurrency> DocumentTaxCurrencies { get; }
     DbSet<SalesInvoice> SalesInvoices { get; }
     DbSet<SalesInvoiceLine> SalesInvoiceLines { get; }
+    DbSet<InvoiceSettings> InvoiceSettings { get; }
     DbSet<Payment> Payments { get; }
     DbSet<PaymentLine> PaymentLines { get; }
     DbSet<BankClearing> BankClearings { get; }

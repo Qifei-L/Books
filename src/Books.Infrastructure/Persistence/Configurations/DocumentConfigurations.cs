@@ -124,6 +124,25 @@ internal sealed class DocumentTaxCurrencyConfiguration : IEntityTypeConfiguratio
     }
 }
 
+internal sealed class InvoiceSettingsConfiguration : IEntityTypeConfiguration<InvoiceSettings>
+{
+    public void Configure(EntityTypeBuilder<InvoiceSettings> b)
+    {
+        b.ToTable("invoice_settings");
+        b.HasKey(x => x.LedgerId);
+        b.Property(x => x.NameKhmer).HasMaxLength(200);
+        b.Property(x => x.NameEnglish).HasMaxLength(200);
+        b.Property(x => x.TaxId).HasMaxLength(50);
+        b.Property(x => x.AddressKhmer).HasMaxLength(500);
+        b.Property(x => x.AddressEnglish).HasMaxLength(500);
+        b.Property(x => x.Phone).HasMaxLength(50);
+        b.Property(x => x.Email).HasMaxLength(200);
+        b.Property(x => x.InvoicePrefix).HasMaxLength(20);
+        b.Property(x => x.CreditNotePrefix).HasMaxLength(20);
+        b.HasOne<Ledger>().WithMany().HasForeignKey(x => x.LedgerId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<SalesInvoice>
 {
     public void Configure(EntityTypeBuilder<SalesInvoice> b)
