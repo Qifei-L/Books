@@ -1,4 +1,5 @@
 using System.Globalization;
+using Books.Application.Documents;
 using Books.Application.Reporting;
 using ClosedXML.Excel;
 
@@ -121,6 +122,60 @@ public static class ExcelExport
         Amounts(sheet, row, 2, line.Amount);
         sheet.Row(row).Style.Font.Bold = true;
         return row + 1;
+    }
+
+    /// <summary>The monthly return workpaper: boxes, reconciliation with the tax accounts, and lines with an overridden VAT.</summary>
+    public static byte[] TaxReturn(TaxReturnDto r, string ledgerName)
+    {
+        using var book = new XLWorkbook();
+        var basis = r.TaxCurrencyBasis == "override" ? $"{r.TaxCurrency} at {r.OverrideRate} ({r.OverrideReason})" : $"{r.TaxCurrency} from document snapshots";
+        var sheet = Sheet(book, "Tax return", ledgerName, $"{r.ReturnName} · {r.Period} · definition v{r.DefinitionVersion} · {r.Currency}, {basis}");
+        Header(sheet, 4, "Section", "Box", "Label", r.Currency, r.TaxCurrency ?? "");
+        var row = 5;
+        foreach (var b in r.Boxes)
+        {
+            sheet.Cell(row, 1).Value = b.Section;
+            sheet.Cell(row, 2).Value = b.Key;
+            sheet.Cell(row, 3).Value = b.Information ? $"{b.Label} (information)" : b.Label;
+            Amounts(sheet, row, 4, b.Amount);
+            if (b.TaxCurrencyAmount is { } khr)
+            {
+                Amounts(sheet, row, 5, khr);
+            }
+            row++;
+        }
+        Notes(sheet, row + 1, r.Issues.Select(i => $"{i.Code}: {i.Message}")
+            .Concat(r.Filed is { } f ? [$"Filed {f.FiledAt:yyyy-MM-dd HH:mm} UTC; {f.Differences.Count} boxes differ from the filed return."] : ["Not filed."]));
+
+        var rec = book.Worksheets.Add("Reconciliation");
+        Header(rec, 1, "Usage", "Accounts", "Ledger", "Documents", "Difference", "Other postings");
+        row = 2;
+        foreach (var x in r.Reconciliation)
+        {
+            rec.Cell(row, 1).Value = x.Label;
+            rec.Cell(row, 2).Value = string.Join(", ", x.Accounts);
+            Amounts(rec, row, 3, x.LedgerAmount, x.ReturnAmount, x.Difference);
+            rec.Cell(row, 6).Value = string.Join("; ", x.OtherPostings.Select(o => $"No. {o.JournalNo} {o.Date:yyyy-MM-dd} {o.Reference} {o.Amount}"));
+            row++;
+        }
+        rec.Columns().AdjustToContents(8, 60);
+
+        var adjusted = book.Worksheets.Add("Adjusted VAT");
+        Header(adjusted, 1, "Document", "No.", "Date", "Party", "Line", "Calculated", "Entered", "Reason");
+        row = 2;
+        foreach (var l in r.AdjustedLines)
+        {
+            adjusted.Cell(row, 1).Value = l.DocumentType;
+            adjusted.Cell(row, 2).Value = l.DocumentNo;
+            adjusted.Cell(row, 3).Value = l.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            adjusted.Cell(row, 4).Value = l.Party;
+            adjusted.Cell(row, 5).Value = l.LineNo;
+            Amounts(adjusted, row, 6, l.TaxCalculated ?? "0", l.TaxAmount ?? "0");
+            adjusted.Cell(row, 8).Value = l.TaxReason ?? "";
+            row++;
+        }
+        adjusted.Columns().AdjustToContents(8, 60);
+        return Save(book, sheet);
     }
 
     private static IXLWorksheet Sheet(XLWorkbook book, string title, string ledgerName, string subtitle)

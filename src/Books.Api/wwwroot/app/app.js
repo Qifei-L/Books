@@ -108,6 +108,7 @@ async function chooseLedger(ledger) {
   await renderSetup();
   await renderSales();
   await renderPurchases();
+  await renderTax("2026-10");
   for (const id of ["tb-out", "gl-out", "pl-out", "bs-out"]) $(id).innerHTML = "";
 }
 
@@ -276,6 +277,46 @@ function showSale(d, party) {
   $("journal-dialog").showModal();
 }
 
+async function renderTax(period) {
+  let r;
+  try {
+    r = await api(`${ledgerUrl()}/tax-returns/${period}`);
+  } catch (e) {
+    $("tab-tax").innerHTML = `<p class="muted">${esc(e.message)}</p>`;
+    return;
+  }
+  const sections = [...new Set(r.boxes.map((b) => b.section))];
+  const months = Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, "0")}`);
+  $("tab-tax").innerHTML = `
+    <p><label>Month <select id="tax-period">${months.map((m) => `<option ${m === period ? "selected" : ""}>${m}</option>`).join("")}</select></label>
+      <a class="button" href="#" id="tax-xlsx">Excel</a>
+      <span class="muted">${esc(r.return_name)} · definition v${r.definition_version} · ${r.currency} / ${r.tax_currency ?? ""}
+      ${r.tax_currency_basis === "override" ? `at ${r.override_rate}` : "from document snapshots"}</span></p>
+    <p>${r.filed ? `<span class="pill posted">filed ${r.filed.filed_at.slice(0, 10)}</span> ${r.filed.differences.length ? `<span class="error">${r.filed.differences.length} boxes differ from the filed return</span>` : ""}` : `<span class="pill draft">not filed</span>`}</p>
+    ${r.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}
+    ${sections.map((s) => `<h3>${esc(s)}</h3><table><tr><th>Box</th><th>Label</th><th class="num">${r.currency}</th><th class="num">${r.tax_currency ?? ""}</th></tr>
+      ${r.boxes.filter((b) => b.section === s).map((b) => `<tr class="${b.lines ? "click" : "total"}" data-box="${b.key}"><td>${b.key}</td><td>${esc(b.label)}${b.information ? " <span class='muted'>(information)</span>" : ""}</td>
+        <td class="num">${b.amount}</td><td class="num">${b.tax_currency_amount ? Number(b.tax_currency_amount).toLocaleString() : ""}</td></tr>`).join("")}</table>`).join("")}
+    <h3>Reconciliation with tax accounts</h3>
+    <table><tr><th>Usage</th><th>Accounts</th><th class="num">Ledger</th><th class="num">Documents</th><th class="num">Difference</th><th>Other postings</th></tr>
+    ${r.reconciliation.map((x) => `<tr><td>${esc(x.label)}</td><td>${x.accounts.join(", ")}</td><td class="num">${x.ledger_amount}</td><td class="num">${x.return_amount}</td>
+      <td class="num ${x.matches ? "ok" : "error"}">${x.difference}</td><td>${x.other_postings.map((o) => `No. ${o.journal_no} ${esc(o.reference ?? "")} ${o.amount}`).join("; ")}</td></tr>`).join("")}</table>
+    ${r.adjusted_lines.length ? `<h3>Lines with overridden VAT</h3><table><tr><th>Document</th><th>Party</th><th class="num">Calculated</th><th class="num">Entered</th><th>Reason</th></tr>
+      ${r.adjusted_lines.map((l) => `<tr><td>${l.document_type} ${l.document_no}</td><td>${esc(l.party)}</td><td class="num">${l.tax_calculated}</td><td class="num">${l.tax_amount}</td><td>${esc(l.tax_reason ?? "")}</td></tr>`).join("")}</table>` : ""}`;
+  $("tax-period").onchange = (e) => renderTax(e.target.value);
+  $("tax-xlsx").onclick = (e) => { e.preventDefault(); download(`${ledgerUrl()}/tax-returns/${period}.xlsx`, `tax-return-${period}.xlsx`); };
+  for (const tr of $("tab-tax").querySelectorAll("tr.click")) {
+    tr.onclick = async () => {
+      const box = await api(`${ledgerUrl()}/tax-returns/${period}/boxes/${tr.dataset.box}`);
+      $("journal-body").innerHTML = `<h3>${esc(box.label)} · ${box.period}</h3><p class="muted">${box.amount} · ${box.tax_currency_amount ?? ""}</p>
+        <table><tr><th>Document</th><th>Date</th><th>Party</th><th>Line</th><th class="num">Amount</th><th class="num">Rate</th><th class="num">KHR</th></tr>
+        ${box.lines.map((l) => `<tr><td>${l.document_type} ${l.document_no}</td><td>${l.date}</td><td>${esc(l.party)}</td><td>${esc(l.description ?? "")}</td>
+          <td class="num">${l.amount}</td><td class="num">${l.tax_currency_rate ?? ""}</td><td class="num">${l.tax_currency_amount ? Number(l.tax_currency_amount).toLocaleString() : ""}</td></tr>`).join("")}</table>`;
+      $("journal-dialog").showModal();
+    };
+  }
+}
+
 async function renderPurchases() {
   const [invoices, notes, parties, aging] = await Promise.all([
     api(`${ledgerUrl()}/purchase-invoices`), api(`${ledgerUrl()}/debit-notes`), api(`${ledgerUrl()}/parties`),
@@ -356,6 +397,18 @@ $("bs-form").addEventListener("submit", async (event) => {
     showError(error);
   }
 });
+
+async function download(url, name) {
+  try {
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${state.token}` } });
+    if (!response.ok) throw new Error(`Export failed (HTTP ${response.status}).`);
+    const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(await response.blob()), download: name });
+    link.click();
+    URL.revokeObjectURL(link.href);
+  } catch (error) {
+    showError(error);
+  }
+}
 
 // Excel downloads use the same query as the form next to the button.
 for (const button of document.querySelectorAll("[data-export]")) {

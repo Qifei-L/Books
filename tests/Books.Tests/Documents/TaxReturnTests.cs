@@ -107,9 +107,9 @@ public sealed class TaxReturnTests(TestHost host)
     /// purchase invoice (rent 1000 at VAT 10% with a valid invoice and WHT 10%; supplies 50 without a valid invoice),
     /// a draft sale that must not count. KHR rate 4100 from the setup.
     /// </summary>
-    internal async Task<SalesInvoiceTests.Setup> SeedAsync()
+    internal async Task<SalesInvoiceTests.Setup> SeedAsync(string? subject = null)
     {
-        var s = await new SalesInvoiceTests(host).SetUpAsync();
+        var s = await new SalesInvoiceTests(host).SetUpAsync(subject);
         var supplier = (await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/parties", new { name = "Landlord", is_supplier = true })).DataAsync(HttpStatusCode.Created)).Id();
         var rent = (await AccountTests.CreateAsync(s.Books.Admin, s.Books.OrgId, s.Books.LedgerId, "5000", "Rent", "cost_and_expense")).Id();
         await (await s.Books.Admin.PostAsync(s.Url, SalesInvoiceTests.Body(s))).DataAsync(HttpStatusCode.Created);

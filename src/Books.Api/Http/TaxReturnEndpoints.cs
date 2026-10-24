@@ -27,6 +27,15 @@ public static class TaxReturnEndpoints
             WriteHttp.Result(http, await service.FileAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, period,
                 Override(body?.KhrRate, body?.KhrReason), ct)));
 
+        ledger.MapGet("/tax-returns/{period}.xlsx", async (Guid orgId, Guid ledgerId, string period, string? khrRate, string? khrReason, int? definitionVersion,
+            PrincipalAccessor principals, TaxReturnService service, Books.Application.Ledgers.CompanyService companies, CancellationToken ct) =>
+        {
+            var principal = await principals.GetAsync(ct);
+            var r = await service.ReturnAsync(principal, orgId, ledgerId, period, Override(khrRate, khrReason), ct, definitionVersion);
+            var name = (await companies.GetLedgerAsync(principal, orgId, ledgerId, ct)).CompanyName;
+            return Results.File(ExcelExport.TaxReturn(r, name), ExcelExport.ContentType, $"tax-return-{r.Period}.xlsx");
+        });
+
         ledger.MapGet("/tax-returns/{period}/boxes/{key}", async (Guid orgId, Guid ledgerId, string period, string key, string? khrRate, string? khrReason, int? definitionVersion,
             PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.BoxLinesAsync(await principals.GetAsync(ct), orgId, ledgerId, period, key, Override(khrRate, khrReason), ct, definitionVersion)));
