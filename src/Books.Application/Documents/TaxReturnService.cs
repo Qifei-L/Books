@@ -206,7 +206,17 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
             return new TaxLine(TaxLine.JournalKind, p.JournalId, p.JournalNo, p.AccountingDate, Guid.Empty, p.Reference, p.LineNo, p.Description, p.AccountId,
                 null, null, 0, amount, amount, null, true, null, 0, rate?.Rate ?? monthEnd, p.Usage);
         });
-        lines = lines.Concat(journalLines).OrderBy(l => l.Date).ThenBy(l => l.DocumentKind).ThenBy(l => l.DocumentNo).ThenBy(l => l.LineNo).ToList();
+        // Payments and receipts: lines posted straight to an account count when they carry a tax code or withholding
+        // (a fee, a transfer or tax a customer withheld is not a sale or purchase), at the month-end rate.
+        var payments = await db.Payments.AsNoTracking().Include(p => p.Lines)
+            .Where(p => p.LedgerId == ledgerId && p.Status == DocumentStatus.Posted && p.Date >= from && p.Date <= to).ToListAsync(ct);
+        var paymentLines = payments.SelectMany(p => p.Lines
+            .Where(l => l.Kind == PaymentLineKind.Account && (l.TaxCodeId is not null || l.WithholdingCodeId is not null))
+            .Select(l => new TaxLine(p.SourceKind, p.Id, p.PaymentNo, p.Date, p.PartyId ?? Guid.Empty, p.Reference, l.LineNo, l.Description, l.AccountId!.Value,
+                l.TaxCodeId, Kind(l.TaxCodeId), l.NetAmount, l.TaxAmount, l.TaxCalculated, l.TaxReason, l.ValidTaxInvoice,
+                l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, l.WithholdingAmount, rate?.Rate ?? monthEnd,
+                PartyTaxable: p.PartyId is { } party && taxable.Contains(party))));
+        lines = lines.Concat(journalLines).Concat(paymentLines).OrderBy(l => l.Date).ThenBy(l => l.DocumentKind).ThenBy(l => l.DocumentNo).ThenBy(l => l.LineNo).ToList();
 
         var issues = new List<JournalIssue>();
         var taxLines = (List<TaxLine>)lines;
@@ -263,7 +273,8 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
     /// <summary>Liability usages count credits as positive; input VAT counts debits.</summary>
     private static int Sign(string usage) => usage == "input_vat" ? 1 : -1;
 
-    private static readonly string[] DocumentKinds = [PurchaseInvoice.Kind, PurchaseInvoice.DebitNoteKind, SalesInvoice.Kind, SalesInvoice.CreditNoteKind];
+    private static readonly string[] DocumentKinds =
+        [PurchaseInvoice.Kind, PurchaseInvoice.DebitNoteKind, SalesInvoice.Kind, SalesInvoice.CreditNoteKind, Payment.Kind, Payment.ReceiptKind];
 
     /// <summary>
     /// Compares the return with the tax accounts' movement. Journal postings count in the return (owner decision) and
