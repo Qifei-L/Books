@@ -19,6 +19,9 @@ public enum Usage
 
     // Inventory items: stock on hand and what it cost when sold.
     Inventory, CostOfSales,
+
+    // Fixed assets: cost, accumulated depreciation (a contra asset) and the monthly expense.
+    FixedAsset, AccumulatedDepreciation, DepreciationExpense,
 }
 
 public static class Usages
@@ -28,8 +31,8 @@ public static class Usages
     {
         Usage.Payable or Usage.OutputVat or Usage.WithholdingPayable or Usage.SalariesPayable or Usage.SalaryTaxPayable or Usage.NssfPayable
             or Usage.OtherTaxPayable => [AccountType.Liabilities],
-        Usage.Receivable or Usage.Bank or Usage.InputVat or Usage.Inventory => [AccountType.Assets],
-        Usage.NonDeductibleVat or Usage.SalaryExpense or Usage.NssfExpense or Usage.CostOfSales => [AccountType.CostAndExpense],
+        Usage.Receivable or Usage.Bank or Usage.InputVat or Usage.Inventory or Usage.FixedAsset or Usage.AccumulatedDepreciation => [AccountType.Assets],
+        Usage.NonDeductibleVat or Usage.SalaryExpense or Usage.NssfExpense or Usage.CostOfSales or Usage.DepreciationExpense => [AccountType.CostAndExpense],
         _ => throw new ArgumentOutOfRangeException(nameof(usage)),
     };
 

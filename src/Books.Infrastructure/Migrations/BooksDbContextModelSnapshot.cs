@@ -772,6 +772,83 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.DepreciationLine", b =>
+                {
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_no");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_id");
+
+                    b.HasKey("RunId", "LineNo")
+                        .HasName("pk_depreciation_lines");
+
+                    b.HasIndex("AssetId")
+                        .HasDatabaseName("ix_depreciation_lines_asset_id");
+
+                    b.ToTable("depreciation_lines", (string)null);
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.DepreciationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("JournalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("journal_id");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<DateOnly>("Period")
+                        .HasColumnType("date")
+                        .HasColumnName("period");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_depreciation_runs");
+
+                    b.HasIndex("LedgerId", "Period")
+                        .IsUnique()
+                        .HasDatabaseName("ix_depreciation_runs_ledger_id_period")
+                        .HasFilter("status = 'posted'");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_depreciation_runs_org_id_ledger_id");
+
+                    b.ToTable("depreciation_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_depreciation_runs_status", "status IN ('draft', 'posted', 'deleted') AND EXTRACT(DAY FROM period) = 1");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.DocumentTaxCurrency", b =>
                 {
                     b.Property<Guid>("DocumentId")
@@ -883,6 +960,100 @@ namespace Books.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("ck_filed_tax_returns_period", "EXTRACT(DAY FROM period) = 1");
                         });
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.FixedAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AccumulatedDepreciationAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("accumulated_depreciation_account_id");
+
+                    b.Property<DateOnly>("AcquisitionDate")
+                        .HasColumnType("date")
+                        .HasColumnName("acquisition_date");
+
+                    b.Property<Guid>("AssetAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_account_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("code");
+
+                    b.Property<decimal>("Cost")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("cost");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("DepreciationExpenseAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("depreciation_expense_account_id");
+
+                    b.Property<Guid?>("DisposalJournalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("disposal_journal_id");
+
+                    b.Property<DateOnly?>("DisposedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("disposed_on");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<decimal>("ResidualValue")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("residual_value");
+
+                    b.Property<int>("UsefulLifeMonths")
+                        .HasColumnType("integer")
+                        .HasColumnName("useful_life_months");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_fixed_assets");
+
+                    b.HasIndex("AccumulatedDepreciationAccountId")
+                        .HasDatabaseName("ix_fixed_assets_accumulated_depreciation_account_id");
+
+                    b.HasIndex("AssetAccountId")
+                        .HasDatabaseName("ix_fixed_assets_asset_account_id");
+
+                    b.HasIndex("DepreciationExpenseAccountId")
+                        .HasDatabaseName("ix_fixed_assets_depreciation_expense_account_id");
+
+                    b.HasIndex("LedgerId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_fixed_assets_ledger_id_code");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_fixed_assets_org_id_ledger_id");
+
+                    b.ToTable("fixed_assets", (string)null);
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.PayRun", b =>
@@ -2242,7 +2413,7 @@ namespace Books.Infrastructure.Migrations
 
                     b.ToTable("account_usages", null, t =>
                         {
-                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', 'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable', 'inventory', 'cost_of_sales')");
+                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', 'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable', 'inventory', 'cost_of_sales', 'fixed_asset', 'accumulated_depreciation', 'depreciation_expense')");
                         });
                 });
 
@@ -2967,6 +3138,34 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_bank_transfers_ledgers_org_id_ledger_id");
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.DepreciationLine", b =>
+                {
+                    b.HasOne("Books.Domain.Documents.FixedAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_depreciation_lines_fixed_assets_asset_id");
+
+                    b.HasOne("Books.Domain.Documents.DepreciationRun", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_depreciation_lines_depreciation_runs_run_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.DepreciationRun", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_depreciation_runs_ledgers_org_id_ledger_id");
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.DocumentTaxCurrency", b =>
                 {
                     b.HasOne("Books.Domain.Ledgers.Ledger", null)
@@ -2993,6 +3192,38 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_filed_tax_returns_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.FixedAsset", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccumulatedDepreciationAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_fixed_assets_accounts_accumulated_depreciation_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AssetAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_fixed_assets_accounts_asset_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("DepreciationExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_fixed_assets_accounts_depreciation_expense_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_fixed_assets_ledgers_org_id_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.PayRun", b =>
@@ -3565,6 +3796,11 @@ namespace Books.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.BankStatement", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.DepreciationRun", b =>
                 {
                     b.Navigation("Lines");
                 });

@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<BankStatementService>();
         services.AddScoped<PayRunService>();
         services.AddScoped<InventoryReportService>();
+        services.AddScoped<FixedAssetService>();
         services.AddScoped<ReceivablesReportService>();
         services.AddScoped<TaxReturnService>();
         services.AddScoped<ReturnDefinitionService>();

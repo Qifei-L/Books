@@ -24,6 +24,8 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
         new("1200", "Accounts receivable", AccountType.Assets, "Current assets", [Usage.Receivable]),
         new("1300", "VAT input (deductible)", AccountType.Assets, "Current assets", [Usage.InputVat]),
         new("1400", "Inventory on hand", AccountType.Assets, "Current assets", [Usage.Inventory]),
+        new("1500", "Property and equipment, at cost", AccountType.Assets, "Non-current assets", [Usage.FixedAsset]),
+        new("1590", "Accumulated depreciation", AccountType.Assets, "Non-current assets", [Usage.AccumulatedDepreciation]),
         new("2000", "Accounts payable", AccountType.Liabilities, "Current liabilities", [Usage.Payable]),
         new("2100", "VAT output payable", AccountType.Liabilities, "Current liabilities", [Usage.OutputVat]),
         new("2200", "Withholding tax payable", AccountType.Liabilities, "Current liabilities", [Usage.WithholdingPayable]),
@@ -36,6 +38,7 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
         new("3900", "Opening balance clearing", AccountType.Equity, "Equity", [], SystemPurpose.OpeningBalanceClearing),
         new("5800", "Cost of goods sold", AccountType.CostAndExpense, "Operating expenses", [Usage.CostOfSales]),
         new("5900", "Non-deductible VAT", AccountType.CostAndExpense, "Operating expenses", [Usage.NonDeductibleVat]),
+        new("6200", "Depreciation", AccountType.CostAndExpense, "Operating expenses", [Usage.DepreciationExpense]),
         new("6100", "Salaries and wages", AccountType.CostAndExpense, "Operating expenses", [Usage.SalaryExpense]),
         new("6110", "NSSF contributions", AccountType.CostAndExpense, "Operating expenses", [Usage.NssfExpense]),
     ];

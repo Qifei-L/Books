@@ -16,7 +16,7 @@ namespace Books.Api.Mcp;
 [McpServerToolType]
 public sealed class BooksBankTools(
     PrincipalAccessor principals, PaymentService payments, BankStatementService statements, BankReconciliationService reconciliation, PayRunService payRuns,
-    IHttpContextAccessor http)
+    FixedAssetService assets, InventoryReportService inventory, IHttpContextAccessor http)
 {
     public sealed record PaymentLine(
         [property: JsonPropertyName("amount"), Description("Decimal string; VAT excluded on account lines; may be negative (fees, discounts, tax a customer withheld).")] string Amount,
@@ -42,6 +42,32 @@ public sealed class BooksBankTools(
         [property: JsonPropertyName("description")] string? Description = null,
         [property: JsonPropertyName("reference")] string? Reference = null,
         [property: JsonPropertyName("external_id"), Description("The bank's own transaction ID, if shown; used to skip lines imported before.")] string? ExternalId = null);
+
+    [McpServerTool(Name = "get_fixed_asset_register", ReadOnly = true, Idempotent = true)]
+    [Description("The fixed asset register on a date: cost, accumulated depreciation and net book value per asset, checked against the asset accounts.")]
+    public Task<CallToolResult> Register(Guid org_id, Guid ledger_id, DateOnly as_of, CancellationToken ct) =>
+        BooksReadTools.RunAsync(async () => await assets.RegisterAsync(await principals.GetAsync(ct), org_id, ledger_id, as_of, ct));
+
+    [McpServerTool(Name = "save_fixed_asset", Idempotent = true)]
+    [Description("Adds a fixed asset to the register (straight-line depreciation by month, starting the month after acquisition), or changes one when asset_id "
+        + "and expected_version are given. The purchase itself is a purchase invoice or payment line on the asset account. Posting depreciation is for people.")]
+    public Task<CallToolResult> SaveAsset(Guid org_id, Guid ledger_id,
+        [Description("A new UUID per change.")] Guid idempotency_key,
+        string code, string name, DateOnly acquisition_date, [Description("Decimal string.")] string cost, int useful_life_months,
+        [Description("Decimal string; default 0.")] string? residual_value = null, Guid? asset_id = null, long? expected_version = null,
+        CancellationToken ct = default) =>
+        McpWrites.RunAsync(async () =>
+        {
+            var input = FixedAssetEndpoints.Input(new FixedAssetEndpoints.AssetRequest(code, name, acquisition_date, cost, residual_value, useful_life_months));
+            var meta = McpWrites.Meta(http, "save_fixed_asset", idempotency_key, new { org_id, ledger_id, code, name, acquisition_date, cost, useful_life_months, residual_value, asset_id })
+                with { ExpectedVersion = expected_version };
+            return await assets.SaveAsync(await principals.GetAsync(ct), meta, org_id, ledger_id, asset_id, input, ct);
+        });
+
+    [McpServerTool(Name = "get_inventory", ReadOnly = true, Idempotent = true)]
+    [Description("Inventory items on a date: quantities in and out, on hand, average cost and value, checked against the inventory account.")]
+    public Task<CallToolResult> Inventory(Guid org_id, Guid ledger_id, DateOnly as_of, CancellationToken ct) =>
+        BooksReadTools.RunAsync(async () => await inventory.ReportAsync(await principals.GetAsync(ct), org_id, ledger_id, as_of, ct));
 
     [McpServerTool(Name = "list_pay_runs", ReadOnly = true, Idempotent = true)]
     [Description("Pay runs (imported payroll results) with their totals and status.")]

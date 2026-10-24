@@ -96,7 +96,10 @@ public sealed class AccountUsageService(IBooksDb db, WriteRunner writes)
         "other_tax_payable" => Usage.OtherTaxPayable,
         "inventory" => Usage.Inventory,
         "cost_of_sales" => Usage.CostOfSales,
+        "fixed_asset" => Usage.FixedAsset,
+        "accumulated_depreciation" => Usage.AccumulatedDepreciation,
+        "depreciation_expense" => Usage.DepreciationExpense,
         _ => throw BooksProblem.Invalid("usage must be one of payable, receivable, bank, output_vat, input_vat, non_deductible_vat, withholding_payable, "
-            + "salary_expense, nssf_expense, salaries_payable, salary_tax_payable, nssf_payable, other_tax_payable, inventory, cost_of_sales."),
+            + "salary_expense, nssf_expense, salaries_payable, salary_tax_payable, nssf_payable, other_tax_payable, inventory, cost_of_sales, fixed_asset, accumulated_depreciation, depreciation_expense."),
     };
 }
