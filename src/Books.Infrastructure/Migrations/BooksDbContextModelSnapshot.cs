@@ -1731,6 +1731,15 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("numeric(20,4)")
                         .HasColumnName("net_amount");
 
+                    b.Property<decimal>("OtherTaxAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("other_tax_amount");
+
+                    b.Property<Guid?>("OtherTaxCodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("other_tax_code_id");
+
                     b.Property<decimal?>("Quantity")
                         .HasPrecision(20, 4)
                         .HasColumnType("numeric(20,4)")
@@ -1768,6 +1777,9 @@ namespace Books.Infrastructure.Migrations
 
                     b.HasIndex("ItemId")
                         .HasDatabaseName("ix_sales_invoice_lines_item_id");
+
+                    b.HasIndex("OtherTaxCodeId")
+                        .HasDatabaseName("ix_sales_invoice_lines_other_tax_code_id");
 
                     b.HasIndex("TaxCodeId")
                         .HasDatabaseName("ix_sales_invoice_lines_tax_code_id");
@@ -2217,7 +2229,7 @@ namespace Books.Infrastructure.Migrations
 
                     b.ToTable("account_usages", null, t =>
                         {
-                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', 'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable')");
+                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', 'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable')");
                         });
                 });
 
@@ -2709,7 +2721,7 @@ namespace Books.Infrastructure.Migrations
 
                     b.ToTable("tax_codes", null, t =>
                         {
-                            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_zero_rated', 'non_vat', 'withholding')");
+                            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_zero_rated', 'non_vat', 'withholding', 'other_tax')");
 
                             t.HasCheckConstraint("ck_tax_codes_rate", "rate >= 0 AND rate <= 100");
                         });
@@ -3249,6 +3261,12 @@ namespace Books.Infrastructure.Migrations
                         .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_sales_invoice_lines_items_item_id");
+
+                    b.HasOne("Books.Domain.Ledgers.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("OtherTaxCodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_sales_invoice_lines_tax_codes_other_tax_code_id");
 
                     b.HasOne("Books.Domain.Ledgers.TaxCode", null)
                         .WithMany()

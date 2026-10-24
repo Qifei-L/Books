@@ -29,6 +29,7 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
         new("2300", "Salaries payable", AccountType.Liabilities, "Current liabilities", [Usage.SalariesPayable]),
         new("2310", "Tax on salary payable", AccountType.Liabilities, "Current liabilities", [Usage.SalaryTaxPayable]),
         new("2320", "NSSF payable", AccountType.Liabilities, "Current liabilities", [Usage.NssfPayable]),
+        new("2400", "Other taxes payable", AccountType.Liabilities, "Current liabilities", [Usage.OtherTaxPayable]),
         new("2999", "Suspense", AccountType.Liabilities, "Current liabilities", [], SystemPurpose.Suspense),
         new("3100", "Retained earnings", AccountType.Equity, "Equity", [], SystemPurpose.RetainedEarnings),
         new("3900", "Opening balance clearing", AccountType.Equity, "Equity", [], SystemPurpose.OpeningBalanceClearing),
@@ -48,6 +49,9 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
         new("WHT 15% services, interest, royalties", TaxKind.Withholding, 15m, "2200", Category: "r1_services"),
         new("WHT 10% rent", TaxKind.Withholding, 10m, "2200", Category: "r5_rent"),
         new("WHT 14% non-resident", TaxKind.Withholding, 14m, "2200", Category: "n3_management"),
+        new("Specific tax 10%", TaxKind.OtherTax, 10m, "2400", Category: "specific"),
+        new("Accommodation tax 2%", TaxKind.OtherTax, 2m, "2400", Category: "accommodation"),
+        new("Public lighting tax 5%", TaxKind.OtherTax, 5m, "2400", Category: "public_lighting"),
     ];
 
     public sealed record Summary(string Template, IReadOnlyList<string> Created, IReadOnlyList<string> Reused);
@@ -100,7 +104,7 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
                 var builtin = Books.Domain.Documents.TaxReturns.Builtin(Key)!;
                 code.SetReturnCategory(spec.Category, spec.Kind == TaxKind.Withholding
                     ? [.. builtin.WithholdingCategories.Select(c => c.Key)]
-                    : [.. (builtin.TaxCategories ?? []).Select(c => c.Key)]);
+                    : [.. (builtin.TaxCategories ?? []).Where(c => c.Kind == Text.Of(spec.Kind)).Select(c => c.Key)]);
                 db.TaxCodes.Add(code);
                 created.Add($"tax code {spec.Name}");
             }

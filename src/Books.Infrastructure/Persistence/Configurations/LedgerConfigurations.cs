@@ -141,7 +141,7 @@ internal sealed class TaxCodeConfiguration : IEntityTypeConfiguration<TaxCode>
     {
         b.ToTable("tax_codes", t =>
         {
-            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_zero_rated', 'non_vat', 'withholding')");
+            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_zero_rated', 'non_vat', 'withholding', 'other_tax')");
             t.HasCheckConstraint("ck_tax_codes_rate", "rate >= 0 AND rate <= 100");
         });
         b.Property(x => x.Id).ValueGeneratedNever();
@@ -241,7 +241,7 @@ internal sealed class AccountUsageConfiguration : IEntityTypeConfiguration<Accou
     {
         b.ToTable("account_usages", t => t.HasCheckConstraint("ck_account_usages_usage",
             "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', "
-            + "'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable')"));
+            + "'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable')"));
         b.HasKey(x => new { x.AccountId, x.Usage });
         b.HasIndex(x => new { x.LedgerId, x.Usage });
         b.HasOne<Account>().WithMany()

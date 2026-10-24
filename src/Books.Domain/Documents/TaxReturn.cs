@@ -13,7 +13,7 @@ public sealed record TaxLine(
     string DocumentKind, Guid DocumentId, long DocumentNo, DateOnly Date, Guid PartyId, string? Reference, int LineNo, string? Description,
     Guid AccountId, Guid? TaxCodeId, TaxKind? TaxKind, decimal Net, decimal Tax, decimal TaxCalculated, string? TaxReason, bool ValidTaxInvoice,
     string? WithholdingCategory, decimal Withholding, decimal? KhrRate, string? PostingUsage = null, bool PartyTaxable = false, PayRunLine? Payroll = null,
-    decimal PayrollScale = 1, string? TaxCategory = null)
+    decimal PayrollScale = 1, string? TaxCategory = null, decimal OtherTax = 0, string? OtherTaxCategory = null)
 {
     public const string JournalKind = "journal";
 
@@ -36,7 +36,7 @@ public sealed record ReturnDefinitionSpec(
     [property: JsonPropertyName("tax_categories")] IReadOnlyList<TaxCategory>? TaxCategories = null);
 
 /// <summary>A category VAT codes (and later other taxes) are reported under, for example imports.</summary>
-/// <param name="Kind">The tax code kind it applies to: vat_input or vat_output.</param>
+/// <param name="Kind">The tax code kind it applies to: vat_input, vat_output or other_tax.</param>
 public sealed record TaxCategory(string Key, string Label, string Kind);
 
 /// <summary>
@@ -65,14 +65,15 @@ public sealed record PostingRule(string Usage);
 /// <param name="TaxKinds">vat_output, vat_input, vat_zero_rated, non_vat or none (no tax code); omit for any.</param>
 /// <param name="ValidTaxInvoice">Purchases: only lines with (true) or without (false) a valid tax invoice; omit for both.</param>
 /// <param name="WithholdingCategory">Only lines whose withholding code has this category; omit for any.</param>
-/// <param name="Amount">net, tax or withholding.</param>
+/// <param name="Amount">net, tax, withholding, other_tax, or taxable (net plus other tax: the VAT base).</param>
 /// <param name="Party">taxable (the customer or supplier has a tax ID) or non_taxable; omit for both.</param>
 /// <param name="TaxCategory">Only lines whose tax code has this category, or none for codes without one; omit for any.</param>
 public sealed record LineRule(
     string Side, [property: JsonPropertyName("tax_kinds")] IReadOnlyList<string>? TaxKinds = null,
     [property: JsonPropertyName("valid_tax_invoice")] bool? ValidTaxInvoice = null,
     [property: JsonPropertyName("withholding_category")] string? WithholdingCategory = null, string Amount = "net", string? Party = null,
-    [property: JsonPropertyName("tax_category")] string? TaxCategory = null);
+    [property: JsonPropertyName("tax_category")] string? TaxCategory = null,
+    [property: JsonPropertyName("other_tax_category")] string? OtherTaxCategory = null);
 
 /// <summary>The sum of earlier boxes, each added or subtracted, optionally times a percent and rounded to the currency.</summary>
 public sealed record FormulaRule(IReadOnlyList<FormulaTerm> Terms, decimal? Percent = null);
@@ -119,9 +120,9 @@ public static class TaxReturns
         }
         var categoryKeys = categories.Select(c => c.Key).ToHashSet();
         var taxCategoryKeys = (spec.TaxCategories ?? []).Select(c => c.Key).ToHashSet();
-        foreach (var bad in (spec.TaxCategories ?? []).Where(c => c.Kind is not ("vat_input" or "vat_output")))
+        foreach (var bad in (spec.TaxCategories ?? []).Where(c => c.Kind is not ("vat_input" or "vat_output" or "other_tax")))
         {
-            errors.Add($"Tax category {bad.Key}: kind must be vat_input or vat_output.");
+            errors.Add($"Tax category {bad.Key}: kind must be vat_input, vat_output or other_tax.");
         }
         var seen = new HashSet<string>();
         var boxes = new List<ReturnBox>();
@@ -182,9 +183,13 @@ public static class TaxReturns
                 {
                     errors.Add($"{at}: withholding category {category} is not defined.");
                 }
-                if (rule.Amount is not ("net" or "tax" or "withholding"))
+                if (rule.Amount is not ("net" or "tax" or "withholding" or "other_tax" or "taxable"))
                 {
-                    errors.Add($"{at}: amount must be net, tax or withholding.");
+                    errors.Add($"{at}: amount must be net, tax, withholding, other_tax or taxable.");
+                }
+                if (rule.OtherTaxCategory is { } otherCategory && !taxCategoryKeys.Contains(otherCategory))
+                {
+                    errors.Add($"{at}: other tax category {otherCategory} is not defined.");
                 }
                 if (rule.TaxCategory is { } taxCategory && taxCategory != "none" && !taxCategoryKeys.Contains(taxCategory))
                 {
@@ -266,7 +271,8 @@ public static class TaxReturns
             && (rule.WithholdingCategory is null || l.WithholdingCategory == rule.WithholdingCategory)
             && (rule.Party is null || (rule.Party == "taxable") == l.PartyTaxable)
             && (rule.TaxCategory is null || (rule.TaxCategory == "none" ? l.TaxCategory is null : l.TaxCategory == rule.TaxCategory))
-                ? rule.Amount switch { "tax" => l.Tax, "withholding" => l.Withholding, _ => l.Net }
+            && (rule.OtherTaxCategory is null || l.OtherTaxCategory == rule.OtherTaxCategory)
+                ? rule.Amount switch { "tax" => l.Tax, "withholding" => l.Withholding, "other_tax" => l.OtherTax, "taxable" => l.Net + l.OtherTax, _ => l.Net }
                 : null;
     }
 
@@ -291,6 +297,13 @@ public static class TaxReturns
     private const string NonResident = "WT 03 II. Withholding tax on non-residents";
     private const string WithholdingTotal = "WT 03 Withholding tax";
     private const string Salary = "TOS 01 Tax on salary";
+    private const string OtherTaxes = "T7 01 Other monthly taxes";
+
+    private static BoxSpec[] Other(string key, string label) =>
+    [
+        new($"t701_{key}_base", OtherTaxes, $"{label}: taxable sales", new LineRule("sale", OtherTaxCategory: key)),
+        new($"t701_{key}", OtherTaxes, $"{label}: tax", new LineRule("sale", OtherTaxCategory: key, Amount: "other_tax")),
+    ];
 
     private static BoxSpec Wht(WithholdingCategory c, bool tax, string section) =>
         new($"wt03_{c.Key}{(tax ? "" : "_base")}", section, $"{c.Label}: {(tax ? "withholding tax" : "amount to be paid")}",
@@ -316,9 +329,9 @@ public static class TaxReturns
         new("t701_11", VatPurchases, "11 Total input tax (04 + 06)", Formula: new FormulaRule([new("t701_04"), new("t701_06"), new("t701_input_journals")])),
         new("t701_non_deductible_vat", VatPurchases, "VAT on non-creditable purchases (expensed, not on the form)",
             new LineRule("purchase", ["vat_input"], false, Amount: "tax"), Information: true),
-        new("t701_12", VatSales, "12 Sales with VAT 10% to taxable persons, excluding VAT", new LineRule("sale", ["vat_output"], Party: "taxable")),
+        new("t701_12", VatSales, "12 Sales with VAT 10% to taxable persons, excluding VAT", new LineRule("sale", ["vat_output"], Party: "taxable", Amount: "taxable")),
         new("t701_13", VatSales, "13 VAT on sales to taxable persons", new LineRule("sale", ["vat_output"], Party: "taxable", Amount: "tax")),
-        new("t701_14", VatSales, "14 Sales with VAT 10% to non-taxable persons, excluding VAT", new LineRule("sale", ["vat_output"], Party: "non_taxable")),
+        new("t701_14", VatSales, "14 Sales with VAT 10% to non-taxable persons, excluding VAT", new LineRule("sale", ["vat_output"], Party: "non_taxable", Amount: "taxable")),
         new("t701_15", VatSales, "15 VAT on sales to non-taxable persons", new LineRule("sale", ["vat_output"], Party: "non_taxable", Amount: "tax")),
         new("t701_16", VatSales, "16 Exports at 0% to overseas customers", new LineRule("sale", ["vat_zero_rated"])),
         new("t701_17", VatSales, "17 Sales without VAT, taxable persons", new LineRule("sale", ["non_vat", "none"], Party: "taxable")),
@@ -337,6 +350,9 @@ public static class TaxReturns
         new("wt03_journals", WithholdingTotal, "Withholding tax posted by journals", Postings: new PostingRule("withholding_payable")),
         new("wt03_total", WithholdingTotal, "Withholding tax payable (TTR001 line 03)",
             Formula: new FormulaRule([new("wt03_resident_total"), new("wt03_nonresident_total"), new("wt03_journals")])),
+        .. Other("specific", "Specific tax on certain merchandise and services (TTR001 line 06)"),
+        .. Other("accommodation", "Accommodation tax (TTR001 line 07)"),
+        .. Other("public_lighting", "Public lighting tax (TTR001 line 08)"),
         new("tos_resident_gross", Salary, "Salaries of resident employees", Payroll: new PayrollRule("gross", true)),
         new("tos_resident_tax", Salary, "Tax on salary, resident employees", Payroll: new PayrollRule("salary_tax", true)),
         new("tos_nonresident_gross", Salary, "Salaries of non-resident employees", Payroll: new PayrollRule("gross", false)),
@@ -346,7 +362,12 @@ public static class TaxReturns
         new("tos_total", Salary, "Tax on salary payable (TTR001 lines 01 and 02)",
             Formula: new FormulaRule([new("tos_resident_tax"), new("tos_nonresident_tax"), new("tos_fringe_benefit_tax")])),
        ],
-    [new("import", "Imports: VAT paid at customs (T7 01 boxes 05-06)", "vat_input")]);
+    [
+        new("import", "Imports: VAT paid at customs (T7 01 boxes 05-06)", "vat_input"),
+        new("specific", "Specific tax on certain merchandise and services", "other_tax"),
+        new("accommodation", "Accommodation tax", "other_tax"),
+        new("public_lighting", "Public lighting tax", "other_tax"),
+    ]);
 }
 
 public enum DefinitionStatus { Draft, Published }
