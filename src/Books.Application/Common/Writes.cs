@@ -31,11 +31,15 @@ public sealed record WriteResult(int Status, string Json, long? Version)
 /// <param name="Operation">Stable operation name, part of the idempotency scope.</param>
 /// <param name="OrgId">Organization whose row is locked; null for global operations such as creating an organization.</param>
 /// <param name="ReplayRequiresMembership">False only for receipts the actor may see after losing access (leaving).</param>
-public sealed record WriteRequest(string Operation, Guid? OrgId, WriteMeta Meta, bool ReplayRequiresMembership = true);
+/// <param name="LedgerId">
+/// Set for writes inside one ledger: the ledger row is locked exclusively and the organization row only shared,
+/// so writes to different ledgers run side by side while organization changes (access, members) wait for them.
+/// </param>
+public sealed record WriteRequest(string Operation, Guid? OrgId, WriteMeta Meta, bool ReplayRequiresMembership = true, Guid? LedgerId = null);
 
 /// <summary>
 /// Runs every business write the same way, in one READ COMMITTED transaction:
-/// lock the user, lock the organization, replay or reject a reused Idempotency-Key,
+/// lock the user, lock the organization (shared) and ledger, or the organization alone, replay or reject a reused Idempotency-Key,
 /// run the handler (which checks current access and version), then save the change,
 /// its audit events and the idempotency record together.
 /// </summary>
@@ -57,6 +61,11 @@ public sealed class WriteRunner(IBooksDb db, TimeProvider clock)
             {
                 // Serialization failure or deadlock: retry the whole transaction with the same key.
             }
+            catch (Exception ex) when (Find<DbException>(ex) is { SqlState: "23505" } unique && unique.Message.Contains("pk_idempotency_records") && attempt < MaxAttempts)
+            {
+                // The same key ran concurrently in another ledger of the organization: retry, and the
+                // second attempt replays or rejects it like any reused key.
+            }
             catch (Exception ex) when (Find<DbException>(ex) is { SqlState: "55P03" or "57014" })
             {
                 throw new BooksProblem(503, "TEMPORARILY_UNAVAILABLE", "The operation timed out; retry with the same Idempotency-Key.");
@@ -70,7 +79,7 @@ public sealed class WriteRunner(IBooksDb db, TimeProvider clock)
         await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '3s'; SET LOCAL statement_timeout = '10s'", ct);
         var now = clock.GetUtcNow();
 
-        // Lock order everywhere: user, organization, then rows inside it.
+        // Lock order everywhere: user, organization, ledger, then rows inside it.
         // Global operations lock the user exclusively so the same key cannot run twice concurrently.
         var userStatus = request.OrgId is null
             ? await db.Database.SqlQuery<string>($"SELECT status AS \"Value\" FROM users WHERE id = {principal.UserId} FOR UPDATE").ToListAsync(ct)
@@ -84,7 +93,13 @@ public sealed class WriteRunner(IBooksDb db, TimeProvider clock)
         Membership? actor = null;
         if (request.OrgId is { } orgId)
         {
-            organization = (await db.Organizations.FromSql($"SELECT * FROM organizations WHERE id = {orgId} FOR UPDATE").ToListAsync(ct)).SingleOrDefault();
+            organization = request.LedgerId is { } ledgerId
+                ? (await db.Organizations.FromSql($"SELECT * FROM organizations WHERE id = {orgId} FOR SHARE").ToListAsync(ct)).SingleOrDefault()
+                : (await db.Organizations.FromSql($"SELECT * FROM organizations WHERE id = {orgId} FOR UPDATE").ToListAsync(ct)).SingleOrDefault();
+            if (organization is not null && request.LedgerId is { } locked)
+            {
+                await db.Database.ExecuteSqlAsync($"SELECT 1 FROM ledgers WHERE id = {locked} AND org_id = {orgId} FOR UPDATE", ct);
+            }
             actor = organization is null
                 ? null
                 : await db.Memberships.SingleOrDefaultAsync(

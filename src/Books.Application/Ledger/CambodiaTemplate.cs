@@ -47,7 +47,7 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
     public sealed record Summary(string Template, IReadOnlyList<string> Created, IReadOnlyList<string> Reused);
 
     public Task<WriteResult> ApplyAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("ledger.apply_template", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("ledger.apply_template", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             scope.RequireAdmin();
             var ledger = await db.Ledgers.SingleOrDefaultAsync(l => l.OrgId == orgId && l.Id == ledgerId, ct) ?? throw BooksProblem.NotFound();

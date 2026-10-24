@@ -26,7 +26,7 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
         }, ct);
 
     public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, CreateAccount command, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("account.create", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("account.create", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
@@ -53,7 +53,7 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
     /// same account when its code changes (rule 16).
     /// </summary>
     public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid accountId, UpdateAccount command, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("account.update", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("account.update", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var account = await db.Accounts.SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Id == accountId, ct) ?? throw BooksProblem.NotFound();
@@ -87,7 +87,7 @@ public sealed class AccountService(IBooksDb db, WriteRunner writes, ReadRunner r
     /// M1 has no postings yet; M2 must refuse accounts referenced by any journal line.
     /// </summary>
     public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid accountId, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("account.delete", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("account.delete", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var account = await db.Accounts.SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Id == accountId, ct) ?? throw BooksProblem.NotFound();

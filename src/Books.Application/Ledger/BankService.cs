@@ -22,7 +22,7 @@ public sealed class BankService(IBooksDb db, WriteRunner writes, ReadRunner read
         }, ct);
 
     public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid accountId, string bankName, string? accountNumber, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("bank_account.create", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("bank_account.create", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
@@ -42,7 +42,7 @@ public sealed class BankService(IBooksDb db, WriteRunner writes, ReadRunner read
         }, ct);
 
     public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid accountId, string bankName, string? accountNumber, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("bank_account.update", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("bank_account.update", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var bank = await db.BankAccounts.SingleOrDefaultAsync(b => b.LedgerId == ledgerId && b.AccountId == accountId, ct) ?? throw BooksProblem.NotFound();

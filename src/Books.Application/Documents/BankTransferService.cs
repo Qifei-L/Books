@@ -32,7 +32,7 @@ public sealed class BankTransferService(IBooksDb db, WriteRunner writes, ReadRun
     /// reasons (422, committed). With post = false it is kept as a draft on purpose.
     /// </summary>
     public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, BankTransferInput input, bool post, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest(post ? "bank_transfer.save" : "bank_transfer.save_draft", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest(post ? "bank_transfer.save" : "bank_transfer.save_draft", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
@@ -70,7 +70,7 @@ public sealed class BankTransferService(IBooksDb db, WriteRunner writes, ReadRun
     /// change fails validation is not changed at all, and its posting stays (rule 28); it cannot go back to draft.
     /// </summary>
     public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid transferId, BankTransferInput input, bool post, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest(post ? "bank_transfer.save" : "bank_transfer.save_draft", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest(post ? "bank_transfer.save" : "bank_transfer.save_draft", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var transfer = await FindAsync(ledgerId, transferId, ct);
@@ -98,7 +98,7 @@ public sealed class BankTransferService(IBooksDb db, WriteRunner writes, ReadRun
         }, ct);
 
     public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid transferId, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("bank_transfer.delete", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("bank_transfer.delete", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var transfer = await FindAsync(ledgerId, transferId, ct);

@@ -9,7 +9,7 @@ namespace Books.Application.Ledgers;
 public sealed class LedgerSettingsService(IBooksDb db, WriteRunner writes)
 {
     public Task<WriteResult> ChangeSettingsAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, string? baseCurrency, int? fyStartMonth, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("ledger.settings", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("ledger.settings", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             scope.RequireAdmin();
             var ledger = await db.Ledgers.SingleOrDefaultAsync(l => l.OrgId == orgId && l.Id == ledgerId, ct) ?? throw BooksProblem.NotFound();
@@ -23,7 +23,7 @@ public sealed class LedgerSettingsService(IBooksDb db, WriteRunner writes)
 
     /// <summary>Sets, moves back or clears the inclusive Close date. Journals dated on or before it cannot change.</summary>
     public Task<WriteResult> CloseAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, DateOnly? closedThrough, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("ledger.close", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("ledger.close", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             scope.RequireAdmin();
             var ledger = await db.Ledgers.SingleOrDefaultAsync(l => l.OrgId == orgId && l.Id == ledgerId, ct) ?? throw BooksProblem.NotFound();

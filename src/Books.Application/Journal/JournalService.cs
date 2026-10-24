@@ -23,7 +23,7 @@ public sealed record JournalDto(
 public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner reads)
 {
     public Task<WriteResult> CreateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, JournalDraft draft, bool post, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest(post ? "journal.save" : "journal.save_draft", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest(post ? "journal.save" : "journal.save_draft", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             RefuseAgentPosting(principal, post);
@@ -57,7 +57,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
     /// new date must be after Close (rule 27). A stale version is rejected, never merged (rule 29).
     /// </summary>
     public Task<WriteResult> UpdateAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid journalId, JournalDraft draft, bool post, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest(post ? "journal.save" : "journal.save_draft", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest(post ? "journal.save" : "journal.save_draft", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             RefuseAgentPosting(principal, post);
@@ -92,7 +92,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
 
     /// <summary>Deletes a journal while its date is after Close (rule 27). History stays as revisions.</summary>
     public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid journalId, CancellationToken ct) =>
-        writes.RunAsync(principal, new WriteRequest("journal.delete", orgId, meta), async scope =>
+        writes.RunAsync(principal, new WriteRequest("journal.delete", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var journal = await FindForWriteAsync(ledgerId, journalId, principal, ct);
