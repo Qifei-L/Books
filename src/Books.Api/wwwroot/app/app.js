@@ -111,6 +111,86 @@ async function chooseLedger(ledger) {
   await renderBank();
   await renderTax("2026-10");
   for (const id of ["tb-out", "gl-out", "pl-out", "bs-out"]) $(id).innerHTML = "";
+  for (const id of ["tb-form", "pl-form", "bs-form"]) $(id).requestSubmit();
+}
+
+// Drilldown: a report's account opens its GL detail for the same period; a GL line opens its journal.
+function openGl(accountId, from, to) {
+  const f = $("gl-form");
+  f.account.value = accountId;
+  f.from.value = from;
+  f.to.value = to;
+  document.querySelector('.tabs button[data-tab="gl"]').click();
+  f.requestSubmit();
+}
+
+const SOURCES = {
+  purchase_invoice: "Purchase invoice", purchase_debit_note: "Debit note", sales_invoice: "Sales invoice", sales_credit_note: "Credit note",
+  payment: "Payment", receipt: "Receipt", bank_transfer: "Bank transfer", pay_run: "Pay run",
+};
+
+async function openJournal(id) {
+  try {
+    showJournal(await api(`${ledgerUrl()}/journals/${id}`));
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function openJournalNo(no) {
+  const journal = (await api(`${ledgerUrl()}/journals`)).find((j) => j.journal_no === Number(no));
+  if (journal) showJournal(journal);
+}
+
+const DOC_LISTS = {
+  sales_invoice: "sales-invoices", sales_credit_note: "credit-notes", purchase_invoice: "purchase-invoices", purchase_debit_note: "debit-notes",
+  payment: "payments", receipt: "receipts", pay_run: "pay-runs", bank_transfer: "transfers",
+};
+
+// Opens whatever produced a posting: the document's own view where there is one, otherwise its journal.
+async function openDocument(kind, id) {
+  try {
+    if (kind === "journal" || !DOC_LISTS[kind]) return openJournal(id);
+    const [docs, parties] = await Promise.all([api(`${ledgerUrl()}/${DOC_LISTS[kind]}`), api(`${ledgerUrl()}/parties`)]);
+    const party = (pid) => parties.find((p) => p.id === pid)?.name ?? "";
+    const doc = docs.find((d) => d.id === id);
+    if (!doc) return;
+    if (kind.startsWith("sales")) showSale(doc, party);
+    else if (kind.startsWith("purchase")) showPurchase(doc, party);
+    else if (kind === "payment" || kind === "receipt") showPayment(doc, party);
+    else if (doc.journal_id) openJournal(doc.journal_id);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+const journalButton = (d) => d.journal_id ? `<p><button class="secondary" onclick="openJournal('${d.journal_id}')">Journal ${d.journal_no ?? ""}</button></p>` : "";
+
+function showPayment(d, party) {
+  $("journal-body").innerHTML = `<h3>${d.type === "receipt" ? "Receipt" : "Payment"} ${d.payment_no} <span class="pill ${d.status}">${d.status}</span></h3>
+    <p class="muted">${esc(accountName(d.bank_account_id))} · ${d.date} · ${esc(party(d.party_id))} · ${esc(d.reference ?? "")} · ${esc(d.description ?? "")}</p>
+    <table><tr><th>Line</th><th>Description</th><th class="num">Amount</th><th class="num">VAT</th><th class="num">WHT</th><th class="num">Total</th></tr>
+    ${d.lines.map((l) => `<tr><td>${l.kind === "account" ? esc(accountName(l.account_id)) : `${esc(accountName(l.control_account_id))} · ${l.kind === "invoice" ? "settles an invoice" : "party balance"}`}</td>
+      <td>${esc(l.description ?? "")}</td><td class="num">${l.amount}</td><td class="num">${blank(l.tax_amount)}</td><td class="num">${blank(l.withholding_amount)}</td><td class="num">${l.total}</td></tr>`).join("")}
+    <tr class="total"><td colspan="5">Total</td><td class="num">${d.total}</td></tr></table>
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}`;
+  $("journal-dialog").showModal();
+}
+
+async function showStatement(kind, partyId, asOf) {
+  try {
+    const s = await api(`${ledgerUrl()}/reports/${kind}-statement?${kind}Id=${partyId}&from=${asOf.slice(0, 4)}-01-01&to=${asOf}`);
+    $("journal-body").innerHTML = `<h3>${esc(s.supplier ?? s.customer)} · statement</h3>
+      <p class="muted">${s.from} – ${s.to} · ${s.currency}</p>
+      <table><tr><th>Date</th><th>Type</th><th>No.</th><th>Reference</th><th>Due</th><th class="num">Amount</th><th class="num">Balance</th></tr>
+      <tr><td colspan="6" class="muted">Opening balance</td><td class="num">${s.opening_balance}</td></tr>
+      ${s.items.map((i) => `<tr><td>${i.date}</td><td>${i.type.replaceAll("_", " ")}</td><td>${i.number}</td><td>${esc(i.reference ?? "")}</td><td>${i.due_date}</td>
+        <td class="num">${i.amount}</td><td class="num">${i.balance}</td></tr>`).join("")}
+      <tr class="total"><td colspan="6">Closing balance</td><td class="num">${s.closing_balance}</td></tr></table>`;
+    $("journal-dialog").showModal();
+  } catch (error) {
+    showError(error);
+  }
 }
 
 for (const button of document.querySelectorAll(".tabs button")) {
@@ -142,11 +222,13 @@ async function renderChart() {
   }
   $("tab-chart").innerHTML = `<table><tr><th>Code</th><th>Account</th><th>Status</th><th>System purpose</th></tr>${rows.join("")}</table>`;
   $("gl-form").account.innerHTML = accounts.map((a) => `<option value="${a.id}">${esc(a.code)} ${esc(a.name)}</option>`).join("");
+  const year = new Date().getFullYear();
+  for (const tr of $("tab-chart").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, `${year}-01-01`, `${year}-12-31`);
 }
 
 function accountRow(a, purposeOf, indented) {
   const status = [a.active ? "active" : "inactive", a.used ? "used" : null].filter(Boolean).join(", ");
-  return `<tr><td>${esc(a.code)}</td><td style="padding-left:${indented ? 24 : 8}px">${esc(a.name)}</td><td class="muted">${status}</td><td>${esc(purposeOf[a.id] ?? "")}</td></tr>`;
+  return `<tr class="click" data-account="${a.id}"><td>${esc(a.code)}</td><td style="padding-left:${indented ? 24 : 8}px">${esc(a.name)}</td><td class="muted">${status}</td><td>${esc(purposeOf[a.id] ?? "")}</td></tr>`;
 }
 
 const accountName = (id) => {
@@ -166,6 +248,8 @@ async function renderJournals() {
 
 function showJournal(j) {
   $("journal-body").innerHTML = `<h3>Journal ${j.journal_no} <span class="pill ${j.status}">${j.status}</span></h3>
+    ${j.source_kind ? `<p>From ${SOURCES[j.source_kind] ?? esc(j.source_kind)} · change it through the document, not the journal.
+      <button class="secondary" onclick="openDocument('${j.source_kind}', '${j.source_id}')">Open ${SOURCES[j.source_kind] ?? "document"}</button></p>` : ""}
     <p class="muted">${j.accounting_date} · ${esc(j.reference ?? "")} · ${esc(j.description ?? "")} · revision ${j.revision_no}, version ${j.version}</p>
     <table><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr>
     ${j.lines.map((l) => `<tr><td>${esc(accountName(l.account_id))}</td><td class="num">${l.debit === "0.00" ? "" : l.debit}</td><td class="num">${l.credit === "0.00" ? "" : l.credit}</td></tr>`).join("")}</table>
@@ -185,10 +269,12 @@ $("tb-form").addEventListener("submit", async (event) => {
       <p>${tb.balanced ? `<span class="ok">Balanced</span>` : `<span class="error">Not balanced</span>`} · ${tb.currency}</p>
       <table><tr><th>Code</th><th>Account</th><th class="num">Opening Dr</th><th class="num">Opening Cr</th><th class="num">Period Dr</th>
         <th class="num">Period Cr</th><th class="num">Closing Dr</th><th class="num">Closing Cr</th></tr>
-      ${tb.rows.map((r) => `<tr><td>${esc(r.code ?? "")}</td><td>${esc(r.name)}</td><td class="num">${blank(r.opening_debit)}</td><td class="num">${blank(r.opening_credit)}</td>
+      ${tb.rows.map((r) => `<tr ${r.account_id ? `class="click" data-account="${r.account_id}"` : ""}><td>${esc(r.code ?? "")}</td><td>${esc(r.name)}</td><td class="num">${blank(r.opening_debit)}</td><td class="num">${blank(r.opening_credit)}</td>
         <td class="num">${blank(r.period_debit)}</td><td class="num">${blank(r.period_credit)}</td><td class="num">${blank(r.closing_debit)}</td><td class="num">${blank(r.closing_credit)}</td></tr>`).join("")}
       <tr class="total"><td></td><td>Total</td><td class="num">${t.opening_debit}</td><td class="num">${t.opening_credit}</td><td class="num">${t.period_debit}</td>
-        <td class="num">${t.period_credit}</td><td class="num">${t.closing_debit}</td><td class="num">${t.closing_credit}</td></tr></table>`;
+        <td class="num">${t.period_credit}</td><td class="num">${t.closing_debit}</td><td class="num">${t.closing_credit}</td></tr></table>
+      <p class="muted small">Click an account for its GL detail.</p>`;
+    for (const tr of $("tb-out").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, f.from.value, f.to.value);
   } catch (error) {
     showError(error);
   }
@@ -202,9 +288,11 @@ $("gl-form").addEventListener("submit", async (event) => {
     $("gl-out").innerHTML = `<h3>${esc(gl.code)} ${esc(gl.name)}</h3>
       <table><tr><th>Date</th><th>No.</th><th>Reference</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr>
       <tr><td colspan="6" class="muted">Opening balance</td><td class="num">${gl.opening_balance}</td></tr>
-      ${gl.lines.map((l) => `<tr><td>${l.date}</td><td>${l.journal_no}</td><td>${esc(l.reference)}</td><td>${esc(l.description)}</td>
+      ${gl.lines.map((l) => `<tr class="click" data-journal="${l.journal_id}"><td>${l.date}</td><td>${l.journal_no}</td><td>${esc(l.reference)}</td><td>${esc(l.description)}</td>
         <td class="num">${blank(l.debit)}</td><td class="num">${blank(l.credit)}</td><td class="num">${l.balance}</td></tr>`).join("")}
-      <tr class="total"><td colspan="4">Period totals / closing</td><td class="num">${gl.period_debit}</td><td class="num">${gl.period_credit}</td><td class="num">${gl.closing_balance}</td></tr></table>`;
+      <tr class="total"><td colspan="4">Period totals / closing</td><td class="num">${gl.period_debit}</td><td class="num">${gl.period_credit}</td><td class="num">${gl.closing_balance}</td></tr></table>
+      <p class="muted small">Click a line for its journal.</p>`;
+    for (const tr of $("gl-out").querySelectorAll("tr[data-journal]")) tr.onclick = () => openJournal(tr.dataset.journal);
   } catch (error) {
     showError(error);
   }
@@ -257,11 +345,12 @@ async function renderSales() {
     <h3 style="margin-top:16px">AR aging at ${aging.as_of}</h3>
     <p>${aging.matches_control ? `<span class="ok">Equals the receivable balance ${aging.control_balance}</span>` : `<span class="error">Does not equal the receivable balance ${aging.control_balance}</span>`}</p>
     <table><tr><th>Customer</th><th class="num">Not due</th><th class="num">1–30</th><th class="num">31–60</th><th class="num">61–90</th><th class="num">Over 90</th><th class="num">Total</th></tr>
-    ${[...aging.rows, a].map((r) => `<tr class="${r === a ? "total" : ""}"><td>${esc(r.customer)}</td><td class="num">${r.not_due}</td><td class="num">${r.days1_to30}</td>
+    ${[...aging.rows, a].map((r) => `<tr class="${r === a ? "total" : "click"}" ${r === a ? "" : `data-customer="${r.customer_id}"`}><td>${esc(r.customer)}</td><td class="num">${r.not_due}</td><td class="num">${r.days1_to30}</td>
       <td class="num">${r.days31_to60}</td><td class="num">${r.days61_to90}</td><td class="num">${r.over90}</td><td class="num">${r.total}</td></tr>`).join("")}</table>`;
   for (const tr of $("tab-sales").querySelectorAll("tr[data-id]")) {
     tr.onclick = () => showSale(docs.find((d) => d.id === tr.dataset.id), party);
   }
+  for (const tr of $("tab-sales").querySelectorAll("tr[data-customer]")) tr.onclick = () => showStatement("customer", tr.dataset.customer, aging.as_of);
 }
 
 function showSale(d, party) {
@@ -274,7 +363,7 @@ function showSale(d, party) {
     <tr class="total"><td colspan="2">Gross ${d.gross_total}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td></tr></table>
     ${t ? `<p>Total including VAT: <b>${Number(t.gross_total).toLocaleString()} ${t.currency}</b> (VAT ${Number(t.tax_total).toLocaleString()} ${t.currency})
       at ${t.rate} ${esc(t.rate_source)} of ${t.rate_date}${t.reason ? ` · ${esc(t.reason)}` : ""}</p>` : ""}
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}`;
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}`;
   $("journal-dialog").showModal();
 }
 
@@ -296,20 +385,25 @@ async function renderBank() {
     <p><label>Account <select id="bank-pick">${banks.map((b) => `<option value="${b.account_id ?? b.id}" ${b === bank ? "selected" : ""}>${esc(b.code)} ${esc(b.name)} · ${esc(b.bank_name)}</option>`).join("")}</select></label></p>
     <h3>Payments and receipts</h3>
     <table><tr><th>No.</th><th>Date</th><th>Party</th><th>Reference</th><th>Lines</th><th class="num">In</th><th class="num">Out</th><th>Status</th></tr>
-    ${docs.map((d) => `<tr><td>${d.type === "receipt" ? "RC" : "PM"} ${d.payment_no}</td><td>${d.date}</td><td>${esc(party(d.party_id))}</td><td>${esc(d.reference ?? "")}</td>
+    ${docs.map((d) => `<tr class="click" data-pay="${d.id}"><td>${d.type === "receipt" ? "RC" : "PM"} ${d.payment_no}</td><td>${d.date}</td><td>${esc(party(d.party_id))}</td><td>${esc(d.reference ?? "")}</td>
       <td>${d.lines.map((l) => `${l.kind === "account" ? esc(accountName(l.account_id)) : l.kind === "invoice" ? "invoice" : "party balance"} ${l.amount}`).join("; ")}</td>
       <td class="num">${d.type === "receipt" ? d.total : ""}</td><td class="num">${d.type === "payment" ? d.total : ""}</td>
       <td>${d.status === "posted" ? `<span class="pill posted">posted</span>` : `<span class="pill draft">${d.status}</span> ${d.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>
     <h3 style="margin-top:16px">Reconciliation at ${r.as_of}</h3>
     <p>Book ${r.book_balance} · cleared ${r.cleared_balance}${r.statement_balance ? ` · statement ${r.statement_balance} · ${r.reconciled ? `<span class="ok">reconciled</span>` : `<span class="error">difference ${r.difference}</span>`}` : ""}</p>
     <table><tr><th>Pending</th><th>Date</th><th>Source</th><th>Reference</th><th class="num">Amount</th></tr>
-    ${r.pending.slice(-15).map((p) => `<tr><td>No. ${p.journal_no}</td><td>${p.date}</td><td>${p.source}</td><td>${esc(p.reference ?? "")}</td><td class="num">${p.amount}</td></tr>`).join("")}</table>
+    ${r.pending.slice(-15).map((p) => `<tr class="click" data-journal="${p.journal_id}"><td>No. ${p.journal_no}</td><td>${p.date}</td><td>${p.source}</td><td>${esc(p.reference ?? "")}</td><td class="num">${p.amount}</td></tr>`).join("")}</table>
     ${r.pending.length > 15 ? `<p class="muted">${r.pending.length - 15} earlier pending postings not shown.</p>` : ""}
     ${statements.map((st) => `<h3 style="margin-top:16px">Statement ${st.from} – ${st.to}</h3>
       <p class="muted">Opening ${st.opening_balance} · closing ${st.closing_balance} · ${st.matched} matched · ${st.drafted} to Suspense (drafts) · ${st.duplicates} duplicates</p>
       <table><tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Status</th></tr>
-      ${st.lines.map((l) => `<tr><td>${l.date}</td><td>${esc(l.description ?? "")}</td><td class="num">${l.amount}</td><td><span class="pill ${l.status === "matched" ? "posted" : "draft"}">${l.status}</span></td></tr>`).join("")}</table>`).join("")}`;
+      ${st.lines.map((l) => `<tr class="${l.status === "duplicate" ? "" : "click"}" data-line-journal="${l.journal_id ?? ""}" data-line-payment="${l.payment_id ?? ""}" data-line-kind="${Number(l.amount) > 0 ? "receipt" : "payment"}"><td>${l.date}</td><td>${esc(l.description ?? "")}</td><td class="num">${l.amount}</td><td><span class="pill ${l.status === "matched" ? "posted" : "draft"}">${l.status}</span></td></tr>`).join("")}</table>`).join("")}`;
   $("bank-pick").onchange = (e) => { state.bankId = e.target.value; renderBank(); };
+  for (const tr of $("tab-bank").querySelectorAll("tr[data-pay]")) tr.onclick = () => showPayment(docs.find((d) => d.id === tr.dataset.pay), party);
+  for (const tr of $("tab-bank").querySelectorAll("tr[data-journal]")) tr.onclick = () => openJournal(tr.dataset.journal);
+  for (const tr of $("tab-bank").querySelectorAll("tr[data-line-kind]")) {
+    tr.onclick = () => tr.dataset.lineJournal ? openJournal(tr.dataset.lineJournal) : tr.dataset.linePayment && openDocument(tr.dataset.lineKind, tr.dataset.linePayment);
+  }
 }
 
 async function renderTax(period) {
@@ -335,7 +429,7 @@ async function renderTax(period) {
     <h3>Reconciliation with tax accounts</h3>
     <table><tr><th>Usage</th><th>Accounts</th><th class="num">Ledger</th><th class="num">Documents</th><th class="num">Difference</th><th>Other postings</th></tr>
     ${r.reconciliation.map((x) => `<tr><td>${esc(x.label)}</td><td>${x.accounts.join(", ")}</td><td class="num">${x.ledger_amount}</td><td class="num">${x.return_amount}</td>
-      <td class="num ${x.matches ? "ok" : "error"}">${x.difference}</td><td>${x.other_postings.map((o) => `No. ${o.journal_no} ${esc(o.reference ?? "")} ${o.amount}`).join("; ")}</td></tr>`).join("")}</table>
+      <td class="num ${x.matches ? "ok" : "error"}">${x.difference}</td><td>${x.other_postings.map((o) => `<a href="#" onclick="event.preventDefault(); openJournalNo(${o.journal_no})">No. ${o.journal_no}</a> ${esc(o.reference ?? "")} ${o.amount}`).join("; ")}</td></tr>`).join("")}</table>
     ${r.adjusted_lines.length ? `<h3>Lines with overridden VAT</h3><table><tr><th>Document</th><th>Party</th><th class="num">Calculated</th><th class="num">Entered</th><th>Reason</th></tr>
       ${r.adjusted_lines.map((l) => `<tr><td>${l.document_type} ${l.document_no}</td><td>${esc(l.party)}</td><td class="num">${l.tax_calculated}</td><td class="num">${l.tax_amount}</td><td>${esc(l.tax_reason ?? "")}</td></tr>`).join("")}</table>` : ""}`;
   $("tax-period").onchange = (e) => renderTax(e.target.value);
@@ -345,7 +439,7 @@ async function renderTax(period) {
       const box = await api(`${ledgerUrl()}/tax-returns/${period}/boxes/${tr.dataset.box}`);
       $("journal-body").innerHTML = `<h3>${esc(box.label)} · ${box.period}</h3><p class="muted">${box.amount} · ${box.tax_currency_amount ?? ""}</p>
         <table><tr><th>Document</th><th>Date</th><th>Party</th><th>Line</th><th class="num">Amount</th><th class="num">Rate</th><th class="num">KHR</th></tr>
-        ${box.lines.map((l) => `<tr><td>${l.document_type} ${l.document_no}</td><td>${l.date}</td><td>${esc(l.party)}</td><td>${esc(l.description ?? "")}</td>
+        ${box.lines.map((l) => `<tr class="click" onclick="openDocument('${l.document_type}', '${l.document_id}')"><td>${l.document_type.replaceAll("_", " ")} ${l.document_no}</td><td>${l.date}</td><td>${esc(l.party)}</td><td>${esc(l.description ?? "")}</td>
           <td class="num">${l.amount}</td><td class="num">${l.tax_currency_rate ?? ""}</td><td class="num">${l.tax_currency_amount ? Number(l.tax_currency_amount).toLocaleString() : ""}</td></tr>`).join("")}</table>`;
       $("journal-dialog").showModal();
     };
@@ -370,11 +464,12 @@ async function renderPurchases() {
     <h3 style="margin-top:16px">AP aging at ${aging.as_of}</h3>
     <p>${aging.matches_control ? `<span class="ok">Equals the payable balance ${aging.control_balance}</span>` : `<span class="error">Does not equal the payable balance ${aging.control_balance}</span>`}</p>
     <table><tr><th>Supplier</th><th class="num">Not due</th><th class="num">1–30</th><th class="num">31–60</th><th class="num">61–90</th><th class="num">Over 90</th><th class="num">Total</th></tr>
-    ${[...aging.rows, a].map((r) => `<tr class="${r === a ? "total" : ""}"><td>${esc(r.supplier)}</td><td class="num">${r.not_due}</td><td class="num">${r.days1_to30}</td>
+    ${[...aging.rows, a].map((r) => `<tr class="${r === a ? "total" : "click"}" ${r === a ? "" : `data-supplier="${r.supplier_id}"`}><td>${esc(r.supplier)}</td><td class="num">${r.not_due}</td><td class="num">${r.days1_to30}</td>
       <td class="num">${r.days31_to60}</td><td class="num">${r.days61_to90}</td><td class="num">${r.over90}</td><td class="num">${r.total}</td></tr>`).join("")}</table>`;
   for (const tr of $("tab-purchases").querySelectorAll("tr[data-id]")) {
     tr.onclick = () => showPurchase([...invoices, ...notes].find((d) => d.id === tr.dataset.id), party);
   }
+  for (const tr of $("tab-purchases").querySelectorAll("tr[data-supplier]")) tr.onclick = () => showStatement("supplier", tr.dataset.supplier, aging.as_of);
 }
 
 function showPurchase(d, party) {
@@ -387,7 +482,7 @@ function showPurchase(d, party) {
     <tr class="total"><td colspan="2">Totals · gross ${d.gross_total} · payable ${d.payable_total}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td><td></td><td class="num">${d.withholding_total}</td></tr></table>
     ${d.tax_currency ? `<p class="muted">${d.tax_currency.currency} at ${d.tax_currency.rate} (${esc(d.tax_currency.rate_source)}, ${d.tax_currency.rate_date})${d.tax_currency.reason ? ` · ${esc(d.tax_currency.reason)}` : ""}:
       gross ${d.tax_currency.gross_total} · VAT ${d.tax_currency.tax_total}</p>` : ""}
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}`;
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}`;
   $("journal-dialog").showModal();
 }
 
@@ -397,7 +492,8 @@ function statementRows(lines, level) {
     const pad = `style="padding-left:${8 + level * 18}px"`;
     const name = esc(line.code ? `${line.code} ${line.name}` : line.name);
     if (line.kind !== "group") {
-      return `<tr><td ${pad}>${line.kind === "calculated" ? `<em>${name}</em>` : name}</td><td class="num">${line.amount}</td></tr>`;
+      const drill = line.kind === "account" && line.id ? `class="click" data-account="${line.id}"` : "";
+      return `<tr ${drill}><td ${pad}>${line.kind === "calculated" ? `<em>${name}</em>` : name}</td><td class="num">${line.amount}</td></tr>`;
     }
     return `<tr><td ${pad}><strong>${name}</strong></td><td></td></tr>${statementRows(line.children, level + 1)}
       <tr><td ${pad}><strong>Total ${esc(line.name)}</strong></td><td class="num"><strong>${line.amount}</strong></td></tr>`;
@@ -415,7 +511,8 @@ $("pl-form").addEventListener("submit", async (event) => {
     const f = event.target;
     const pl = await api(`${ledgerUrl()}/reports/profit-and-loss?from=${f.from.value}&to=${f.to.value}`);
     $("pl-out").innerHTML = `<table><tr><th>Account</th><th class="num">${pl.currency}</th></tr>${statementTable(pl.sections)}
-      <tr class="total"><td>Net profit</td><td class="num">${pl.net_profit}</td></tr></table>`;
+      <tr class="total"><td>Net profit</td><td class="num">${pl.net_profit}</td></tr></table><p class="muted small">Click an account for its GL detail.</p>`;
+    for (const tr of $("pl-out").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, f.from.value, f.to.value);
   } catch (error) {
     showError(error);
   }
@@ -427,7 +524,9 @@ $("bs-form").addEventListener("submit", async (event) => {
     const bs = await api(`${ledgerUrl()}/reports/balance-sheet?asOf=${event.target.asOf.value}`);
     $("bs-out").innerHTML = `<p>${bs.balanced ? `<span class="ok">Balanced</span>` : `<span class="error">Not balanced</span>`}
       · assets ${bs.total_assets} = liabilities and equity ${bs.total_liabilities_and_equity}</p>
-      <table><tr><th>Account</th><th class="num">${bs.currency}</th></tr>${statementTable(bs.sections)}</table>`;
+      <table><tr><th>Account</th><th class="num">${bs.currency}</th></tr>${statementTable(bs.sections)}</table><p class="muted small">Click an account for its GL detail.</p>`;
+    const asOf = event.target.asOf.value;
+    for (const tr of $("bs-out").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, `${asOf.slice(0, 4)}-01-01`, asOf);
   } catch (error) {
     showError(error);
   }
