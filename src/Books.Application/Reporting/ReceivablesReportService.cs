@@ -70,7 +70,7 @@ public sealed class ReceivablesReportService(IBooksDb db, ReadRunner reads)
         }, ct);
 
     /// <summary>Posted invoices (charges) and credit notes and receipt lines from customers (credits) dated up to the date.</summary>
-    private async Task<(List<Charge>, List<Credit>)> DocumentsAsync(Guid ledgerId, DateOnly to, CancellationToken ct)
+    internal async Task<(List<Charge>, List<Credit>)> DocumentsAsync(Guid ledgerId, DateOnly to, CancellationToken ct)
     {
         var documents = await db.SalesInvoices.AsNoTracking().Include(i => i.Lines)
             .Where(i => i.LedgerId == ledgerId && i.Status == DocumentStatus.Posted && i.Date <= to).ToListAsync(ct);

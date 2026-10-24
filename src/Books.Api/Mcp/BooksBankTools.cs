@@ -16,7 +16,7 @@ namespace Books.Api.Mcp;
 [McpServerToolType]
 public sealed class BooksBankTools(
     PrincipalAccessor principals, PaymentService payments, BankStatementService statements, BankReconciliationService reconciliation, PayRunService payRuns,
-    FixedAssetService assets, InventoryReportService inventory, StockAdjustmentService adjustments, IHttpContextAccessor http)
+    FixedAssetService assets, InventoryReportService inventory, StockAdjustmentService adjustments, FxRevaluationService revaluations, IHttpContextAccessor http)
 {
     public sealed record PaymentLine(
         [property: JsonPropertyName("amount"), Description("Decimal string; VAT excluded on account lines; may be negative (fees, discounts, tax a customer withheld).")] string Amount,
@@ -99,6 +99,20 @@ public sealed class BooksBankTools(
             var meta = McpWrites.Meta(http, "save_stock_adjustment_draft", idempotency_key, new { org_id, ledger_id, date, lines, reference, description });
             return await adjustments.CreateAsync(await principals.GetAsync(ct), meta, org_id, ledger_id, input, post: false, ct);
         });
+
+    [McpServerTool(Name = "list_fx_revaluations", ReadOnly = true, Idempotent = true)]
+    [Description("Year-end exchange revaluations posted: the closing rates, each bank account and open invoice revalued, and the reversal the day after.")]
+    public Task<CallToolResult> FxRevaluations(Guid org_id, Guid ledger_id, CancellationToken ct) =>
+        BooksReadTools.RunAsync(async () => await revaluations.ListAsync(await principals.GetAsync(ct), org_id, ledger_id, ct));
+
+    [McpServerTool(Name = "get_fx_revaluation_preview", ReadOnly = true, Idempotent = true)]
+    [Description("What a year-end exchange revaluation on the date would post, without posting it: bank accounts in another currency and open "
+        + "invoices in another currency, restated at the closing rate, with the unrealized difference. Posting it is for people.")]
+    public Task<CallToolResult> FxRevaluationPreview(Guid org_id, Guid ledger_id, [Description("yyyy-MM-dd, usually the last day of the fiscal year.")] DateOnly date,
+        [Description("Closing KHR rate per one unit of the ledger's currency; omit for the rate table on or before the date.")] string? khr_rate = null,
+        CancellationToken ct = default) =>
+        BooksReadTools.RunAsync(async () => await revaluations.PreviewAsync(await principals.GetAsync(ct), org_id, ledger_id, date,
+            khr_rate is null ? null : FxRevaluationEndpoints.Rates(new Dictionary<string, string> { ["KHR"] = khr_rate }), ct));
 
     [McpServerTool(Name = "list_pay_runs", ReadOnly = true, Idempotent = true)]
     [Description("Pay runs (imported payroll results) with their totals and status.")]

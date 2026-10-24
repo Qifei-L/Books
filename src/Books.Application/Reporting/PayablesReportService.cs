@@ -76,7 +76,7 @@ public sealed class PayablesReportService(IBooksDb db, ReadRunner reads)
         }, ct);
 
     /// <summary>Posted invoices (charges) and debit notes and payment lines to suppliers (credits) dated up to the date.</summary>
-    private async Task<(List<Charge>, List<Credit>)> DocumentsAsync(Guid ledgerId, DateOnly to, CancellationToken ct)
+    internal async Task<(List<Charge>, List<Credit>)> DocumentsAsync(Guid ledgerId, DateOnly to, CancellationToken ct)
     {
         var documents = await db.PurchaseInvoices.AsNoTracking().Include(i => i.Lines)
             .Where(i => i.LedgerId == ledgerId && i.Status == DocumentStatus.Posted && i.Date <= to).ToListAsync(ct);
@@ -97,7 +97,8 @@ public sealed class PayablesReportService(IBooksDb db, ReadRunner reads)
 }
 
 /// <summary>An amount still open for a party: positive when owed, negative for a credit.</summary>
-internal sealed record OpenItem(Guid PartyId, DateOnly Date, DateOnly DueDate, string Type, long Number, string? Reference, decimal Amount);
+/// <param name="InvoiceId">The invoice still open; null for a party's credit.</param>
+internal sealed record OpenItem(Guid PartyId, DateOnly Date, DateOnly DueDate, string Type, long Number, string? Reference, decimal Amount, Guid? InvoiceId = null);
 
 /// <summary>An invoice: what the party owes (payables) or is owed (receivables).</summary>
 internal sealed record Charge(Guid Id, Guid PartyId, DateOnly Date, DateOnly DueDate, string Type, long Number, string? Reference, decimal Amount);
@@ -144,7 +145,7 @@ internal static class OpenItems
                 pool -= take;
                 if (remaining[invoice.Id] != 0)
                 {
-                    open.Add(new OpenItem(party, invoice.Date, invoice.DueDate, invoice.Type, invoice.Number, invoice.Reference, remaining[invoice.Id]));
+                    open.Add(new OpenItem(party, invoice.Date, invoice.DueDate, invoice.Type, invoice.Number, invoice.Reference, remaining[invoice.Id], invoice.Id));
                 }
             }
             if (pool != 0)

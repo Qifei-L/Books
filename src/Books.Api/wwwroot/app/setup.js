@@ -4,9 +4,10 @@
 const isAdmin = () => state.role === "admin";
 
 async function renderSetup() {
-  const [parties, taxCodes, banks, transfers, invoiceSettings, rates] = await Promise.all([
+  const [parties, taxCodes, banks, transfers, invoiceSettings, rates, revaluations] = await Promise.all([
     api(`${ledgerUrl()}/parties`), api(`${ledgerUrl()}/tax-codes`), api(`${ledgerUrl()}/bank-accounts`), api(`${ledgerUrl()}/transfers`),
     api(`${ledgerUrl()}/invoice-settings`), api(`/api/v1/organizations/${state.org}/exchange-rates?from=${today().slice(0, 4)}-01-01&to=${today()}`),
+    api(`${ledgerUrl()}/fx-revaluations`),
   ]);
   const roles = (p) => [p.is_customer ? "customer" : null, p.is_supplier ? "supplier" : null].filter(Boolean).join(", ");
   const s = invoiceSettings;
@@ -38,7 +39,15 @@ async function renderSetup() {
     <h3 style="margin-top:16px">Exchange rates this year ${isAdmin() ? `<button class="secondary small" onclick="rateForm()">Set a rate</button>` : ""}</h3>
     <p class="muted small">Shared by every company in the organization.</p>
     <table><tr><th>Date</th><th>From</th><th>To</th><th class="num">Rate</th><th>Source</th></tr>
-    ${rates.slice(-12).reverse().map((r) => `<tr><td>${r.date}</td><td>${r.from_currency}</td><td>${r.to_currency}</td><td class="num">${r.rate}</td><td>${esc(r.source)}</td></tr>`).join("")}</table>`;
+    ${rates.slice(-12).reverse().map((r) => `<tr><td>${r.date}</td><td>${r.from_currency}</td><td>${r.to_currency}</td><td class="num">${r.rate}</td><td>${esc(r.source)}</td></tr>`).join("")}</table>
+
+    <h3 style="margin-top:16px">Year-end exchange revaluation ${canEdit() ? `<button class="secondary small" onclick="revaluationForm()">Revalue…</button>` : ""}</h3>
+    <p class="muted small">Restates bank accounts and open invoices in another currency at the closing rate; the unrealized difference reverses the next day. Revalue before closing the year.</p>
+    <table><tr><th>No.</th><th>Date</th><th>Rates</th><th class="num">Unrealized</th><th>Status</th><th></th></tr>
+    ${revaluations.filter((r) => r.status !== "deleted").map((r) => `<tr><td>FXR ${r.revaluation_no}</td><td>${r.date}</td>
+      <td>${Object.entries(r.rates).map(([c, v]) => `${c} ${v}`).join(", ")}</td><td class="num">${r.total}</td><td><span class="pill ${r.status}">${r.status}</span></td>
+      <td><button class="secondary small" onclick="openJournal('${r.journal_id}')">Journal</button>
+        ${canEdit() ? `<button class="secondary small" onclick="deleteRevaluation('${r.id}', '${r.version}', '${r.date}')">Delete</button>` : ""}</td></tr>`).join("")}</table>`;
   for (const tr of $("tab-setup").querySelectorAll("tr[data-bank]")) tr.onclick = () => bankForm(banks.find((b) => b.account_id === tr.dataset.bank));
   for (const tr of $("tab-setup").querySelectorAll("tr[data-transfer]")) tr.onclick = () => transferForm(shownTransfers.find((t) => t.id === tr.dataset.transfer));
   for (const tr of $("tab-setup").querySelectorAll("tr[data-tax]")) tr.onclick = () => taxCodeForm(taxCodes.find((t) => t.id === tr.dataset.tax));
@@ -273,6 +282,63 @@ async function deleteRun(id, period) {
   if (!confirm(`Delete the depreciation run for ${period}? Its journal is removed too.`)) return;
   try {
     await write("DELETE", `${ledgerUrl()}/depreciation-runs/${id}`);
+    await refreshLedger();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+// ---- Year-end exchange revaluation ----
+
+async function revaluationForm() {
+  // The end of the current fiscal year: the day before the next one starts.
+  const year = Number(today().slice(0, 4));
+  const fyStart = state.ledger.fy_start_month;
+  const nextStartYear = Number(today().slice(5, 7)) >= fyStart ? year + 1 : year;
+  const end = new Date(Date.UTC(nextStartYear, fyStart - 1, 0)).toISOString().slice(0, 10);
+  const form = openForm("Year-end exchange revaluation", `
+    <div class="grid">
+      <label>Closing date <input type="date" name="date" value="${end}"></label>
+      <label>KHR rate <input name="khr" class="num" inputmode="decimal" placeholder="rate table"></label>
+    </div>
+    <div id="revaluation-preview"><p class="muted">Loading…</p></div>
+    <p class="actions"><span class="spacer"></span>
+      <button type="button" class="secondary" data-cancel>Cancel</button>
+      <button type="submit">Post revaluation and reversal</button>
+    </p>`);
+  // The preview is what would post; the server works it out again when posting.
+  const preview = async () => {
+    try {
+      const f = form.elements;
+      const p = await api(`${ledgerUrl()}/fx-revaluations/preview?date=${f.date.value}${orNull(f.khr.value) ? `&khrRate=${encodeURIComponent(f.khr.value.trim())}` : ""}`);
+      $("revaluation-preview").innerHTML = p.lines.length === 0 ? `<p class="muted">Nothing to revalue on ${p.date}.</p>` : `
+        <p class="muted small">Rates: ${Object.entries(p.rates).map(([c, v]) => `${c} ${v}`).join(", ")}</p>
+        <table><tr><th>What</th><th class="num">Own currency</th><th class="num">Before</th><th class="num">After</th><th class="num">Difference</th></tr>
+        ${p.lines.map((l) => `<tr><td>${esc(l.description ?? "")}</td><td class="num">${Number(l.foreign_amount).toLocaleString()} ${l.currency}</td>
+          <td class="num">${l.before}</td><td class="num">${l.after}</td><td class="num">${l.adjustment}</td></tr>`).join("")}
+        <tr class="total"><td colspan="4">Unrealized gain (+) or loss (−)</td><td class="num">${p.total}</td></tr></table>`;
+    } catch (error) {
+      $("revaluation-preview").innerHTML = `<p class="error">${esc(error.message)}</p>`;
+    }
+  };
+  form.elements.date.onchange = preview;
+  form.elements.khr.onchange = preview;
+  await preview();
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    busy(form, async () => {
+      const f = form.elements;
+      await write("POST", `${ledgerUrl()}/fx-revaluations`, { date: f.date.value, ...(orNull(f.khr.value) ? { rates: { KHR: f.khr.value.trim() } } : {}) });
+      $("form-dialog").close();
+      await refreshLedger();
+    });
+  };
+}
+
+async function deleteRevaluation(id, version, date) {
+  if (!confirm(`Delete the revaluation at ${date}? Its posting and reversal are removed.`)) return;
+  try {
+    await write("DELETE", `${ledgerUrl()}/fx-revaluations/${id}`, undefined, version);
     await refreshLedger();
   } catch (error) {
     showError(error);

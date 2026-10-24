@@ -1066,6 +1066,148 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("fixed_assets", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.FxRevaluation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<Guid?>("JournalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("journal_id");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Rates")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("rates");
+
+                    b.Property<long>("RevaluationNo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("revaluation_no");
+
+                    b.Property<Guid?>("ReversalJournalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reversal_journal_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_fx_revaluations");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_fx_revaluations_created_by");
+
+                    b.HasIndex("LedgerId", "Date")
+                        .HasDatabaseName("ix_fx_revaluations_ledger_id_date");
+
+                    b.HasIndex("LedgerId", "JournalId")
+                        .HasDatabaseName("ix_fx_revaluations_ledger_id_journal_id");
+
+                    b.HasIndex("LedgerId", "RevaluationNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_fx_revaluations_ledger_id_revaluation_no");
+
+                    b.HasIndex("LedgerId", "ReversalJournalId")
+                        .HasDatabaseName("ix_fx_revaluations_ledger_id_reversal_journal_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_fx_revaluations_org_id_ledger_id");
+
+                    b.ToTable("fx_revaluations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_fx_revaluations_status", "status IN ('posted', 'deleted') AND journal_id IS NOT NULL AND reversal_journal_id IS NOT NULL");
+                        });
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.FxRevaluationLine", b =>
+                {
+                    b.Property<Guid>("RevaluationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revaluation_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_no");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<decimal>("After")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("after");
+
+                    b.Property<decimal>("Before")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("before");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<decimal>("ForeignAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("foreign_amount");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid?>("PartyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("party_id");
+
+                    b.HasKey("RevaluationId", "LineNo")
+                        .HasName("pk_fx_revaluation_lines");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_fx_revaluation_lines_account_id");
+
+                    b.ToTable("fx_revaluation_lines", (string)null);
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.InvoiceSettings", b =>
                 {
                     b.Property<Guid>("LedgerId")
@@ -2703,7 +2845,7 @@ namespace Books.Infrastructure.Migrations
 
                     b.ToTable("account_usages", null, t =>
                         {
-                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', 'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable', 'inventory', 'cost_of_sales', 'fixed_asset', 'accumulated_depreciation', 'depreciation_expense', 'fx_realized', 'fx_unrealized')");
+                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', 'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable', 'inventory', 'cost_of_sales', 'fixed_asset', 'accumulated_depreciation', 'depreciation_expense', 'fx_realized', 'fx_unrealized', 'receivable_revaluation', 'payable_revaluation')");
                         });
                 });
 
@@ -3516,6 +3658,55 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_fixed_assets_ledgers_org_id_ledger_id");
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.FxRevaluation", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_fx_revaluations_users_created_by");
+
+                    b.HasOne("Books.Domain.Journals.Journal", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "JournalId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_fx_revaluations_journals_ledger_id_journal_id");
+
+                    b.HasOne("Books.Domain.Journals.Journal", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "ReversalJournalId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_fx_revaluations_journals_ledger_id_reversal_journal_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_fx_revaluations_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.FxRevaluationLine", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_fx_revaluation_lines_accounts_account_id");
+
+                    b.HasOne("Books.Domain.Documents.FxRevaluation", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("RevaluationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_fx_revaluation_lines_fx_revaluations_revaluation_id");
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.InvoiceSettings", b =>
                 {
                     b.HasOne("Books.Domain.Ledgers.Ledger", null)
@@ -4157,6 +4348,11 @@ namespace Books.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.DepreciationRun", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.FxRevaluation", b =>
                 {
                     b.Navigation("Lines");
                 });

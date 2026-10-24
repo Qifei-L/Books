@@ -462,6 +462,47 @@ internal sealed class StockAdjustmentLineConfiguration : IEntityTypeConfiguratio
     }
 }
 
+internal sealed class FxRevaluationConfiguration : IEntityTypeConfiguration<FxRevaluation>
+{
+    public void Configure(EntityTypeBuilder<FxRevaluation> b)
+    {
+        b.ToTable("fx_revaluations", t => t.HasCheckConstraint(
+            "ck_fx_revaluations_status", "status IN ('posted', 'deleted') AND journal_id IS NOT NULL AND reversal_journal_id IS NOT NULL"));
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Rates).HasColumnType("jsonb");
+        b.HasIndex(x => new { x.LedgerId, x.RevaluationNo }).IsUnique();
+        b.HasIndex(x => new { x.LedgerId, x.Date });
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.RevaluationId).OnDelete(DeleteBehavior.Restrict);
+        b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Journal>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.JournalId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Journal>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.ReversalJournalId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class FxRevaluationLineConfiguration : IEntityTypeConfiguration<FxRevaluationLine>
+{
+    public void Configure(EntityTypeBuilder<FxRevaluationLine> b)
+    {
+        b.ToTable("fx_revaluation_lines");
+        b.HasKey(x => new { x.RevaluationId, x.LineNo });
+        b.Ignore(x => x.Adjustment);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.Property(x => x.Currency).HasMaxLength(3);
+        b.Property(x => x.ForeignAmount).HasPrecision(20, 4);
+        b.Property(x => x.Before).HasPrecision(20, 4);
+        b.Property(x => x.After).HasPrecision(20, 4);
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 internal sealed class FixedAssetConfiguration : IEntityTypeConfiguration<FixedAsset>
 {
     public void Configure(EntityTypeBuilder<FixedAsset> b)
