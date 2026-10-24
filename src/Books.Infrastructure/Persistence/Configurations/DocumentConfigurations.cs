@@ -298,3 +298,39 @@ internal sealed class BankClearingConfiguration : IEntityTypeConfiguration<BankC
         b.HasOne<User>().WithMany().HasForeignKey(x => x.ClearedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class BankStatementConfiguration : IEntityTypeConfiguration<BankStatement>
+{
+    public void Configure(EntityTypeBuilder<BankStatement> b)
+    {
+        b.ToTable("bank_statements");
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.OpeningBalance).HasPrecision(20, 4);
+        b.Property(x => x.ClosingBalance).HasPrecision(20, 4);
+        b.HasIndex(x => new { x.LedgerId, x.AccountId, x.ToDate });
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.StatementId).OnDelete(DeleteBehavior.Restrict);
+        b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.AccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.ImportedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class BankStatementLineConfiguration : IEntityTypeConfiguration<BankStatementLine>
+{
+    public void Configure(EntityTypeBuilder<BankStatementLine> b)
+    {
+        b.ToTable("bank_statement_lines", t => t.HasCheckConstraint("ck_bank_statement_lines_status", "status IN ('matched', 'drafted', 'duplicate')"));
+        b.HasKey(x => new { x.StatementId, x.LineNo });
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.Property(x => x.Reference).HasMaxLength(200);
+        b.Property(x => x.ExternalId).HasMaxLength(200);
+        b.Property(x => x.Amount).HasPrecision(20, 4);
+        b.HasIndex(x => x.ExternalId);
+        b.HasOne<Payment>().WithMany().HasForeignKey(x => x.PaymentId).OnDelete(DeleteBehavior.Restrict);
+    }
+}

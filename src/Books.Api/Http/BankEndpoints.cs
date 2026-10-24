@@ -12,6 +12,16 @@ public static class BankEndpoints
 
     public sealed record UnclearRequest(IReadOnlyList<Guid>? JournalIds);
 
+    public sealed record StatementLineRequest(DateOnly Date, string? Description, string? Reference, string Amount, string? ExternalId);
+
+    public sealed record StatementRequest(string OpeningBalance, string ClosingBalance, IReadOnlyList<StatementLineRequest> Lines);
+
+    internal static (decimal Opening, decimal Closing, List<StatementLineInput> Lines) Statement(StatementRequest body) =>
+        (PurchaseEndpoints.Number(body.OpeningBalance, 0, "opening_balance", signed: true) ?? throw BooksProblem.Invalid("opening_balance is required."),
+         PurchaseEndpoints.Number(body.ClosingBalance, 0, "closing_balance", signed: true) ?? throw BooksProblem.Invalid("closing_balance is required."),
+         (body.Lines ?? throw BooksProblem.Invalid("lines is required.")).Select((l, i) => new StatementLineInput(l.Date, l.Description, l.Reference,
+             PurchaseEndpoints.Number(l.Amount, i, "amount", signed: true) ?? throw BooksProblem.Invalid($"Line {i + 1}: amount is required."), l.ExternalId)).ToList());
+
     public sealed record BankAccountRequest(Guid AccountId, string BankName, string? AccountNumber);
 
     public sealed record BankAccountUpdate(string BankName, string? AccountNumber);
@@ -31,6 +41,19 @@ public static class BankEndpoints
 
         reconciliation.MapPost("/clearings", async (Guid orgId, Guid ledgerId, Guid accountId, ClearRequest body, PrincipalAccessor principals, BankReconciliationService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.ClearAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, accountId, body.ClearedOn, body.JournalIds ?? [], ct)));
+
+        reconciliation.MapGet("/statements", async (Guid orgId, Guid ledgerId, Guid accountId, PrincipalAccessor principals, BankStatementService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.ListAsync(await principals.GetAsync(ct), orgId, ledgerId, accountId, ct)));
+
+        reconciliation.MapPost("/statements", async (Guid orgId, Guid ledgerId, Guid accountId, StatementRequest body, PrincipalAccessor principals, BankStatementService service, HttpContext http, CancellationToken ct) =>
+        {
+            var (opening, closing, lines) = Statement(body);
+            return WriteHttp.Result(http, await service.ImportAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, accountId, opening, closing, lines, ct));
+        });
+
+        api.MapPost("/organizations/{orgId:guid}/ledgers/{ledgerId:guid}/bank-statements/{statementId:guid}/post-drafts",
+            async (Guid orgId, Guid ledgerId, Guid statementId, PrincipalAccessor principals, BankStatementService service, HttpContext http, CancellationToken ct) =>
+            WriteHttp.Result(http, await service.PostDraftsAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, null), orgId, ledgerId, statementId, ct)));
 
         reconciliation.MapPost("/clearings/remove", async (Guid orgId, Guid ledgerId, Guid accountId, UnclearRequest body, PrincipalAccessor principals, BankReconciliationService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.UnclearAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, accountId, body.JournalIds ?? [], ct)));
