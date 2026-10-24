@@ -7,7 +7,8 @@ namespace Books.Api.Http;
 public static class PaymentEndpoints
 {
     /// <param name="InvoiceId">Settles this invoice.</param>
-    /// <param name="AccountId">Posts to this account; with neither, the line goes to the party's balance.</param>
+    /// <param name="AccountId">Posts to this account. An account with the Payable or Receivable usage settles with the party
+    /// (Manager.io style), optionally naming an invoice; with no account, the line settles on the document's own side.</param>
     /// <param name="Amount">Decimal string; net of VAT on account lines; may be negative.</param>
     public sealed record LineRequest(
         Guid? InvoiceId, Guid? AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string? Amount,

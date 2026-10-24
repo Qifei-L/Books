@@ -116,6 +116,11 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var invoice = await FindAsync(ledgerId, invoiceId, ct);
             scope.CheckVersion(invoice.Version);
+            if (await db.PaymentLines.AnyAsync(l => l.InvoiceId == invoice.Id
+                    && db.Payments.Any(p => p.Id == l.PaymentId && p.Status != DocumentStatus.Deleted), ct))
+            {
+                throw BooksProblem.Conflict("INVOICE_SETTLED", "A payment or receipt settles this invoice; change or delete that line first.");
+            }
             if (invoice.Status == DocumentStatus.Posted)
             {
                 await posting.DeleteAsync(scope, await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct), invoice.JournalId!.Value, ct);
