@@ -536,6 +536,128 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("bank_clearings", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.BankStatement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<decimal>("ClosingBalance")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("closing_balance");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date")
+                        .HasColumnName("from_date");
+
+                    b.Property<DateTimeOffset>("ImportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("imported_at");
+
+                    b.Property<Guid>("ImportedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("imported_by");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<decimal>("OpeningBalance")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("opening_balance");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<DateOnly>("ToDate")
+                        .HasColumnType("date")
+                        .HasColumnName("to_date");
+
+                    b.HasKey("Id")
+                        .HasName("pk_bank_statements");
+
+                    b.HasIndex("ImportedBy")
+                        .HasDatabaseName("ix_bank_statements_imported_by");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_bank_statements_org_id_ledger_id");
+
+                    b.HasIndex("LedgerId", "AccountId", "ToDate")
+                        .HasDatabaseName("ix_bank_statements_ledger_id_account_id_to_date");
+
+                    b.ToTable("bank_statements", (string)null);
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.BankStatementLine", b =>
+                {
+                    b.Property<Guid>("StatementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("statement_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_no");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("external_id");
+
+                    b.Property<Guid?>("JournalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("journal_id");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_id");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reference");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("StatementId", "LineNo")
+                        .HasName("pk_bank_statement_lines");
+
+                    b.HasIndex("ExternalId")
+                        .HasDatabaseName("ix_bank_statement_lines_external_id");
+
+                    b.HasIndex("PaymentId")
+                        .HasDatabaseName("ix_bank_statement_lines_payment_id");
+
+                    b.ToTable("bank_statement_lines", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_bank_statement_lines_status", "status IN ('matched', 'drafted', 'duplicate')");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.BankTransfer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2522,6 +2644,48 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_bank_clearings_ledgers_org_id_ledger_id");
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.BankStatement", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("ImportedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_statements_users_imported_by");
+
+                    b.HasOne("Books.Domain.Ledgers.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "AccountId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_statements_accounts_ledger_id_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_statements_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.BankStatementLine", b =>
+                {
+                    b.HasOne("Books.Domain.Documents.Payment", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_bank_statement_lines_payments_payment_id");
+
+                    b.HasOne("Books.Domain.Documents.BankStatement", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("StatementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_statement_lines_bank_statements_statement_id");
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.BankTransfer", b =>
                 {
                     b.HasOne("Books.Domain.Access.User", null)
@@ -3124,6 +3288,11 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_tax_codes_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.BankStatement", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.Payment", b =>

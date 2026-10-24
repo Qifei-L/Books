@@ -109,7 +109,7 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
             return WriteResult.Of(200, new { id = payment.Id, deleted = true }, payment.Version);
         }, ct);
 
-    private async Task<(string Status, Payment Payment)> CreateOneAsync(WriteScope scope, Ledger ledger, PaymentInput input, bool post, bool receipt, CancellationToken ct)
+    internal async Task<(string Status, Payment Payment)> CreateOneAsync(WriteScope scope, Ledger ledger, PaymentInput input, bool post, bool receipt, CancellationToken ct)
     {
         var series = receipt ? Payment.ReceiptKind : Payment.Kind;
         var payment = new Payment(Guid.CreateVersion7(), ledger.OrgId, ledger.Id, await posting.NextNumberAsync(ledger.Id, series, ct), scope.Principal.UserId, scope.Now, receipt);
@@ -120,6 +120,10 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
         await db.SaveChangesAsync(ct);
         return (status, payment);
     }
+
+    /// <summary>Posts a draft as it stands (statement drafts to Suspense); returns posted or not_posted.</summary>
+    internal Task<string> PostDraftAsync(WriteScope scope, Ledger ledger, Payment payment, CancellationToken ct) =>
+        SaveAsync(scope, ledger, payment, [], post: true, ct);
 
     private async Task<string> SaveAsync(WriteScope scope, Ledger ledger, Payment payment, List<JournalIssue> documentIssues, bool post, CancellationToken ct)
     {
