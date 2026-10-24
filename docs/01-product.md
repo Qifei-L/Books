@@ -41,20 +41,21 @@ Replace our Manager.io bookkeeping with a system that:
 
 ## Milestones
 
-| Weeks | Milestone | Done when |
+| Milestone | Done when | Status (2026-10-24) |
 | --- | --- | --- |
-| 1–2 | M1 Foundation | Org isolation, invitation and last-admin tests pass; accounts CRUD |
-| 3–4 | M2 Journal core | Post, edit, delete, Close; TB and GL Detail; invariants tested |
-| 5 | M3 Statements | Balance Sheet, P&L, year-end calculation |
-| 6 | M4 Document framework | Parties, tax codes, bank accounts, posting adapter, allocations |
-| 7–8 | M5 Purchases | AP documents, WHT, AP aging |
-| 9 | M6 Sales | AR documents, KHR totals (tax currency slot), AR aging, MCP batch tools |
-| 10–11 | M7 Bank | Payments and receipts, statement lines through MCP batch import, matching, reconciliation |
-| 12 | M8 Tax reporting | VAT/WHT monthly summary and detail, filed-period snapshot |
-| 13 | M9 Invoice printing | Sales invoices and credit notes as PDF, with the KHR total |
-| 14–15 | M10 Inventory and fixed assets | Inventory items, stock movements from purchases and sales, cost of sales; fixed asset register and depreciation |
-| 16 | M11 Other monthly taxes | Tax on salary from imported payroll results (TOS 01); specific tax, accommodation tax and public lighting tax (T7 01) |
-| 17–18 | M12 Multi-currency | Foreign-currency bank accounts, documents and parties; exchange differences |
-| 19 | M13 Attachments | Files attached to documents and journals (invoices, receipts, statements), shared by every document type |
+| M1 Foundation | Org isolation, invitation and last-admin tests pass; accounts CRUD | Done |
+| M2 Journal core | Post, edit, delete, Close; TB and GL Detail; invariants tested | Done |
+| M3 Statements | Balance Sheet, P&L, year-end calculation; Excel export | Done |
+| M4 Document framework | Parties, tax codes, bank accounts, posting adapter, transfers, items | Done |
+| M5 Purchases | Purchase invoices, debit notes, WHT, AP aging, Cambodia template | Done |
+| M6 Sales | Sales invoices, credit notes, KHR totals, AR aging, MCP batch tools | Done |
+| M7 Cash and bank | Payments and receipts (Manager.io style), settlement by party, statement import through MCP, clearing and reconciliation | Done |
+| M8 Tax reporting | Monthly return on GDT forms (T7 01, WT 03), versioned definitions, reconciliation, filing | Done |
+| M9 Invoice printing | Sales invoices and credit notes as PDF in Khmer and English, three styles, KHR total | Next |
+| M10 Inventory and fixed assets | Inventory items, stock movements from purchases and sales, cost of sales; fixed asset register and depreciation | Planned |
+| M11 Other monthly taxes | Tax on salary from imported payroll results (TOS 01) is done; specific, accommodation and public lighting tax (T7 01) | Part done |
+| M12 Multi-currency | Foreign-currency bank accounts, documents and parties; exchange differences | Planned |
+| M13 Attachments | Files attached to documents and journals, shared by every document type | Planned |
+| Later | Annual income tax return; import VAT (T7 01 boxes 05–06); CamInvoice | Planned |
 
 MCP tools ship with each milestone, not at the end.

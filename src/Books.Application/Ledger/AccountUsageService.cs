@@ -88,6 +88,12 @@ public sealed class AccountUsageService(IBooksDb db, WriteRunner writes)
         "input_vat" => Usage.InputVat,
         "non_deductible_vat" => Usage.NonDeductibleVat,
         "withholding_payable" => Usage.WithholdingPayable,
-        _ => throw BooksProblem.Invalid("usage must be one of payable, receivable, bank, output_vat, input_vat, non_deductible_vat, withholding_payable."),
+        "salary_expense" => Usage.SalaryExpense,
+        "nssf_expense" => Usage.NssfExpense,
+        "salaries_payable" => Usage.SalariesPayable,
+        "salary_tax_payable" => Usage.SalaryTaxPayable,
+        "nssf_payable" => Usage.NssfPayable,
+        _ => throw BooksProblem.Invalid("usage must be one of payable, receivable, bank, output_vat, input_vat, non_deductible_vat, withholding_payable, "
+            + "salary_expense, nssf_expense, salaries_payable, salary_tax_payable, nssf_payable."),
     };
 }

@@ -355,6 +355,8 @@ internal sealed class PayRunConfiguration : IEntityTypeConfiguration<PayRun>
             a.Property(x => x.OtherDeductions).HasColumnName("other_deductions_account_id");
         });
         b.HasAlternateKey(x => new { x.LedgerId, x.Id });
+        b.Property(x => x.Currency).HasMaxLength(3).IsFixedLength();
+        b.Property(x => x.Rate).HasPrecision(20, 10);
         b.HasIndex(x => new { x.LedgerId, x.PayRunNo }).IsUnique();
         b.HasIndex(x => new { x.LedgerId, x.Period });
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.PayRunId).OnDelete(DeleteBehavior.Restrict);
