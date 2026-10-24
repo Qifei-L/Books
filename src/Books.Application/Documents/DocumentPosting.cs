@@ -25,6 +25,10 @@ public sealed class DocumentPosting(IBooksDb db, JournalService journals)
     {
         JournalService.RefuseAgentPosting(scope.Principal, touchesPosting: true);
         var journal = journalId is { } id ? await db.Journals.SingleAsync(j => j.Id == id, ct) : null;
+        if (journal is not null)
+        {
+            await BankReconciliationService.EnsureNotClearedAsync(db, journal.Id, ct);
+        }
         var previousDate = journal?.EffectiveRevisionId is { } effective
             ? await db.JournalRevisions.Where(r => r.Id == effective).Select(r => (DateOnly?)r.AccountingDate).SingleAsync(ct)
             : null;
@@ -59,6 +63,7 @@ public sealed class DocumentPosting(IBooksDb db, JournalService journals)
     {
         JournalService.RefuseAgentPosting(scope.Principal, touchesPosting: true);
         var journal = await db.Journals.SingleAsync(j => j.Id == journalId, ct);
+        await BankReconciliationService.EnsureNotClearedAsync(db, journal.Id, ct);
         var shown = await db.JournalRevisions.SingleAsync(r => r.Id == (journal.EffectiveRevisionId ?? journal.CurrentRevisionId), ct);
         if (ledger.ClosedThrough is { } closed && shown.AccountingDate <= closed)
         {
