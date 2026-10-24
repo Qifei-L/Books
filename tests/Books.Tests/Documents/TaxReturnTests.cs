@@ -130,6 +130,24 @@ public sealed class TaxReturnTests(TestHost host)
     }
 
     [Fact]
+    public async Task Imports_go_to_boxes_05_and_06_and_count_in_total_input_tax()
+    {
+        var s = await SeedAsync();
+        var overseas = (await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/parties", new { name = "Shenzhen Parts Ltd.", is_supplier = true })).DataAsync(HttpStatusCode.Created)).Id();
+        var stock = (await AccountTests.CreateAsync(s.Books.Admin, s.Books.OrgId, s.Books.LedgerId, "5400", "Purchases of goods", "cost_and_expense")).Id();
+        await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/purchase-invoices", new
+        {
+            supplier_id = overseas, date = "2026-10-08", reference = "CUSTOMS-2026-0815",
+            lines = new[] { new { account_id = stock, amount = "2000.00", tax_code_id = s.Taxes["VAT 10% (imports)"], valid_tax_invoice = true } },
+        })).DataAsync(HttpStatusCode.Created);
+
+        var boxes = Boxes(await GetAsync(s, "tax-returns/2026-10"));
+
+        Assert.Equal(("1000.00", "100.00", "2000.00", "200.00", "300.00"),
+            (boxes["t701_03"].Usd, boxes["t701_04"].Usd, boxes["t701_05"].Usd, boxes["t701_06"].Usd, boxes["t701_11"].Usd));
+    }
+
+    [Fact]
     public async Task Lines_with_an_overridden_vat_are_listed_for_review()
     {
         var s = await SeedAsync();

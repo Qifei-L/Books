@@ -59,9 +59,9 @@ public sealed class TaxCode
     public void SetReturnCategory(string? category, IReadOnlyCollection<string> allowed)
     {
         category = string.IsNullOrWhiteSpace(category) ? null : category.Trim();
-        if (category is not null && Kind != TaxKind.Withholding)
+        if (category is not null && Kind is not (TaxKind.Withholding or TaxKind.VatInput or TaxKind.VatOutput))
         {
-            throw new DomainException("Only withholding codes have a return category.");
+            throw new DomainException("Only withholding and VAT codes have a return category.");
         }
         if (category is not null && !allowed.Contains(category))
         {

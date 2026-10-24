@@ -119,7 +119,8 @@ public sealed class ReturnDefinitionService(IBooksDb db, WriteRunner writes, Rea
     }
 
     /// <summary>Withholding categories a tax code may use: those of the latest published version, else the built-in ones.</summary>
-    internal async Task<IReadOnlyCollection<string>> CategoriesAsync(Ledger ledger, CancellationToken ct)
+    /// <summary>The return categories a tax code of this kind may use: withholding categories, or VAT categories such as imports.</summary>
+    internal async Task<IReadOnlyCollection<string>> CategoriesAsync(Ledger ledger, TaxKind kind, CancellationToken ct)
     {
         if (TaxReturns.Builtin(ledger.TaxPack) is not { } builtin)
         {
@@ -127,7 +128,11 @@ public sealed class ReturnDefinitionService(IBooksDb db, WriteRunner writes, Rea
         }
         var latest = await db.ReturnDefinitionVersions.AsNoTracking()
             .Where(v => v.LedgerId == ledger.Id && v.Status == DefinitionStatus.Published).OrderByDescending(v => v.EffectiveFrom).FirstOrDefaultAsync(ct);
-        return (latest is null ? builtin : Spec(latest)).WithholdingCategories.Select(c => c.Key).ToList();
+        var spec = latest is null ? builtin : Spec(latest);
+        var kindName = Text.Of(kind);
+        return kind == TaxKind.Withholding
+            ? spec.WithholdingCategories.Select(c => c.Key).ToList()
+            : (spec.TaxCategories ?? []).Where(c => c.Kind == kindName).Select(c => c.Key).ToList();
     }
 
     private static void Check(Ledger ledger, DateOnly month, ReturnDefinitionSpec definition)
