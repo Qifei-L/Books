@@ -169,18 +169,21 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         var snapshots = await db.DocumentTaxCurrencies.AsNoTracking().Where(t => ids.Contains(t.DocumentId)).ToDictionaryAsync(t => t.DocumentId, t => t.Rate, ct);
 
         TaxKind? Kind(Guid? code) => code is { } id ? codes[id].Kind : null;
+        string? Category(Guid? code) => code is { } id && codes[id].Kind is TaxKind.VatInput or TaxKind.VatOutput ? codes[id].ReturnCategory : null;
         decimal? Rate(Guid documentId) => rate?.Rate ?? (snapshots.TryGetValue(documentId, out var r) ? r : null);
         IEnumerable<TaxLine> lines = purchases.SelectMany(i => i.Lines.Select(l =>
         {
             var sign = i.IsDebitNote ? -1 : 1;
             return new TaxLine(i.SourceKind, i.Id, i.InvoiceNo, i.Date, i.SupplierId, i.Reference, l.LineNo, l.Description, l.AccountId, l.TaxCodeId, Kind(l.TaxCodeId),
                 sign * l.NetAmount, sign * l.TaxAmount, sign * l.TaxCalculated, l.TaxReason, l.ValidTaxInvoice,
-                l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, sign * l.WithholdingAmount, Rate(i.Id), PartyTaxable: taxable.Contains(i.SupplierId));
+                l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, sign * l.WithholdingAmount, Rate(i.Id), PartyTaxable: taxable.Contains(i.SupplierId),
+                TaxCategory: Category(l.TaxCodeId));
         })).Concat(sales.SelectMany(i => i.Lines.Select(l =>
         {
             var sign = i.IsCreditNote ? -1 : 1;
             return new TaxLine(i.SourceKind, i.Id, i.InvoiceNo, i.Date, i.CustomerId, i.Reference, l.LineNo, l.Description, l.AccountId, l.TaxCodeId, Kind(l.TaxCodeId),
-                sign * l.NetAmount, sign * l.TaxAmount, sign * l.TaxCalculated, l.TaxReason, true, null, 0, Rate(i.Id), PartyTaxable: taxable.Contains(i.CustomerId));
+                sign * l.NetAmount, sign * l.TaxAmount, sign * l.TaxCalculated, l.TaxReason, true, null, 0, Rate(i.Id), PartyTaxable: taxable.Contains(i.CustomerId),
+                TaxCategory: Category(l.TaxCodeId));
         })));
 
         // Journal postings on tax accounts that do not come from purchase or sales documents (manual corrections):
@@ -215,7 +218,7 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
             .Select(l => new TaxLine(p.SourceKind, p.Id, p.PaymentNo, p.Date, p.PartyId ?? Guid.Empty, p.Reference, l.LineNo, l.Description, l.AccountId!.Value,
                 l.TaxCodeId, Kind(l.TaxCodeId), l.NetAmount, l.TaxAmount, l.TaxCalculated, l.TaxReason, l.ValidTaxInvoice,
                 l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, l.WithholdingAmount, rate?.Rate ?? monthEnd,
-                PartyTaxable: p.PartyId is { } party && taxable.Contains(party))));
+                PartyTaxable: p.PartyId is { } party && taxable.Contains(party), TaxCategory: Category(l.TaxCodeId))));
         // Payroll results: the month's posted pay runs; salary tax uses the rate of the 15th (04-cambodia-tax).
         var payRuns = await db.PayRuns.AsNoTracking().Include(r => r.Lines)
             .Where(r => r.LedgerId == ledgerId && r.Status == DocumentStatus.Posted && r.Period == from).ToListAsync(ct);

@@ -41,6 +41,7 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
     [
         new("VAT 10% (sales)", TaxKind.VatOutput, 10m, "2100"),
         new("VAT 10% (purchases)", TaxKind.VatInput, 10m, "1300", "5900"),
+        new("VAT 10% (imports)", TaxKind.VatInput, 10m, "1300", "5900", Category: "import"),
         new("VAT 0% (zero-rated)", TaxKind.VatZeroRated, 0m, null),
         new("Non-VAT", TaxKind.NonVat, 0m, null),
         new("VAT 4% fuel (sales)", TaxKind.VatOutput, 4m, "2100", From: new DateOnly(2026, 3, 1)),
@@ -96,7 +97,10 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
                 var account = spec.AccountCode is null ? null : byCode[spec.AccountCode];
                 var nonDeductible = spec.NonDeductibleCode is null ? null : byCode[spec.NonDeductibleCode];
                 var code = new TaxCode(Guid.CreateVersion7(), ledger, spec.Name, spec.Kind, spec.Rate, account, nonDeductible, spec.From, null, scope.Now);
-                code.SetReturnCategory(spec.Category, [.. Books.Domain.Documents.TaxReturns.Builtin(Key)!.WithholdingCategories.Select(c => c.Key)]);
+                var builtin = Books.Domain.Documents.TaxReturns.Builtin(Key)!;
+                code.SetReturnCategory(spec.Category, spec.Kind == TaxKind.Withholding
+                    ? [.. builtin.WithholdingCategories.Select(c => c.Key)]
+                    : [.. (builtin.TaxCategories ?? []).Select(c => c.Key)]);
                 db.TaxCodes.Add(code);
                 created.Add($"tax code {spec.Name}");
             }

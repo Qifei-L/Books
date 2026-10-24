@@ -32,7 +32,7 @@ public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner r
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var (account, nonDeductible) = (await AccountAsync(ledgerId, input.AccountId, ct), await AccountAsync(ledgerId, input.NonDeductibleAccountId, ct));
             var code = new TaxCode(Guid.CreateVersion7(), ledger, input.Name, input.Kind, input.Rate, account, nonDeductible, input.EffectiveFrom, input.EffectiveTo, scope.Now);
-            code.SetReturnCategory(input.ReturnCategory, await definitions.CategoriesAsync(ledger, ct));
+            code.SetReturnCategory(input.ReturnCategory, await definitions.CategoriesAsync(ledger, code.Kind, ct));
             await EnsureUsagesAsync(code, account, nonDeductible, ct);
             db.TaxCodes.Add(code);
             await db.SaveChangesAsync(ct);
@@ -55,7 +55,7 @@ public sealed class TaxCodeService(IBooksDb db, WriteRunner writes, ReadRunner r
             var before = (await LoadAsync(ledgerId, code.Id, ct)).Single();
             var (account, nonDeductible) = (await AccountAsync(ledgerId, input.AccountId, ct), await AccountAsync(ledgerId, input.NonDeductibleAccountId, ct));
             code.Update(input.Name, input.Rate, account, nonDeductible, input.EffectiveFrom, input.EffectiveTo, input.Active);
-            code.SetReturnCategory(input.ReturnCategory, await definitions.CategoriesAsync(await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct), ct));
+            code.SetReturnCategory(input.ReturnCategory, await definitions.CategoriesAsync(await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct), code.Kind, ct));
             await EnsureUsagesAsync(code, account, nonDeductible, ct);
             await db.SaveChangesAsync(ct);
             var after = (await LoadAsync(ledgerId, code.Id, ct)).Single();
