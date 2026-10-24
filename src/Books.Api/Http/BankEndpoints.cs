@@ -22,7 +22,8 @@ public static class BankEndpoints
          (body.Lines ?? throw BooksProblem.Invalid("lines is required.")).Select((l, i) => new StatementLineInput(l.Date, l.Description, l.Reference,
              PurchaseEndpoints.Number(l.Amount, i, "amount", signed: true) ?? throw BooksProblem.Invalid($"Line {i + 1}: amount is required."), l.ExternalId)).ToList());
 
-    public sealed record BankAccountRequest(Guid AccountId, string BankName, string? AccountNumber);
+    /// <param name="Currency">The currency money is held in, for example KHR; omit for the ledger's. Fixed once set.</param>
+    public sealed record BankAccountRequest(Guid AccountId, string BankName, string? AccountNumber, string? Currency = null);
 
     public sealed record BankAccountUpdate(string BankName, string? AccountNumber);
 
@@ -64,7 +65,7 @@ public static class BankEndpoints
             Envelope.Ok(http, await service.ListAsync(await principals.GetAsync(ct), orgId, ledgerId, ct)));
 
         banks.MapPost("", async (Guid orgId, Guid ledgerId, BankAccountRequest body, PrincipalAccessor principals, BankService service, HttpContext http, CancellationToken ct) =>
-            WriteHttp.Result(http, await service.CreateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, body.AccountId, body.BankName, body.AccountNumber, ct)));
+            WriteHttp.Result(http, await service.CreateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, body.AccountId, body.BankName, body.AccountNumber, ct, body.Currency)));
 
         banks.MapPut("/{accountId:guid}", async (Guid orgId, Guid ledgerId, Guid accountId, BankAccountUpdate body, PrincipalAccessor principals, BankService service, HttpContext http, CancellationToken ct) =>
             WriteHttp.Result(http, await service.UpdateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, ledgerId, accountId, body.BankName, body.AccountNumber, ct)));

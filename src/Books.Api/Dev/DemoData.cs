@@ -179,6 +179,13 @@ public static class DemoData
             [Settle(chart["1200"], 1_980m)]), true, true, ct);
         await paymentService.CreateAsync(principal, Meta(), orgId, ledgerId, new PaymentInput(bank, customers[1], DateOnly.Parse("2026-10-29"), "ABA-IN-29", "Angkor Hotels part payment",
             [Settle(chart["1200"], 1_500m), To(withheld, "WHT 15% withheld by customer", -225m)]), true, true, ct);
+        // A KHR account (M12.2): riel bought from ACLEDA, and a riel payment for printing.
+        var wing = await Account("1120", "Wing Bank KHR", AccountType.Assets, current);
+        await banks.CreateAsync(principal, Meta(), orgId, ledgerId, wing, "Wing Bank", "100 200 300", ct, "KHR");
+        await transfers.CreateAsync(principal, Meta(), orgId, ledgerId,
+            new BankTransferInput(DateOnly.Parse("2026-10-21"), acleda, wing, 500m, 0m, null, "FX-1021", "Buy riel", ToAmount: 2_060_000m), true, ct);
+        await paymentService.CreateAsync(principal, Meta(), orgId, ledgerId, new PaymentInput(wing, null, DateOnly.Parse("2026-10-23"), "WING-23", "Printing paid in riel",
+            [To(utilities, "Leaflets", 410_000m)]), true, false, ct);
         // Everything up to 14 October was reconciled before; the October statement starts from that balance.
         var reconciliation = services.GetRequiredService<BankReconciliationService>();
         var reconciled = await reconciliation.ReconciliationAsync(principal, orgId, ledgerId, bank, DateOnly.Parse("2026-10-14"), null, ct);

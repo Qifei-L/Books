@@ -10,7 +10,8 @@ public sealed class BankAccount
 {
     private BankAccount() { }
 
-    public BankAccount(Ledger ledger, Account account, string bankName, string? accountNumber, DateTimeOffset createdAt)
+    /// <param name="currency">The account's currency; null for the ledger's. Fixed once set.</param>
+    public BankAccount(Ledger ledger, Account account, string bankName, string? accountNumber, DateTimeOffset createdAt, string? currency = null)
     {
         if (account.LedgerId != ledger.Id || account.Type != AccountType.Assets)
         {
@@ -19,7 +20,7 @@ public sealed class BankAccount
         OrgId = ledger.OrgId;
         LedgerId = ledger.Id;
         AccountId = account.Id;
-        Currency = ledger.BaseCurrency;
+        Currency = currency is null ? ledger.BaseCurrency : Currencies.Require(currency).Code;
         CreatedAt = createdAt;
         Set(bankName, accountNumber);
         account.MarkAsBank();
@@ -31,7 +32,7 @@ public sealed class BankAccount
     public string BankName { get; private set; } = "";
     public string? AccountNumber { get; private set; }
 
-    /// <summary>The ledger's base currency for now; foreign-currency bank accounts come with multi-currency.</summary>
+    /// <summary>The currency money is held in; payments, receipts, transfers and statements on the account use it (M12.2).</summary>
     public string Currency { get; private set; } = "";
 
     public DateTimeOffset CreatedAt { get; private set; }

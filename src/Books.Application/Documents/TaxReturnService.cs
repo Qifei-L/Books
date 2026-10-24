@@ -219,8 +219,9 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         var paymentLines = payments.SelectMany(p => p.Lines
             .Where(l => l.Kind == PaymentLineKind.Account && (l.TaxCodeId is not null || l.WithholdingCodeId is not null))
             .Select(l => new TaxLine(p.SourceKind, p.Id, p.PaymentNo, p.Date, p.PartyId ?? Guid.Empty, p.Reference, l.LineNo, l.Description, l.AccountId!.Value,
-                l.TaxCodeId, Kind(l.TaxCodeId), l.NetAmount, l.TaxAmount, l.TaxCalculated, l.TaxReason, l.ValidTaxInvoice,
-                l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, l.WithholdingAmount, rate?.Rate ?? monthEnd,
+                l.TaxCodeId, Kind(l.TaxCodeId), p.ToBase(l.NetAmount, baseMinor), p.ToBase(l.TaxAmount, baseMinor), p.ToBase(l.TaxCalculated, baseMinor), l.TaxReason, l.ValidTaxInvoice,
+                l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, p.ToBase(l.WithholdingAmount, baseMinor),
+                rate?.Rate ?? (p.ExchangeRate is { } own && p.Currency == slot?.Currency ? own : monthEnd),
                 PartyTaxable: p.PartyId is { } party && taxable.Contains(party), TaxCategory: Category(l.TaxCodeId))));
         // Payroll results: the month's posted pay runs; salary tax uses the rate of the 15th (04-cambodia-tax).
         var payRuns = await db.PayRuns.AsNoTracking().Include(r => r.Lines)

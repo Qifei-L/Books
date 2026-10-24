@@ -79,6 +79,7 @@
 | 2026-10-24 | Invoice printing details (M9.1): the style follows the lines' tax codes (any VAT above 0% → tax invoice; only 0% or non-VAT → zero/non-VAT; no codes → commercial) and can be chosen per print; State Charge relabels the VAT line; the seller block (Khmer and English names and addresses, VATTIN, contact) and the prefixes (default INV- and CN-) are per-ledger settings changed by administrators; drafts print marked DRAFT; the KHR total comes from the invoice's tax currency snapshot. |
 | 2026-10-24 | Scope against QuickBooks: no quotes or estimates, no purchase orders, no budgets; payroll stays as imported results. Next is M15, data entry in the app for people, using the same API and rules as AI clients. |
 | 2026-10-24 | Data entry (M15): the app will become the real app for staff, but not yet (it stays Development-only with the local test issuer for now); no reviewer step before posting for now, to be refined later; posted documents may still be deleted (their journal goes with them). |
+| 2026-10-24 | Multi-currency part 2 (M12.2): bank accounts may be kept in KHR (balance in KHR and its USD value; payments, receipts, transfers and statements in the bank's currency); settling a foreign-currency invoice settles it in the invoice's currency, and the difference from the invoice's rate is realized exchange gain or loss; realized and unrealized exchange differences have separate accounts; revaluation of foreign balances is yearly, at year end (M12.2b). |
 
 ## Proposed defaults (accept or change)
 

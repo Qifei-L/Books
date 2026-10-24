@@ -175,7 +175,8 @@ const journalButton = (d) => d.journal_id ? `<p><button class="secondary" onclic
 
 function showPayment(d, party) {
   $("journal-body").innerHTML = `<h3>${d.type === "receipt" ? "Receipt" : "Payment"} ${d.payment_no} <span class="pill ${d.status}">${d.status}</span></h3>
-    <p class="muted">${esc(accountName(d.bank_account_id))} · ${d.date} · ${esc(party(d.party_id))} · ${esc(d.reference ?? "")} · ${esc(d.description ?? "")}</p>
+    <p class="muted">${esc(accountName(d.bank_account_id))} · ${d.date} · ${esc(party(d.party_id))} · ${esc(d.reference ?? "")} · ${esc(d.description ?? "")}
+      ${d.exchange_rate ? ` · ${d.currency} at ${d.exchange_rate}` : ""}</p>
     <table><tr><th>Line</th><th>Description</th><th class="num">Amount</th><th class="num">VAT</th><th class="num">WHT</th><th class="num">Total</th></tr>
     ${d.lines.map((l) => `<tr><td>${l.kind === "account" ? esc(accountName(l.account_id)) : `${esc(accountName(l.control_account_id))} · ${l.kind === "invoice" ? "settles an invoice" : "party balance"}`}</td>
       <td>${esc(l.description ?? "")}</td><td class="num">${l.amount}</td><td class="num">${blank(l.tax_amount)}</td><td class="num">${blank(l.withholding_amount)}</td><td class="num">${l.total}</td></tr>`).join("")}

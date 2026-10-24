@@ -2,13 +2,16 @@ namespace Books.Domain.Journals;
 
 /// <summary>What a user or AI submits for a journal, before any accounting effect.</summary>
 /// <param name="Amount">Signed, in base currency: debit positive, credit negative.</param>
+/// <param name="CurrencyAmount">Lines on a foreign-currency bank account: the same movement in the bank's currency (M12.2).</param>
 public sealed record DraftLine(
-    Guid AccountId, decimal Amount, string? Description = null, Guid? LineId = null, Guid? PartyId = null, Guid? ItemId = null, decimal? Quantity = null);
+    Guid AccountId, decimal Amount, string? Description = null, Guid? LineId = null, Guid? PartyId = null, Guid? ItemId = null, decimal? Quantity = null,
+    decimal? CurrencyAmount = null);
 
 public sealed record JournalDraft(DateOnly AccountingDate, IReadOnlyList<DraftLine> Lines, string? Reference = null, string? Description = null);
 
 /// <summary>The facts about an account that validation needs.</summary>
-public sealed record AccountFacts(Guid Id, bool Active, bool IsControl);
+/// <param name="BankCurrency">The currency of a bank account kept in another currency than the ledger's; null otherwise.</param>
+public sealed record AccountFacts(Guid Id, bool Active, bool IsControl, string? BankCurrency = null, int BankMinorUnits = 0);
 
 /// <summary>Everything validation reads, gathered by the caller inside its transaction.</summary>
 /// <param name="PreviousDate">For an edit, the accounting date of the posted revision being replaced.</param>
@@ -49,6 +52,7 @@ public static class JournalValidator
         new PartyRule(),
         new ItemRule(),
         new CloseDateRule(),
+        new ForeignBankRule(),
     ];
 
     public static IReadOnlyList<JournalIssue> Validate(JournalDraft draft, JournalContext context) =>
@@ -205,6 +209,44 @@ public sealed class CloseDateRule : IJournalRule
         if (context.PreviousDate is { } previous && previous <= closed)
         {
             yield return new JournalIssue("ORIGINAL_DATE_CLOSED", $"The journal being changed is dated on or before the Close date {closed:yyyy-MM-dd}.");
+        }
+    }
+}
+
+/// <summary>
+/// Lines on a bank account kept in another currency carry the movement in that currency too, with the same sign or
+/// zero (a revaluation changes only the ledger amount); other lines carry none (M12.2).
+/// </summary>
+public sealed class ForeignBankRule : IJournalRule
+{
+    public IEnumerable<JournalIssue> Check(JournalDraft draft, JournalContext context)
+    {
+        for (var i = 0; i < draft.Lines.Count; i++)
+        {
+            var line = draft.Lines[i];
+            if (!context.Accounts.TryGetValue(line.AccountId, out var account))
+            {
+                continue;
+            }
+            if (account.BankCurrency is null)
+            {
+                if (line.CurrencyAmount is not null)
+                {
+                    yield return new JournalIssue("CURRENCY_AMOUNT_NOT_ALLOWED", "Only lines on a bank account in another currency take a currency amount.", i + 1);
+                }
+            }
+            else if (line.CurrencyAmount is not { } foreign)
+            {
+                yield return new JournalIssue("CURRENCY_AMOUNT_REQUIRED", $"Lines on this {account.BankCurrency} bank account need the amount in {account.BankCurrency}.", i + 1);
+            }
+            else if (foreign != 0 && Math.Sign(foreign) != Math.Sign(line.Amount))
+            {
+                yield return new JournalIssue("CURRENCY_AMOUNT_SIGN", "The currency amount must go the same way as the amount.", i + 1);
+            }
+            else if (decimal.Round(foreign, account.BankMinorUnits) != foreign || Math.Abs(foreign) > JournalValidator.MaxAmount)
+            {
+                yield return new JournalIssue("TOO_MANY_DECIMALS", $"{account.BankCurrency} allows {account.BankMinorUnits} decimal places.", i + 1);
+            }
         }
     }
 }

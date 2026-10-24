@@ -57,6 +57,7 @@ internal sealed class JournalLineConfiguration : IEntityTypeConfiguration<Journa
         b.ToTable("journal_lines", t => t.HasCheckConstraint("ck_journal_lines_amount", "amount <> 0"));
         b.HasKey(x => new { x.RevisionId, x.LineNo });
         b.Property(x => x.Amount).HasPrecision(20, 4);
+        b.Property(x => x.CurrencyAmount).HasPrecision(20, 4);
         b.Property(x => x.Description).HasMaxLength(1000);
         b.HasIndex(x => new { x.LedgerId, x.AccountId });
         b.HasIndex(x => x.LineId);

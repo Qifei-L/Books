@@ -50,13 +50,27 @@ public sealed class BankTransfer
 
     /// <summary>Why the document is not posted (JSON validation issues); null when posted or when none were found.</summary>
     public string? Issues { get; private set; }
+
+    /// <summary>Between accounts in different currencies: what arrives, in the receiving account's currency (M12.2); null otherwise.</summary>
+    public decimal? ToAmount { get; private set; }
+
+    /// <summary>When the sending account is in another currency than the ledger's: its units per one unit of the ledger's.</summary>
+    public decimal? FromRate { get; private set; }
+
     public Guid CreatedBy { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
 
-    /// <summary>Sets the content; account kinds (bank, expense) are checked by the caller against the ledger.</summary>
-    public void Set(DateOnly date, Guid from, Guid to, decimal amount, decimal fee, Guid? feeAccount, string? reference, string? description, bool isNew)
+    /// <summary>Sets the content; account kinds (bank, expense) and currencies are checked by the caller against the ledger.</summary>
+    public void Set(DateOnly date, Guid from, Guid to, decimal amount, decimal fee, Guid? feeAccount, string? reference, string? description, bool isNew,
+        decimal? toAmount = null, decimal? fromRate = null)
     {
+        if (toAmount is <= 0)
+        {
+            throw new DomainException("to_amount must be positive.");
+        }
+        ToAmount = toAmount;
+        FromRate = fromRate;
         if (from == to)
         {
             throw new DomainException("A transfer needs two different bank accounts.");
@@ -101,17 +115,30 @@ public sealed class BankTransfer
 
     /// <summary>
     /// Posting adapter: Dr to-bank amount · Dr fee account fee · Cr from-bank amount + fee. The bank pays the fee
-    /// from the sending account.
+    /// from the sending account. Between currencies (M12.2) the sending side is converted at <see cref="FromRate"/>;
+    /// the receiving side takes the same value, or its own amount when it is in the ledger's currency, and the
+    /// difference is realized exchange gain or loss. Lines on a foreign-currency account carry that currency's amount.
     /// </summary>
-    public JournalDraft ToJournal()
+    /// <param name="fromForeign">The sending account is in another currency than the ledger's.</param>
+    /// <param name="toForeign">The receiving account is in another currency than the ledger's.</param>
+    public JournalDraft ToJournal(int minorUnits = 2, bool fromForeign = false, bool toForeign = false, Guid? fxRealizedAccount = null)
     {
+        decimal B(decimal amount) => FromRate is { } rate ? Math.Round(amount / rate, minorUnits, MidpointRounding.AwayFromZero) : amount;
         var text = Description ?? $"Transfer {TransferNo}";
-        var lines = new List<DraftLine> { new(ToAccountId, Amount, text) };
+        var arrives = ToAmount ?? Amount;
+        var fromBase = B(Amount);
+        var toBase = toForeign ? fromBase : arrives;
+        var lines = new List<DraftLine> { new(ToAccountId, toBase, text, CurrencyAmount: toForeign ? arrives : null) };
         if (FeeAccountId is { } feeAccount)
         {
-            lines.Add(new DraftLine(feeAccount, FeeAmount, "Bank fee"));
+            lines.Add(new DraftLine(feeAccount, B(FeeAmount), "Bank fee"));
         }
-        lines.Add(new DraftLine(FromAccountId, -(Amount + FeeAmount), text));
+        if (toBase != fromBase)
+        {
+            lines.Add(new DraftLine(fxRealizedAccount ?? throw new DomainException("A transfer between currencies needs an account with the FX realized usage."),
+                fromBase - toBase, $"{text} (exchange difference)"));
+        }
+        lines.Add(new DraftLine(FromAccountId, -lines.Sum(l => l.Amount), text, CurrencyAmount: fromForeign ? -(Amount + FeeAmount) : null));
         return new JournalDraft(Date, lines, Reference, text);
     }
 }

@@ -7,10 +7,12 @@ namespace Books.Api.Http;
 
 public static class TransferEndpoints
 {
-    /// <param name="Amount">Decimal string such as "500.00".</param>
+    /// <param name="Amount">Decimal string such as "500.00", in the sending account's currency.</param>
+    /// <param name="ToAmount">Between accounts in different currencies: what arrives, in the receiving account's currency.</param>
+    /// <param name="FromRate">Sending account in another currency: its units per one unit of the ledger's; omit for the rate of the date.</param>
     public sealed record TransferRequest(
         DateOnly Date, Guid FromAccountId, Guid ToAccountId, string Amount, string? FeeAmount, Guid? FeeAccountId, string? Reference, string? Description,
-        bool Post = true);
+        bool Post = true, string? ToAmount = null, string? FromRate = null);
 
     public static void MapTransferEndpoints(this RouteGroupBuilder api)
     {
@@ -30,7 +32,8 @@ public static class TransferEndpoints
     }
 
     private static BankTransferInput Input(TransferRequest body) =>
-        new(body.Date, body.FromAccountId, body.ToAccountId, Amount(body.Amount, "amount"), Amount(body.FeeAmount, "fee_amount"), body.FeeAccountId, body.Reference, body.Description);
+        new(body.Date, body.FromAccountId, body.ToAccountId, Amount(body.Amount, "amount"), Amount(body.FeeAmount, "fee_amount"), body.FeeAccountId, body.Reference, body.Description,
+            string.IsNullOrWhiteSpace(body.ToAmount) ? null : Amount(body.ToAmount, "to_amount"), PurchaseEndpoints.Rate(body.FromRate));
 
     private static decimal Amount(string? value, string field) =>
         string.IsNullOrWhiteSpace(value) ? 0

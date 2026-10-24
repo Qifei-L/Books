@@ -700,6 +700,11 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("from_account_id");
 
+                    b.Property<decimal?>("FromRate")
+                        .HasPrecision(20, 10)
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("from_rate");
+
                     b.Property<string>("Issues")
                         .HasColumnType("jsonb")
                         .HasColumnName("issues");
@@ -730,6 +735,11 @@ namespace Books.Infrastructure.Migrations
                     b.Property<Guid>("ToAccountId")
                         .HasColumnType("uuid")
                         .HasColumnName("to_account_id");
+
+                    b.Property<decimal?>("ToAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("to_amount");
 
                     b.Property<long>("TransferNo")
                         .HasColumnType("bigint")
@@ -1344,6 +1354,12 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date")
                         .HasColumnName("date");
@@ -1352,6 +1368,11 @@ namespace Books.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("description");
+
+                    b.Property<decimal?>("ExchangeRate")
+                        .HasPrecision(20, 10)
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("exchange_rate");
 
                     b.Property<bool>("IsReceipt")
                         .HasColumnType("boolean")
@@ -1445,6 +1466,11 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("control_account_id");
 
+                    b.Property<decimal>("ControlAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("control_amount");
+
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
@@ -1477,6 +1503,11 @@ namespace Books.Infrastructure.Migrations
                         .HasPrecision(20, 4)
                         .HasColumnType("numeric(20,4)")
                         .HasColumnName("quantity");
+
+                    b.Property<decimal?>("SettledAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("settled_amount");
 
                     b.Property<decimal>("TaxAmount")
                         .HasPrecision(20, 4)
@@ -2319,6 +2350,11 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("numeric(20,4)")
                         .HasColumnName("amount");
 
+                    b.Property<decimal?>("CurrencyAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("currency_amount");
+
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
@@ -2667,7 +2703,7 @@ namespace Books.Infrastructure.Migrations
 
                     b.ToTable("account_usages", null, t =>
                         {
-                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', 'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable', 'inventory', 'cost_of_sales', 'fixed_asset', 'accumulated_depreciation', 'depreciation_expense')");
+                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', 'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable', 'inventory', 'cost_of_sales', 'fixed_asset', 'accumulated_depreciation', 'depreciation_expense', 'fx_realized', 'fx_unrealized')");
                         });
                 });
 

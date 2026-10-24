@@ -41,6 +41,8 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
         new("6200", "Depreciation", AccountType.CostAndExpense, "Operating expenses", [Usage.DepreciationExpense]),
         new("6100", "Salaries and wages", AccountType.CostAndExpense, "Operating expenses", [Usage.SalaryExpense]),
         new("6110", "NSSF contributions", AccountType.CostAndExpense, "Operating expenses", [Usage.NssfExpense]),
+        new("7100", "Exchange gain or loss, realized", AccountType.CostAndExpense, "Other income and expenses", [Usage.FxRealized]),
+        new("7110", "Exchange gain or loss, unrealized", AccountType.CostAndExpense, "Other income and expenses", [Usage.FxUnrealized]),
     ];
 
     private static readonly TaxSpec[] TaxCodes =

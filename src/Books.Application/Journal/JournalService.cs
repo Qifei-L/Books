@@ -8,7 +8,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Books.Application.Journals;
 
-public sealed record JournalLineDto(Guid LineId, Guid AccountId, Guid? PartyId, Guid? ItemId, string? Quantity, string Debit, string Credit, string? Description);
+public sealed record JournalLineDto(Guid LineId, Guid AccountId, Guid? PartyId, Guid? ItemId, string? Quantity, string Debit, string Credit, string? Description,
+    string? CurrencyAmount = null);
 
 /// <param name="Status">Status of the revision shown: draft, error, posted or deleted.</param>
 public sealed record JournalDto(
@@ -206,7 +207,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         for (var i = 0; i < draft.Lines.Count; i++)
         {
             var line = draft.Lines[i];
-            db.JournalLines.Add(new JournalLine(revision, i + 1, line.LineId ?? Guid.CreateVersion7(), line.AccountId, Trim(line.Description), line.Amount, line.PartyId, line.ItemId, line.Quantity));
+            db.JournalLines.Add(new JournalLine(revision, i + 1, line.LineId ?? Guid.CreateVersion7(), line.AccountId, Trim(line.Description), line.Amount, line.PartyId, line.ItemId, line.Quantity, line.CurrencyAmount));
         }
         journal.Apply(revision);
         return revision;
@@ -215,9 +216,13 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
     internal async Task<JournalContext> ContextAsync(Ledger ledger, JournalDraft draft, DateOnly? previousDate, CancellationToken ct)
     {
         var accountIds = draft.Lines.Select(l => l.AccountId).Distinct().ToList();
-        var accounts = await db.Accounts.AsNoTracking()
-            .Where(a => a.LedgerId == ledger.Id && accountIds.Contains(a.Id))
-            .ToDictionaryAsync(a => a.Id, a => new AccountFacts(a.Id, a.Active, a.IsControl), ct);
+        var foreign = await db.BankAccounts.AsNoTracking()
+            .Where(b => b.LedgerId == ledger.Id && accountIds.Contains(b.AccountId) && b.Currency != ledger.BaseCurrency)
+            .ToDictionaryAsync(b => b.AccountId, b => b.Currency, ct);
+        var accounts = (await db.Accounts.AsNoTracking().Where(a => a.LedgerId == ledger.Id && accountIds.Contains(a.Id)).ToListAsync(ct))
+            .ToDictionary(a => a.Id, a => foreign.TryGetValue(a.Id, out var currency)
+                ? new AccountFacts(a.Id, a.Active, a.IsControl, currency, Currencies.Require(currency).MinorUnits)
+                : new AccountFacts(a.Id, a.Active, a.IsControl));
         var partyIds = draft.Lines.Where(l => l.PartyId != null).Select(l => l.PartyId!.Value).Distinct().ToList();
         var parties = await db.Parties.AsNoTracking()
             .Where(p => p.LedgerId == ledger.Id && partyIds.Contains(p.Id))
@@ -239,7 +244,8 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         return new JournalDto(
             journal.Id, journal.LedgerId, journal.JournalNo, journal.SourceKind, journal.SourceId, Text.Of(revision.Status), journal.IsPosted, revision.AccountingDate,
             revision.Reference, revision.Description,
-            lines.Select(l => new JournalLineDto(l.LineId, l.AccountId, l.PartyId, l.ItemId, l.Quantity?.ToString("0.####", CultureInfo.InvariantCulture), Format(Math.Max(l.Amount, 0), minor), Format(Math.Max(-l.Amount, 0), minor), l.Description)).ToList(),
+            lines.Select(l => new JournalLineDto(l.LineId, l.AccountId, l.PartyId, l.ItemId, l.Quantity?.ToString("0.####", CultureInfo.InvariantCulture), Format(Math.Max(l.Amount, 0), minor), Format(Math.Max(-l.Amount, 0), minor), l.Description,
+                l.CurrencyAmount?.ToString("0.####", CultureInfo.InvariantCulture))).ToList(),
             issues, revision.RevisionNo, journal.CreatedBy, journal.CreatedAt, journal.Version.ToString());
     }
 

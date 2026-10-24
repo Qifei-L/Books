@@ -34,7 +34,7 @@ public sealed class BankStatementService(IBooksDb db, WriteRunner writes, ReadRu
         reads.RunAsync<IReadOnlyList<BankStatementDto>>(principal, orgId, async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Read, ct);
-            var minor = await MinorAsync(ledgerId, ct);
+            var minor = await MinorAsync(ledgerId, accountId, ct);
             return (await db.BankStatements.AsNoTracking().Include(s => s.Lines).Where(s => s.LedgerId == ledgerId && s.AccountId == accountId)
                 .OrderByDescending(s => s.ToDate).ThenByDescending(s => s.ImportedAt).ToListAsync(ct)).Select(s => ToDto(s, minor)).ToList();
         }, ct);
@@ -71,7 +71,7 @@ public sealed class BankStatementService(IBooksDb db, WriteRunner writes, ReadRu
 
             var cleared = await db.BankClearings.Where(c => c.AccountId == accountId).Select(c => c.JournalId).ToListAsync(ct);
             var pending = (await db.Database.SqlQuery<Pending>($"""
-                SELECT j.id AS journal_id, j.journal_no AS journal_no, r.accounting_date AS accounting_date, SUM(l.amount) AS amount
+                SELECT j.id AS journal_id, j.journal_no AS journal_no, r.accounting_date AS accounting_date, SUM(COALESCE(l.currency_amount, l.amount)) AS amount
                 FROM journals j
                 JOIN journal_revisions r ON r.id = j.effective_revision_id
                 JOIN journal_lines l ON l.revision_id = r.id AND l.account_id = {accountId}
@@ -103,7 +103,7 @@ public sealed class BankStatementService(IBooksDb db, WriteRunner writes, ReadRu
                 line.Drafted(draft.Id);
             }
             db.BankStatements.Add(statement);
-            var dto = ToDto(statement, Currencies.Require(ledger.BaseCurrency).MinorUnits);
+            var dto = ToDto(statement, await MinorAsync(ledgerId, accountId, ct));
             scope.Audit("bank_statement.imported", "account", accountId, new { statement_id = statement.Id, dto.Matched, dto.Drafted, dto.Duplicates });
             await db.SaveChangesAsync(ct);
             return WriteResult.Of(201, dto);
@@ -145,8 +145,10 @@ public sealed class BankStatementService(IBooksDb db, WriteRunner writes, ReadRu
             return WriteResult.Of(200, new { statement_id = statementId, posted, not_posted = notPosted });
         }, ct);
 
-    private async Task<int> MinorAsync(Guid ledgerId, CancellationToken ct) =>
-        Currencies.Require(await db.Ledgers.Where(l => l.Id == ledgerId).Select(l => l.BaseCurrency).SingleAsync(ct)).MinorUnits;
+    /// <summary>Statements are in the bank account's currency.</summary>
+    private async Task<int> MinorAsync(Guid ledgerId, Guid accountId, CancellationToken ct) =>
+        Currencies.Require(await db.BankAccounts.Where(b => b.AccountId == accountId).Select(b => b.Currency).SingleOrDefaultAsync(ct)
+            ?? await db.Ledgers.Where(l => l.Id == ledgerId).Select(l => l.BaseCurrency).SingleAsync(ct)).MinorUnits;
 
     private static BankStatementDto ToDto(BankStatement s, int minor)
     {

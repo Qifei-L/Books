@@ -330,6 +330,7 @@ async function paymentForm(type, doc) {
         <label class="wide">${receipt ? "Received from" : "Paid to"} <select name="party_id">${options(parties.filter((p) => p.active), doc?.party_id, (p) => p.name, "No party")}</select></label>
         <label>Date <input type="date" name="date" value="${doc?.date ?? today()}" required></label>
         <label>Reference <input name="reference" value="${esc(doc?.reference ?? "")}"></label>
+        <label data-rate>Exchange rate <input name="exchange_rate" inputmode="decimal" value="${doc?.exchange_rate ?? ""}" placeholder="rate of the date"></label>
         <label class="wide">Description <input name="description" value="${esc(doc?.description ?? "")}"></label>
       </div>
       <p class="muted small">Leave the account empty (or choose Accounts payable / receivable) to settle with the party; name an invoice to settle that one, otherwise the oldest open items are settled first.</p>
@@ -349,6 +350,7 @@ async function paymentForm(type, doc) {
       { name: "invoice_id", head: "Invoice", cell: (l) => `<select name="invoice_id">${invoiceOptions(l?.invoice_id)}</select>` },
       { name: "description", head: "Description", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },
       { name: "amount", head: "Amount", num: true, cell: (l) => `<input name="amount" class="num" inputmode="decimal" value="${l?.amount ?? ""}">` },
+      { name: "settled_amount", head: "Settles (invoice currency)", num: true, cell: (l) => `<input name="settled_amount" class="num" inputmode="decimal" value="${l?.settled_amount ?? ""}" title="Only for an invoice in another currency than the bank's; leave empty to convert at the day's rate">` },
       { name: "tax_code_id", head: "VAT", cell: (l) => `<select name="tax_code_id">${options(vat, l?.tax_code_id, (t) => t.name, "None")}</select>` },
       ...(receipt ? [] : [{ name: "valid_tax_invoice", head: "Tax invoice", cell: (l) => `<input type="checkbox" name="valid_tax_invoice" ${l?.valid_tax_invoice === false ? "" : "checked"}>` }]),
       { name: "withholding_code_id", head: "WHT", cell: (l) => `<select name="withholding_code_id">${options(wht, l?.withholding_code_id, (t) => t.name, "None")}</select>` },
@@ -364,7 +366,10 @@ async function paymentForm(type, doc) {
     };
     const grid = lineGrid(form.querySelector("table.lines"), columns, totals);
     form.elements.party_id.onchange = () => { for (const tr of grid.rows()) field(tr, "invoice_id").innerHTML = invoiceOptions(value(tr, "invoice_id")); };
-    form.elements.bank_account_id.onchange = totals;
+    const showRate = () => form.querySelector("[data-rate]").classList.toggle("hidden",
+      banks.find((b) => b.account_id === form.elements.bank_account_id.value)?.currency === state.ledger.base_currency);
+    form.elements.bank_account_id.onchange = () => { showRate(); totals(); };
+    showRate();
     form.querySelector("[data-add]").onclick = () => grid.add();
     for (const l of doc?.lines ?? [null]) grid.add(l);
     totals();
@@ -378,9 +383,11 @@ async function paymentForm(type, doc) {
         ...(tr.dataset.adjusted ? JSON.parse(tr.dataset.adjusted) : {}),
       })).filter((l) => l.amount);
       if (!lines.length) throw new Error("Add at least one line with an amount.");
+      const foreign = banks.find((b) => b.account_id === f.bank_account_id.value)?.currency !== state.ledger.base_currency;
       const body = {
         bank_account_id: f.bank_account_id.value, party_id: text(f.party_id.value), date: f.date.value,
         reference: text(f.reference.value), description: text(f.description.value), lines, post,
+        ...(foreign ? { exchange_rate: text(f.exchange_rate.value) } : {}),
       };
       const result = await (doc ? write("PUT", `${url}/${doc.id}`, body, doc.version) : write("POST", url, body));
       $("form-dialog").close();
@@ -429,6 +436,7 @@ async function journalForm(j) {
       { name: "debit", head: "Debit", num: true, cell: (l) => `<input name="debit" class="num" inputmode="decimal" value="${amount(l?.debit)}">` },
       { name: "credit", head: "Credit", num: true, cell: (l) => `<input name="credit" class="num" inputmode="decimal" value="${amount(l?.credit)}">` },
       { name: "party_id", head: "Party", cell: (l) => `<select name="party_id">${options(parties, l?.party_id, (p) => p.name, "")}</select>` },
+      { name: "currency_amount", head: "Bank currency", num: true, cell: (l) => `<input name="currency_amount" class="num" inputmode="decimal" value="${l?.currency_amount ? String(Math.abs(Number(l.currency_amount))) : ""}" title="Lines on a bank account in another currency: the amount in that currency">` },
     ];
     const totals = () => {
       let dr = 0, cr = 0;

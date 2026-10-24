@@ -19,6 +19,8 @@ internal sealed class BankTransferConfiguration : IEntityTypeConfiguration<BankT
         b.Property(x => x.Id).ValueGeneratedNever();
         b.Property(x => x.Amount).HasPrecision(20, 4);
         b.Property(x => x.FeeAmount).HasPrecision(20, 4);
+        b.Property(x => x.ToAmount).HasPrecision(20, 4);
+        b.Property(x => x.FromRate).HasPrecision(20, 10);
         b.Property(x => x.Reference).HasMaxLength(200);
         b.Property(x => x.Description).HasMaxLength(1000);
         b.Property(x => x.Issues).HasColumnType("jsonb");
@@ -254,6 +256,8 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         b.Property(x => x.Issues).HasColumnType("jsonb");
         b.Ignore(x => x.Total);
         b.Ignore(x => x.SourceKind);
+        b.Property(x => x.Currency).HasMaxLength(3);
+        b.Property(x => x.ExchangeRate).HasPrecision(20, 10);
         b.HasAlternateKey(x => new { x.LedgerId, x.Id });
         // Payments and receipts are numbered in separate series.
         b.HasIndex(x => new { x.LedgerId, x.IsReceipt, x.PaymentNo }).IsUnique();
@@ -291,7 +295,8 @@ internal sealed class PaymentLineConfiguration : IEntityTypeConfiguration<Paymen
         b.Property(x => x.Description).HasMaxLength(1000);
         b.Property(x => x.TaxReason).HasMaxLength(500);
         foreach (var amount in new[] { nameof(PaymentLine.NetAmount), nameof(PaymentLine.TaxCalculated), nameof(PaymentLine.TaxAmount),
-                     nameof(PaymentLine.WithholdingAmount), nameof(PaymentLine.Quantity), nameof(PaymentLine.UnitPrice) })
+                     nameof(PaymentLine.WithholdingAmount), nameof(PaymentLine.Quantity), nameof(PaymentLine.UnitPrice),
+                     nameof(PaymentLine.ControlAmount), nameof(PaymentLine.SettledAmount) })
         {
             b.Property(amount).HasPrecision(20, 4);
         }

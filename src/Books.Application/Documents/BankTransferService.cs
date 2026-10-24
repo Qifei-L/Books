@@ -10,12 +10,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Books.Application.Documents;
 
+/// <param name="Amount">In the sending account's currency, like the fee.</param>
+/// <param name="ToAmount">What arrives, in the receiving account's currency; null when both accounts share a currency.</param>
 public sealed record BankTransferDto(
     Guid Id, Guid LedgerId, long TransferNo, DateOnly Date, Guid FromAccountId, Guid ToAccountId, string Amount,
     string FeeAmount, Guid? FeeAccountId, string? Reference, string? Description, Guid? JournalId, long? JournalNo,
-    string Status, IReadOnlyList<JournalIssue> Issues, string Version);
+    string Status, IReadOnlyList<JournalIssue> Issues, string Version, string? ToAmount = null, string? FromRate = null);
 
-public sealed record BankTransferInput(DateOnly Date, Guid FromAccountId, Guid ToAccountId, decimal Amount, decimal FeeAmount, Guid? FeeAccountId, string? Reference, string? Description);
+/// <param name="ToAmount">Between accounts in different currencies: what arrives, in the receiving account's currency.</param>
+/// <param name="FromRate">When the sending account is in another currency: its units per one unit of the ledger's; omit for the rate of the date.</param>
+public sealed record BankTransferInput(DateOnly Date, Guid FromAccountId, Guid ToAccountId, decimal Amount, decimal FeeAmount, Guid? FeeAccountId, string? Reference, string? Description,
+    decimal? ToAmount = null, decimal? FromRate = null);
 
 /// <summary>Bank transfers, saved together with their journal through <see cref="DocumentPosting"/>.</summary>
 public sealed class BankTransferService(IBooksDb db, WriteRunner writes, ReadRunner reads, DocumentPosting posting)
@@ -48,12 +53,13 @@ public sealed class BankTransferService(IBooksDb db, WriteRunner writes, ReadRun
     /// <summary>Posts or keeps as draft. Returns posted, draft (on purpose) or not_posted (failed, kept as draft with reasons).</summary>
     private async Task<string> SaveAsync(WriteScope scope, Ledger ledger, BankTransfer transfer, bool post, CancellationToken ct)
     {
+        var draft = await JournalAsync(ledger, transfer, ct);
         if (!post)
         {
-            transfer.KeptAsDraft(Issues(await posting.CheckAsync(ledger, transfer.ToJournal(), ct)));
+            transfer.KeptAsDraft(Issues(await posting.CheckAsync(ledger, draft, ct)));
             return "draft";
         }
-        var outcome = await posting.PostAsync(scope, ledger, BankTransfer.Kind, transfer.Id, transfer.JournalId, transfer.ToJournal(), ct);
+        var outcome = await posting.PostAsync(scope, ledger, BankTransfer.Kind, transfer.Id, transfer.JournalId, draft, ct);
         if (outcome.Journal is { } journal)
         {
             transfer.PostedAs(journal.Id);
@@ -64,6 +70,29 @@ public sealed class BankTransferService(IBooksDb db, WriteRunner writes, ReadRun
     }
 
     private static string? Issues(IReadOnlyList<JournalIssue> issues) => issues.Count == 0 ? null : BooksJson.Serialize(issues);
+
+    private async Task<JournalDraft> JournalAsync(Ledger ledger, BankTransfer transfer, CancellationToken ct)
+    {
+        var currencies = await CurrenciesAsync(ledger, transfer.FromAccountId, transfer.ToAccountId, ct);
+        var fromForeign = currencies.From != ledger.BaseCurrency;
+        var toForeign = currencies.To != ledger.BaseCurrency;
+        var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
+        var fx = !toForeign && fromForeign ? await Inventory.AccountAsync(db, ledger.Id, Usage.FxRealized, ct) : (Guid?)null;
+        try
+        {
+            return transfer.ToJournal(minor, fromForeign, toForeign, fx);
+        }
+        catch (DomainException e)
+        {
+            throw BooksProblem.Invalid(e.Message);
+        }
+    }
+
+    private async Task<(string From, string To)> CurrenciesAsync(Ledger ledger, Guid from, Guid to, CancellationToken ct)
+    {
+        var banks = await db.BankAccounts.Where(b => b.LedgerId == ledger.Id && (b.AccountId == from || b.AccountId == to)).ToDictionaryAsync(b => b.AccountId, b => b.Currency, ct);
+        return (banks.GetValueOrDefault(from, ledger.BaseCurrency), banks.GetValueOrDefault(to, ledger.BaseCurrency));
+    }
 
     /// <summary>
     /// Changes a transfer. A draft is posted when valid or stays a draft with new reasons. A posted transfer whose
@@ -133,20 +162,40 @@ public sealed class BankTransferService(IBooksDb db, WriteRunner writes, ReadRun
         {
             throw BooksProblem.Invalid("fee_account_id must be a Cost & Expense account of this ledger.");
         }
-        transfer.Set(input.Date, input.FromAccountId, input.ToAccountId, input.Amount, input.FeeAmount, input.FeeAccountId, input.Reference, input.Description, isNew);
+        // Between currencies the receiving amount is given; the sending side converts at its rate (M12.2).
+        var (fromCurrency, toCurrency) = await CurrenciesAsync(ledger, input.FromAccountId, input.ToAccountId, ct);
+        if ((fromCurrency != toCurrency) != (input.ToAmount is not null))
+        {
+            throw BooksProblem.Invalid(fromCurrency != toCurrency
+                ? $"A transfer from {fromCurrency} to {toCurrency} needs to_amount, what arrives in {toCurrency}."
+                : "to_amount applies only between accounts in different currencies.");
+        }
+        var fromRate = await Rates.ForDocumentAsync(db, ledger, fromCurrency, input.FromRate, input.Date, ct);
+        try
+        {
+            transfer.Set(input.Date, input.FromAccountId, input.ToAccountId, input.Amount, input.FeeAmount, input.FeeAccountId, input.Reference, input.Description, isNew,
+                input.ToAmount, fromRate);
+        }
+        catch (DomainException e)
+        {
+            throw BooksProblem.Invalid(e.Message);
+        }
     }
 
     private async Task<IReadOnlyList<BankTransferDto>> LoadAsync(Guid ledgerId, Guid? id, CancellationToken ct)
     {
-        var minor = Currencies.Require(await db.Ledgers.Where(l => l.Id == ledgerId).Select(l => l.BaseCurrency).SingleAsync(ct)).MinorUnits;
-        string F(decimal v) => v.ToString("F" + minor, CultureInfo.InvariantCulture);
+        var baseCurrency = await db.Ledgers.Where(l => l.Id == ledgerId).Select(l => l.BaseCurrency).SingleAsync(ct);
+        var bankMinor = await db.BankAccounts.Where(b => b.LedgerId == ledgerId).ToDictionaryAsync(b => b.AccountId, b => Currencies.Require(b.Currency).MinorUnits, ct);
+        int M(Guid account) => bankMinor.TryGetValue(account, out var m) ? m : Currencies.Require(baseCurrency).MinorUnits;
+        static string F(decimal v, int minor) => v.ToString("F" + minor, CultureInfo.InvariantCulture);
         return (await db.BankTransfers.AsNoTracking().Where(t => t.LedgerId == ledgerId && (id == null || t.Id == id))
                 .OrderByDescending(t => t.TransferNo)
                 .Select(t => new { t, JournalNo = db.Journals.Where(j => j.Id == t.JournalId).Select(j => (long?)j.JournalNo).FirstOrDefault() })
                 .ToListAsync(ct))
-            .Select(x => new BankTransferDto(x.t.Id, x.t.LedgerId, x.t.TransferNo, x.t.Date, x.t.FromAccountId, x.t.ToAccountId, F(x.t.Amount),
-                F(x.t.FeeAmount), x.t.FeeAccountId, x.t.Reference, x.t.Description, x.t.JournalId, x.JournalNo, Text.Of(x.t.Status),
-                x.t.Issues is null ? [] : System.Text.Json.JsonSerializer.Deserialize<List<JournalIssue>>(x.t.Issues, BooksJson.Options)!, x.t.Version.ToString()))
+            .Select(x => new BankTransferDto(x.t.Id, x.t.LedgerId, x.t.TransferNo, x.t.Date, x.t.FromAccountId, x.t.ToAccountId, F(x.t.Amount, M(x.t.FromAccountId)),
+                F(x.t.FeeAmount, M(x.t.FromAccountId)), x.t.FeeAccountId, x.t.Reference, x.t.Description, x.t.JournalId, x.JournalNo, Text.Of(x.t.Status),
+                x.t.Issues is null ? [] : System.Text.Json.JsonSerializer.Deserialize<List<JournalIssue>>(x.t.Issues, BooksJson.Options)!, x.t.Version.ToString(),
+                x.t.ToAmount is { } to ? F(to, M(x.t.ToAccountId)) : null, x.t.FromRate?.ToString("0.##########", CultureInfo.InvariantCulture)))
             .ToList();
     }
 }
