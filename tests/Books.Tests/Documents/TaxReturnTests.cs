@@ -27,7 +27,8 @@ public sealed class TaxReturnTests(TestHost host)
         Assert.Equal(("1000.00", "100.00", "0.00", "100.00"), (boxes["wht_rent_base"].Usd, boxes["wht_rent"].Usd, boxes["wht_services"].Usd, boxes["wht_total"].Usd));
         Assert.Equal(("369000", "410000", "-41000", "47150"), (boxes["output_vat"].Khr, boxes["input_vat"].Khr, boxes["net_vat"].Khr, boxes["prepayment"].Khr));
         Assert.Equal("document_snapshots", october.GetProperty("tax_currency_basis").GetString());
-        Assert.Empty(october.GetProperty("issues").EnumerateArray());
+        // The October draft is not in the return; it is flagged so it can be posted or re-dated before filing.
+        Assert.Equal(["DRAFTS_IN_PERIOD"], october.GetProperty("issues").EnumerateArray().Select(i => i.GetProperty("code").GetString()));
     }
 
     [Fact]

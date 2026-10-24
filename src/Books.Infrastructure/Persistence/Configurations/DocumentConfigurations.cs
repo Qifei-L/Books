@@ -179,3 +179,18 @@ internal sealed class SalesInvoiceLineConfiguration : IEntityTypeConfiguration<S
         b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class FiledTaxReturnConfiguration : IEntityTypeConfiguration<FiledTaxReturn>
+{
+    public void Configure(EntityTypeBuilder<FiledTaxReturn> b)
+    {
+        b.ToTable("filed_tax_returns", t => t.HasCheckConstraint("ck_filed_tax_returns_period", "EXTRACT(DAY FROM period) = 1"));
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Snapshot).HasColumnType("text");
+        b.HasIndex(x => new { x.LedgerId, x.Period }).IsUnique();
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.FiledBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}

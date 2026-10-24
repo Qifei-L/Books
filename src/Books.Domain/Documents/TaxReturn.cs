@@ -71,3 +71,36 @@ public static class TaxReturns
             Formula: (box, _) => CambodiaWithholding.Sum(c => box($"wht_{c.Key}"))),
     ]);
 }
+
+/// <summary>
+/// A filed monthly return: the return as it was when filed, kept unchanged (owner decision). Filing also closes the
+/// ledger through the month end, so the month's documents cannot change afterwards unless an administrator reopens it.
+/// </summary>
+public sealed class FiledTaxReturn
+{
+    private FiledTaxReturn() { }
+
+    public FiledTaxReturn(Guid id, Guid orgId, Guid ledgerId, DateOnly period, string snapshot, Guid filedBy, DateTimeOffset filedAt)
+    {
+        Id = id;
+        OrgId = orgId;
+        LedgerId = ledgerId;
+        Period = period;
+        Snapshot = snapshot;
+        FiledBy = filedBy;
+        FiledAt = filedAt;
+    }
+
+    public Guid Id { get; private set; }
+    public Guid OrgId { get; private set; }
+    public Guid LedgerId { get; private set; }
+
+    /// <summary>The first day of the month.</summary>
+    public DateOnly Period { get; private set; }
+
+    /// <summary>The return's JSON when filed.</summary>
+    public string Snapshot { get; private set; } = "";
+
+    public Guid FiledBy { get; private set; }
+    public DateTimeOffset FiledAt { get; private set; }
+}
