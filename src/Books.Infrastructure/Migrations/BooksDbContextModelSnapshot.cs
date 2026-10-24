@@ -3005,6 +3005,11 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("category_id");
 
+                    b.Property<string>("Code")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
                     b.Property<Guid?>("CostOfSalesAccountId")
                         .HasColumnType("uuid")
                         .HasColumnName("cost_of_sales_account_id");
@@ -3048,6 +3053,34 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("org_id");
 
+                    b.Property<string>("PurchaseDescription")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("purchase_description");
+
+                    b.Property<decimal?>("PurchasePrice")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("purchase_price");
+
+                    b.Property<Guid?>("PurchaseTaxCodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("purchase_tax_code_id");
+
+                    b.Property<string>("SalesDescription")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("sales_description");
+
+                    b.Property<decimal?>("SalesPrice")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("sales_price");
+
+                    b.Property<Guid?>("SalesTaxCodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sales_tax_code_id");
+
                     b.Property<bool>("TrackInventory")
                         .HasColumnType("boolean")
                         .HasColumnName("track_inventory");
@@ -3070,6 +3103,11 @@ namespace Books.Infrastructure.Migrations
                     b.HasIndex("LedgerId", "CategoryId")
                         .HasDatabaseName("ix_items_ledger_id_category_id");
 
+                    b.HasIndex("LedgerId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_items_ledger_id_code")
+                        .HasFilter("code IS NOT NULL");
+
                     b.HasIndex("LedgerId", "CostOfSalesAccountId")
                         .HasDatabaseName("ix_items_ledger_id_cost_of_sales_account_id");
 
@@ -3084,6 +3122,12 @@ namespace Books.Infrastructure.Migrations
 
                     b.HasIndex("LedgerId", "InventoryAccountId")
                         .HasDatabaseName("ix_items_ledger_id_inventory_account_id");
+
+                    b.HasIndex("LedgerId", "PurchaseTaxCodeId")
+                        .HasDatabaseName("ix_items_ledger_id_purchase_tax_code_id");
+
+                    b.HasIndex("LedgerId", "SalesTaxCodeId")
+                        .HasDatabaseName("ix_items_ledger_id_sales_tax_code_id");
 
                     b.HasIndex("OrgId", "LedgerId")
                         .HasDatabaseName("ix_items_org_id_ledger_id");
@@ -4316,6 +4360,20 @@ namespace Books.Infrastructure.Migrations
                         .HasPrincipalKey("LedgerId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_items_accounts_ledger_id_inventory_account_id");
+
+                    b.HasOne("Books.Domain.Ledgers.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "PurchaseTaxCodeId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_items_tax_codes_ledger_id_purchase_tax_code_id");
+
+                    b.HasOne("Books.Domain.Ledgers.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "SalesTaxCodeId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_items_tax_codes_ledger_id_sales_tax_code_id");
 
                     b.HasOne("Books.Domain.Ledgers.Ledger", null)
                         .WithMany()

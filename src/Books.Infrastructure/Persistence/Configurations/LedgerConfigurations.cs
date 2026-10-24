@@ -218,6 +218,12 @@ internal sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
         b.Property(x => x.Name).HasMaxLength(200);
         b.Property(x => x.Description).HasMaxLength(1000);
         b.Property(x => x.Unit).HasMaxLength(20);
+        b.Property(x => x.Code).HasMaxLength(50);
+        b.Property(x => x.SalesPrice).HasPrecision(20, 4);
+        b.Property(x => x.PurchasePrice).HasPrecision(20, 4);
+        b.Property(x => x.SalesDescription).HasMaxLength(1000);
+        b.Property(x => x.PurchaseDescription).HasMaxLength(1000);
+        b.HasIndex(x => new { x.LedgerId, x.Code }).IsUnique().HasFilter("code IS NOT NULL");
         b.HasAlternateKey(x => new { x.LedgerId, x.Id });
         b.HasOne<Ledger>().WithMany()
             .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
@@ -232,6 +238,12 @@ internal sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
         b.HasOne<TaxCode>().WithMany()
             .HasForeignKey(x => new { x.LedgerId, x.DefaultTaxCodeId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
+        foreach (var code in new[] { nameof(Item.SalesTaxCodeId), nameof(Item.PurchaseTaxCodeId) })
+        {
+            b.HasOne<TaxCode>().WithMany()
+                .HasForeignKey(nameof(Item.LedgerId), code).HasPrincipalKey(nameof(TaxCode.LedgerId), nameof(TaxCode.Id))
+                .OnDelete(DeleteBehavior.Restrict);
+        }
         foreach (var account in new[] { nameof(Item.InventoryAccountId), nameof(Item.IncomeAccountId), nameof(Item.CostOfSalesAccountId) })
         {
             b.HasOne<Account>().WithMany()

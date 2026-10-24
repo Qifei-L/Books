@@ -59,6 +59,21 @@ public sealed class Item
 
     public Guid? DefaultAccountId { get; private set; }
     public Guid? DefaultTaxCodeId { get; private set; }
+
+    /// <summary>The item's own code (SKU), unique in the ledger; optional.</summary>
+    public string? Code { get; private set; }
+
+    /// <summary>Sales side (Manager.io, QuickBooks and Xero style): the price, text and tax code a sales line starts with.</summary>
+    public decimal? SalesPrice { get; private set; }
+
+    public string? SalesDescription { get; private set; }
+    public Guid? SalesTaxCodeId { get; private set; }
+
+    /// <summary>Purchase side: the price, text and tax code a purchase line starts with.</summary>
+    public decimal? PurchasePrice { get; private set; }
+
+    public string? PurchaseDescription { get; private set; }
+    public Guid? PurchaseTaxCodeId { get; private set; }
     public bool Active { get; private set; } = true;
 
     /// <summary>
@@ -78,6 +93,31 @@ public sealed class Item
 
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
+
+    /// <summary>Sets the code and the sales and purchase defaults; tax code kinds are checked by the caller.</summary>
+    public void SetTrading(string? code, decimal? salesPrice, string? salesDescription, TaxCode? salesTaxCode,
+        decimal? purchasePrice, string? purchaseDescription, TaxCode? purchaseTaxCode)
+    {
+        if (salesPrice < 0 || purchasePrice < 0)
+        {
+            throw new DomainException("Prices cannot be negative.");
+        }
+        if ((salesTaxCode is not null && salesTaxCode.LedgerId != LedgerId) || (purchaseTaxCode is not null && purchaseTaxCode.LedgerId != LedgerId))
+        {
+            throw new DomainException("Tax codes must be in the same ledger.");
+        }
+        var trimmed = code?.Trim();
+        Code = string.IsNullOrEmpty(trimmed) ? null : trimmed.Length <= 50 ? trimmed : throw new DomainException("code must be at most 50 characters.");
+        SalesPrice = salesPrice;
+        SalesDescription = Text(salesDescription);
+        SalesTaxCodeId = salesTaxCode?.Id;
+        PurchasePrice = purchasePrice;
+        PurchaseDescription = Text(purchaseDescription);
+        PurchaseTaxCodeId = purchaseTaxCode?.Id;
+    }
+
+    private static string? Text(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim().Length <= 1000 ? value.Trim() : throw new DomainException("Descriptions are at most 1000 characters.");
 
     /// <summary>Replaces all details. References are checked against the same ledger by the caller and the database.</summary>
     public void Set(string name, string? description, string? unit, ItemCategory? category, Account? defaultAccount, TaxCode? defaultTaxCode, bool active, bool isNew = false,

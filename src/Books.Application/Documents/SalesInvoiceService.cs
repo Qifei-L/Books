@@ -181,10 +181,18 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             }
             Item? trackedItem = null;
             var accountId = line.AccountId;
+            var description = line.Description;
+            var unitPrice = line.UnitPrice;
             if (line.ItemId is { } itemId)
             {
                 var item = await db.Items.AsNoTracking().SingleOrDefaultAsync(x => x.LedgerId == ledger.Id && x.Id == itemId, ct)
                     ?? throw BooksProblem.Invalid($"Line {i}: item_id must be an item of this ledger.");
+                // The line starts from the item's sales text and price (in the ledger's currency) where it gives none.
+                description ??= item.SalesDescription;
+                if (unitPrice is null && line.Amount is null && (input.Currency is null || input.Currency == ledger.BaseCurrency))
+                {
+                    unitPrice = item.SalesPrice;
+                }
                 if (item.TrackInventory)
                 {
                     trackedItem = item;
@@ -196,7 +204,7 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
                     accountId = item.IncomeAccountId ?? accountId;
                 }
             }
-            var net = line.Amount ?? (line is { Quantity: { } q, UnitPrice: { } p }
+            var net = line.Amount ?? ((line.Quantity, unitPrice) is ({ } q, { } p)
                 ? decimal.Round(q * p, minor, MidpointRounding.AwayFromZero)
                 : throw BooksProblem.Invalid($"Line {i}: give an amount, or a quantity and a unit price."));
             // Specific, accommodation and public lighting tax: on the net amount, and part of the VAT base.
@@ -232,7 +240,7 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
                 }
                 tax = TaxCalculator.ForLine(net + otherTax, code.Rate, minor, line.TaxOverride, line.TaxReason);
             }
-            var salesLine = new SalesInvoiceLine(accountId, line.Description, line.ItemId, line.Quantity, line.UnitPrice, net, line.TaxCodeId, tax,
+            var salesLine = new SalesInvoiceLine(accountId, description, line.ItemId, line.Quantity, unitPrice, net, line.TaxCodeId, tax,
                 line.OtherTaxCodeId, otherTax);
             if (trackedItem is not null)
             {
