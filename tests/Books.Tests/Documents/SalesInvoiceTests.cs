@@ -33,6 +33,25 @@ public sealed class SalesInvoiceTests(TestHost host)
     }
 
     [Fact]
+    public async Task Accommodation_tax_is_charged_on_top_and_is_part_of_the_vat_base()
+    {
+        var s = await SetUpAsync();
+
+        var invoice = await (await s.Books.Admin.PostAsync(s.Url, new
+        {
+            customer_id = s.Customer, date = "2026-10-15",
+            lines = new[] { new { account_id = s.Services, description = "Room nights", amount = "1000.00", tax_code_id = s.Taxes["VAT 10% (sales)"], other_tax_code_id = s.Taxes["Accommodation tax 2%"] } },
+        })).DataAsync(HttpStatusCode.Created);
+
+        Assert.Equal(("1000.00", "20.00", "102.00", "1122.00"), (Get(invoice, "net_total"), Get(invoice, "other_tax_total"), Get(invoice, "tax_total"), Get(invoice, "gross_total")));
+        var lines = await JournalLinesAsync(s, invoice);
+        Assert.Equal(("20.00", "102.00", "1122.00"), (lines[s.Account("2400")].Cr, lines[s.Account("2100")].Cr, lines[s.Account("1200")].Dr));
+        var boxes = TaxReturnTests.Boxes(await TaxReturnTests.GetAsync(s, "tax-returns/2026-10"));
+        Assert.Equal(("1000.00", "20.00", "1020.00", "102.00"),
+            (boxes["t701_accommodation_base"].Usd, boxes["t701_accommodation"].Usd, boxes["t701_14"].Usd, boxes["t701_15"].Usd));
+    }
+
+    [Fact]
     public async Task A_credit_note_posts_the_opposite_in_its_own_series()
     {
         var s = await SetUpAsync();

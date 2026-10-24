@@ -64,8 +64,11 @@ public sealed class SalesInvoice
     public decimal NetTotal => _lines.Sum(l => l.NetAmount);
     public decimal TaxTotal => _lines.Sum(l => l.TaxAmount);
 
-    /// <summary>What the customer owes, VAT included.</summary>
-    public decimal GrossTotal => NetTotal + TaxTotal;
+    /// <summary>Specific, accommodation and public lighting tax charged on the lines.</summary>
+    public decimal OtherTaxTotal => _lines.Sum(l => l.OtherTaxAmount);
+
+    /// <summary>What the customer owes, VAT and other taxes included.</summary>
+    public decimal GrossTotal => NetTotal + OtherTaxTotal + TaxTotal;
 
     public void Set(Guid customerId, Guid receivableAccountId, DateOnly date, DateOnly dueDate, string? reference, string? description,
         IEnumerable<SalesInvoiceLine> lines, bool isNew, Guid? originalInvoiceId = null)
@@ -126,6 +129,10 @@ public sealed class SalesInvoice
         {
             lines.Add(new DraftLine(vat.Key, -sign * vat.Sum(l => l.TaxAmount), text));
         }
+        foreach (var other in _lines.Where(l => l.OtherTaxAmount != 0).GroupBy(l => taxCodes[l.OtherTaxCodeId!.Value].AccountId!.Value))
+        {
+            lines.Add(new DraftLine(other.Key, -sign * other.Sum(l => l.OtherTaxAmount), $"{text} (other tax)"));
+        }
         lines.Add(new DraftLine(ReceivableAccountId, sign * GrossTotal, text, PartyId: CustomerId));
         return new JournalDraft(Date, lines, Reference, text);
     }
@@ -136,8 +143,11 @@ public sealed class SalesInvoiceLine
 {
     private SalesInvoiceLine() { }
 
-    public SalesInvoiceLine(Guid accountId, string? description, Guid? itemId, decimal? quantity, decimal? unitPrice, decimal netAmount, Guid? taxCodeId, LineTax? tax)
+    public SalesInvoiceLine(Guid accountId, string? description, Guid? itemId, decimal? quantity, decimal? unitPrice, decimal netAmount, Guid? taxCodeId, LineTax? tax,
+        Guid? otherTaxCodeId = null, decimal otherTaxAmount = 0)
     {
+        OtherTaxCodeId = otherTaxCodeId;
+        OtherTaxAmount = otherTaxAmount;
         LineId = Guid.CreateVersion7();
         AccountId = accountId;
         Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
@@ -164,6 +174,11 @@ public sealed class SalesInvoiceLine
     public decimal TaxCalculated { get; private set; }
     public decimal TaxAmount { get; private set; }
     public string? TaxReason { get; private set; }
+
+    /// <summary>A specific, accommodation or public lighting tax code; its tax is part of the VAT base.</summary>
+    public Guid? OtherTaxCodeId { get; private set; }
+
+    public decimal OtherTaxAmount { get; private set; }
 
     public bool TaxAdjusted => TaxAmount != TaxCalculated;
 

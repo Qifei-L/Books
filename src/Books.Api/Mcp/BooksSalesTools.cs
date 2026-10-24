@@ -19,7 +19,8 @@ public sealed class BooksSalesTools(PrincipalAccessor principals, SalesInvoiceSe
         [property: JsonPropertyName("description")] string? Description,
         [property: JsonPropertyName("amount"), Description("Net amount, VAT excluded, as a decimal string.")] string Amount,
         [property: JsonPropertyName("tax_code_id"), Description("Output VAT, VAT 0% or Non-VAT code from list_tax_codes.")] Guid? TaxCodeId = null,
-        [property: JsonPropertyName("item_id")] Guid? ItemId = null);
+        [property: JsonPropertyName("item_id")] Guid? ItemId = null,
+        [property: JsonPropertyName("other_tax_code_id"), Description("Specific, accommodation or public lighting tax code, charged on top of VAT.")] Guid? OtherTaxCodeId = null);
 
     public sealed record SalesDocument(
         [property: JsonPropertyName("type"), Description("invoice, or credit_note for a credit to the customer.")] string Type,
@@ -75,6 +76,6 @@ public sealed class BooksSalesTools(PrincipalAccessor principals, SalesInvoiceSe
 
     private static SalesInvoiceInput Input(SalesDocument d) =>
         SalesEndpoints.Input(new SalesEndpoints.InvoiceRequest(d.CustomerId, null, d.Date, d.DueDate, d.Reference, d.Description,
-            (d.Lines ?? []).Select(l => new SalesEndpoints.LineRequest(l.AccountId, l.Description, l.ItemId, null, null, l.Amount, l.TaxCodeId, null, null)).ToList(),
+            (d.Lines ?? []).Select(l => new SalesEndpoints.LineRequest(l.AccountId, l.Description, l.ItemId, null, null, l.Amount, l.TaxCodeId, null, null, l.OtherTaxCodeId)).ToList(),
             Post: false, d.OriginalInvoiceId, d.TaxCurrencyRate, d.TaxCurrencyReason));
 }

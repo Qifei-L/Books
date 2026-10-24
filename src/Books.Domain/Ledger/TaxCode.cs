@@ -6,7 +6,7 @@ namespace Books.Domain.Ledgers;
 /// VAT output (sales) and input (purchases) at a rate; zero-rated VAT and non-VAT are separate kinds with no tax
 /// (owner decision); withholding tax at a rate.
 /// </summary>
-public enum TaxKind { VatOutput, VatInput, VatZeroRated, NonVat, Withholding }
+public enum TaxKind { VatOutput, VatInput, VatZeroRated, NonVat, Withholding, OtherTax }
 
 /// <summary>
 /// A tax a person chooses on a document line (rule 34). Owned by the ledger and maintained by administrators.
@@ -59,9 +59,9 @@ public sealed class TaxCode
     public void SetReturnCategory(string? category, IReadOnlyCollection<string> allowed)
     {
         category = string.IsNullOrWhiteSpace(category) ? null : category.Trim();
-        if (category is not null && Kind is not (TaxKind.Withholding or TaxKind.VatInput or TaxKind.VatOutput))
+        if (category is not null && Kind is not (TaxKind.Withholding or TaxKind.VatInput or TaxKind.VatOutput or TaxKind.OtherTax))
         {
-            throw new DomainException("Only withholding and VAT codes have a return category.");
+            throw new DomainException("Only withholding, VAT and other tax codes have a return category.");
         }
         if (category is not null && !allowed.Contains(category))
         {

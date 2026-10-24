@@ -65,7 +65,7 @@ public sealed class AccountUsageService(IBooksDb db, WriteRunner writes)
         var inUse = usage switch
         {
             Usage.Bank => await db.BankAccounts.AnyAsync(b => b.AccountId == account.Id, ct),
-            Usage.OutputVat or Usage.InputVat or Usage.WithholdingPayable =>
+            Usage.OutputVat or Usage.InputVat or Usage.WithholdingPayable or Usage.OtherTaxPayable =>
                 await db.TaxCodes.AnyAsync(t => t.AccountId == account.Id, ct),
             Usage.NonDeductibleVat => await db.TaxCodes.AnyAsync(t => t.NonDeductibleAccountId == account.Id, ct),
             // Until payments exist every posted invoice is open; M5.4 narrows this to unpaid invoices.
@@ -93,7 +93,8 @@ public sealed class AccountUsageService(IBooksDb db, WriteRunner writes)
         "salaries_payable" => Usage.SalariesPayable,
         "salary_tax_payable" => Usage.SalaryTaxPayable,
         "nssf_payable" => Usage.NssfPayable,
+        "other_tax_payable" => Usage.OtherTaxPayable,
         _ => throw BooksProblem.Invalid("usage must be one of payable, receivable, bank, output_vat, input_vat, non_deductible_vat, withholding_payable, "
-            + "salary_expense, nssf_expense, salaries_payable, salary_tax_payable, nssf_payable."),
+            + "salary_expense, nssf_expense, salaries_payable, salary_tax_payable, nssf_payable, other_tax_payable."),
     };
 }

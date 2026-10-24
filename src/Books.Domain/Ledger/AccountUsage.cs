@@ -13,6 +13,9 @@ public enum Usage
 
     // Payroll results (pay runs) post to these.
     SalaryExpense, NssfExpense, SalariesPayable, SalaryTaxPayable, NssfPayable,
+
+    // Other monthly taxes charged on sales (specific, accommodation, public lighting).
+    OtherTaxPayable,
 }
 
 public static class Usages
@@ -20,7 +23,8 @@ public static class Usages
     /// <summary>The account types a usage allows.</summary>
     public static AccountType[] Types(Usage usage) => usage switch
     {
-        Usage.Payable or Usage.OutputVat or Usage.WithholdingPayable or Usage.SalariesPayable or Usage.SalaryTaxPayable or Usage.NssfPayable => [AccountType.Liabilities],
+        Usage.Payable or Usage.OutputVat or Usage.WithholdingPayable or Usage.SalariesPayable or Usage.SalaryTaxPayable or Usage.NssfPayable
+            or Usage.OtherTaxPayable => [AccountType.Liabilities],
         Usage.Receivable or Usage.Bank or Usage.InputVat => [AccountType.Assets],
         Usage.NonDeductibleVat or Usage.SalaryExpense or Usage.NssfExpense => [AccountType.CostAndExpense],
         _ => throw new ArgumentOutOfRangeException(nameof(usage)),
@@ -35,6 +39,7 @@ public static class Usages
         TaxKind.VatOutput => Usage.OutputVat,
         TaxKind.VatInput => Usage.InputVat,
         TaxKind.Withholding => Usage.WithholdingPayable,
+        TaxKind.OtherTax => Usage.OtherTaxPayable,
         _ => null,
     };
 }

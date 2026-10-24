@@ -17,7 +17,7 @@ public sealed class CambodiaTemplateTests(TestHost host)
 
         var summary = await (await ApplyAsync(books)).DataAsync();
 
-        Assert.Equal(23, summary.GetProperty("created").GetArrayLength());
+        Assert.Equal(27, summary.GetProperty("created").GetArrayLength());
         var accounts = (await AccountTests.ListAsync(books.Admin, books.OrgId, books.LedgerId)).EnumerateArray().ToDictionary(a => a.GetProperty("code").GetString()!);
         Assert.Equal(["payable"], accounts["2000"].GetProperty("usages").EnumerateArray().Select(u => u.GetString()));
         Assert.True(accounts["2000"].GetProperty("is_control").GetBoolean());
@@ -25,7 +25,7 @@ public sealed class CambodiaTemplateTests(TestHost host)
         var taxCodes = await GetAsync(books, "tax-codes");
         var purchasesVat = taxCodes.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "VAT 10% (purchases)");
         Assert.Equal(accounts["5900"].Id(), purchasesVat.GetProperty("non_deductible_account_id").GetGuid());
-        Assert.Equal(9, taxCodes.GetArrayLength());
+        Assert.Equal(12, taxCodes.GetArrayLength());
         Assert.Equal("cambodia-2026", (await GetAsync(books, "")).GetProperty("tax_pack").GetString());
     }
 
