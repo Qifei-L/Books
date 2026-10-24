@@ -50,6 +50,7 @@ public static class DependencyInjection
         services.AddScoped<PayRunService>();
         services.AddScoped<InvoiceSettingsService>();
         services.AddScoped<InvoicePrintService>();
+        services.AddScoped<StockAdjustmentService>();
         services.AddScoped<InventoryReportService>();
         services.AddScoped<FixedAssetService>();
         services.AddScoped<ReceivablesReportService>();

@@ -414,6 +414,49 @@ internal sealed class PayRunLineConfiguration : IEntityTypeConfiguration<PayRunL
     }
 }
 
+internal sealed class StockAdjustmentConfiguration : IEntityTypeConfiguration<StockAdjustment>
+{
+    public void Configure(EntityTypeBuilder<StockAdjustment> b)
+    {
+        b.ToTable("stock_adjustments", t => t.HasCheckConstraint(
+            "ck_stock_adjustments_status", "status IN ('draft', 'posted', 'deleted') AND (status <> 'posted' OR journal_id IS NOT NULL)"));
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Reference).HasMaxLength(200);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.Property(x => x.Issues).HasColumnType("jsonb");
+        b.HasIndex(x => new { x.LedgerId, x.AdjustmentNo }).IsUnique();
+        b.HasIndex(x => new { x.LedgerId, x.Date });
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.AdjustmentId).OnDelete(DeleteBehavior.Restrict);
+        b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Journal>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.JournalId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class StockAdjustmentLineConfiguration : IEntityTypeConfiguration<StockAdjustmentLine>
+{
+    public void Configure(EntityTypeBuilder<StockAdjustmentLine> b)
+    {
+        b.ToTable("stock_adjustment_lines", t => t.HasCheckConstraint("ck_stock_adjustment_lines_quantity", "quantity <> 0"));
+        b.HasKey(x => new { x.AdjustmentId, x.LineNo });
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.Property(x => x.Quantity).HasPrecision(20, 4);
+        b.Property(x => x.CountedQuantity).HasPrecision(20, 4);
+        b.Property(x => x.BookQuantity).HasPrecision(20, 4);
+        b.Property(x => x.UnitCost).HasPrecision(20, 4);
+        b.Property(x => x.Value).HasPrecision(20, 4);
+        b.HasIndex(x => x.ItemId);
+        b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Account>().WithMany().HasForeignKey(x => x.InventoryAccountId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 internal sealed class FixedAssetConfiguration : IEntityTypeConfiguration<FixedAsset>
 {
     public void Configure(EntityTypeBuilder<FixedAsset> b)

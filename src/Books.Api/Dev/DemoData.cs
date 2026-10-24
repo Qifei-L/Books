@@ -154,6 +154,17 @@ public static class DemoData
             "CN-2026-01", "Damaged goods returned", [Sale(sales, "Return of 10 pcs", 200m, "VAT 10% (sales)")], mekongInvoice), true, ct, creditNote: true);
         await salesInvoices.CreateAsync(principal, Meta(), orgId, ledgerId, new SalesInvoiceInput(customers[2], null, DateOnly.Parse("2026-10-28"), null,
             null, "Catering supplies (draft for review)", [Sale(sales, "Trading goods", 340m, "VAT 10% (sales)")]), false, ct);
+        // Inventory (M10): a stocked item bought and sold at average cost, and two damaged cases written off.
+        var wholesaler = Data(await partyService.CreateAsync(principal, Meta(), orgId, ledgerId,
+            new PartyInput("Kampuchea Beverages Co., Ltd.", "K003-100200300", false, true, null, null, null, null, 30, null), ct)).GetProperty("id").GetGuid();
+        var water = Data(await items.CreateAsync(principal, Meta(), orgId, ledgerId,
+            new ItemInput("Bottled water", "24 × 500 ml", "case", goods, sales, vat10, TrackInventory: true), ct)).GetProperty("id").GetGuid();
+        await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(wholesaler, null, DateOnly.Parse("2026-10-03"), null, "KB-55120", "Bottled water",
+            [new PurchaseLineInput(chart["1400"], "Bottled water", water, 100m, 4m, null, taxes["VAT 10% (purchases)"], null, null, true, null)]), true, ct);
+        await salesInvoices.CreateAsync(principal, Meta(), orgId, ledgerId, new SalesInvoiceInput(customers[2], null, DateOnly.Parse("2026-10-08"), null,
+            "INV-2026-1008", "Bottled water", [new SalesLineInput(sales, "Bottled water", water, 30m, 7m, null, taxes["VAT 10% (sales)"], null, null)]), true, ct);
+        await services.GetRequiredService<StockAdjustmentService>().CreateAsync(principal, Meta(), orgId, ledgerId, new StockAdjustmentInput(DateOnly.Parse("2026-10-24"),
+            "WO-2610", "Damaged in storage", [new StockAdjustmentLineInput(water, "Crushed cases", -2m, null, null, null)]), true, ct);
         // Payments and receipts (M7), Manager.io style: settle with the party on the A/P or A/R account; a customer's
         // withholding and a bank fee are their own lines.
         var paymentService = services.GetRequiredService<PaymentService>();
