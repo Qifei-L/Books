@@ -49,12 +49,13 @@ public sealed class TaxCodeTests(TestHost host)
         var books = await JournalBooks.CreateAsync(host);
         var vatPayable = await AccountTests.CreateAsync(books.Admin, books.OrgId, books.LedgerId, "2100", "VAT payable", "liabilities");
         var vatReceivable = await AccountTests.CreateAsync(books.Admin, books.OrgId, books.LedgerId, "1300", "VAT receivable", "assets");
+        var nonDeductible = await AccountTests.CreateAsync(books.Admin, books.OrgId, books.LedgerId, "5400", "Non-deductible VAT", "cost_and_expense");
 
         var output = await (await Create(books, new { name = "VAT 10% sales", kind = "vat_output", rate = "10", account_id = vatPayable.Id() })).DataAsync(HttpStatusCode.Created);
-        var input = await (await Create(books, new { name = "VAT 10% purchases", kind = "vat_input", rate = "10", account_id = vatReceivable.Id() })).DataAsync(HttpStatusCode.Created);
+        var input = await (await Create(books, new { name = "VAT 10% purchases", kind = "vat_input", rate = "10", account_id = vatReceivable.Id(), non_deductible_account_id = nonDeductible.Id() })).DataAsync(HttpStatusCode.Created);
         var zero = await (await Create(books, new { name = "VAT 0%", kind = "vat_zero_rated", rate = "0" })).DataAsync(HttpStatusCode.Created);
         var nonVat = await (await Create(books, new { name = "Non-VAT", kind = "non_vat", rate = "0" })).DataAsync(HttpStatusCode.Created);
-        var wrongAccount = await Create(books, new { name = "VAT in", kind = "vat_input", rate = "10", account_id = vatPayable.Id() });
+        var wrongAccount = await Create(books, new { name = "VAT in", kind = "vat_input", rate = "10", account_id = vatPayable.Id(), non_deductible_account_id = nonDeductible.Id() });
         var zeroWithRate = await Create(books, new { name = "VAT 0%", kind = "vat_zero_rated", rate = "10" });
 
         Assert.Equal(["vat_output", "vat_input", "vat_zero_rated", "non_vat"], new[] { output, input, zero, nonVat }.Select(t => t.GetProperty("kind").GetString()));

@@ -105,6 +105,16 @@ public sealed class Account
     public DateTimeOffset CreatedAt { get; private set; }
     public long Version { get; private set; } = 1;
 
+    /// <summary>Made a control account (posted only by documents, each line with a party). Only while unused.</summary>
+    public void MarkAsControl()
+    {
+        IsControl = true;
+        Version++;
+    }
+
+    /// <summary>Records a change that belongs to the account, such as its usages, so concurrent edits conflict.</summary>
+    public void Touch() => Version++;
+
     /// <summary>Called when bank details are attached (one bank account per ledger account).</summary>
     public void MarkAsBank()
     {

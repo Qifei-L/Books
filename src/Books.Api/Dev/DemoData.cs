@@ -77,15 +77,16 @@ public static class DemoData
         var vatInput = await Account("1300", "VAT receivable (input)", AccountType.Assets, current);
         var wht = await Account("2100", "Withholding tax payable", AccountType.Liabilities, liabilities);
         var bankCharges = await Account("5300", "Bank charges", AccountType.CostAndExpense, expenses);
+        var nonDeductible = await Account("5400", "Non-deductible VAT", AccountType.CostAndExpense, expenses);
 
         // Ledger setup added in M4: bank details, Cambodian tax codes, parties, items and monthly NBC rates.
         await banks.CreateAsync(principal, Meta(), orgId, ledgerId, bank, "ABA Bank", "000 123 456", ct);
         await banks.CreateAsync(principal, Meta(), orgId, ledgerId, acleda, "ACLEDA Bank", "0001-01-234567-1-1", ct);
-        async Task<Guid> Tax(string name, TaxKind kind, decimal rate, Guid? account, string? from = null) =>
+        async Task<Guid> Tax(string name, TaxKind kind, decimal rate, Guid? account, string? from = null, Guid? nonDeductibleAccount = null) =>
             Data(await taxCodes.CreateAsync(principal, Meta(), orgId, ledgerId,
-                new TaxCodeInput(name, kind, rate, account, from is null ? null : DateOnly.Parse(from), null), ct)).GetProperty("id").GetGuid();
+                new TaxCodeInput(name, kind, rate, account, from is null ? null : DateOnly.Parse(from), null, true, nonDeductibleAccount), ct)).GetProperty("id").GetGuid();
         var vat10 = await Tax("VAT 10% (sales)", TaxKind.VatOutput, 10m, vat);
-        await Tax("VAT 10% (purchases)", TaxKind.VatInput, 10m, vatInput);
+        await Tax("VAT 10% (purchases)", TaxKind.VatInput, 10m, vatInput, nonDeductibleAccount: nonDeductible);
         await Tax("VAT 0% (zero-rated)", TaxKind.VatZeroRated, 0m, null);
         await Tax("Non-VAT", TaxKind.NonVat, 0m, null);
         var fuel4 = await Tax("VAT 4% fuel (sales)", TaxKind.VatOutput, 4m, vat, "2026-03-01");
