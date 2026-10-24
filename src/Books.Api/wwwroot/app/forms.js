@@ -49,7 +49,7 @@ const options = (rows, selected, label, empty) =>
   + rows.map((r) => `<option value="${r.id}" ${r.id === selected ? "selected" : ""}>${esc(label(r))}</option>`).join("");
 
 async function refreshLedger() {
-  await Promise.all([renderSales(), renderSetup(), renderJournals()]);
+  await Promise.all([renderSales(), renderPurchases(), renderBank(), renderSetup(), renderJournals()]);
 }
 
 // ---- Customers and suppliers ----
@@ -105,49 +105,96 @@ async function editParty(id) {
   if (p) partyForm(p);
 }
 
-// ---- Sales invoices and credit notes ----
+// ---- Line grid shared by documents, payments and journals ----
 
-/** Loads what the sales form offers: customers, income accounts, items, sales tax codes, and invoices a credit note may correct. */
-async function salesChoices() {
+/**
+ * A table of editable lines. Each column is { name, head, cell(line) → inner HTML, num? }. Returns helpers to add lines,
+ * read them back and walk the rows; onChange runs after any edit, add or remove.
+ */
+function lineGrid(table, columns, onChange) {
+  table.innerHTML = `<tr>${columns.map((c) => `<th class="${c.num ? "num" : ""}">${c.head}</th>`).join("")}<th></th></tr>`;
+  const add = (line) => {
+    const tr = table.insertRow();
+    tr.dataset.adjusted = line?.tax_adjusted ? JSON.stringify({ tax_amount: line.tax_amount, tax_reason: line.tax_reason }) : "";
+    tr.innerHTML = columns.map((c) => `<td>${c.cell(line)}</td>`).join("")
+      + `<td><button type="button" class="link" title="Remove line" data-remove>×</button></td>`;
+    tr.querySelector("[data-remove]").onclick = () => { tr.remove(); onChange(); };
+    for (const c of columns) c.init?.(tr);
+    return tr;
+  };
+  const rows = () => [...table.rows].slice(1);
+  table.oninput = onChange;
+  table.onchange = onChange;
+  return { add, rows };
+}
+
+const field = (tr, name) => tr.querySelector(`[name=${name}]`);
+const value = (tr, name) => {
+  const el = field(tr, name);
+  if (!el) return null;
+  if (el.type === "checkbox") return el.checked;
+  return el.value.trim() === "" ? null : el.value.trim();
+};
+const num = (v) => Number(v ?? 0) || 0;
+const money = (x, currency) => x.toLocaleString(undefined, { minimumFractionDigits: currency === "KHR" ? 0 : 2, maximumFractionDigits: currency === "KHR" ? 0 : 2 });
+const rateOf = (id, codes) => num(codes.find((t) => t.id === id)?.rate) / 100;
+const partyNames = async () => {
+  const parties = await api(`${ledgerUrl()}/parties`);
+  return (id) => parties.find((p) => p.id === id)?.name ?? "";
+};
+
+// ---- Sales and purchase documents ----
+
+const DOCS = {
+  invoice: { side: "sale", path: "sales-invoices", name: "invoice" },
+  credit_note: { side: "sale", path: "credit-notes", name: "credit note", note: true },
+  purchase_invoice: { side: "purchase", path: "purchase-invoices", name: "purchase invoice" },
+  debit_note: { side: "purchase", path: "debit-notes", name: "debit note", note: true },
+};
+
+/** What a sales or purchase form offers: parties on that side, accounts, items, tax codes, and invoices a note may correct. */
+async function documentChoices(side) {
+  const sale = side === "sale";
   const [parties, accounts, items, taxCodes, invoices] = await Promise.all([
     api(`${ledgerUrl()}/parties`), api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/items`), api(`${ledgerUrl()}/tax-codes`),
-    api(`${ledgerUrl()}/sales-invoices`),
+    api(`${ledgerUrl()}/${sale ? "sales-invoices" : "purchase-invoices"}`),
   ]);
+  const usable = (a) => a.postable && a.active && !a.is_control && !a.is_bank;
   return {
-    customers: parties.filter((p) => p.is_customer && p.active),
-    accounts: accounts.filter((a) => a.type === "income" && a.postable && a.active),
+    parties: parties.filter((p) => p.active && (sale ? p.is_customer : p.is_supplier)),
+    accounts: accounts.filter((a) => usable(a) && (sale ? a.type === "income" : ["cost_and_expense", "assets"].includes(a.type))),
     items: items.filter((i) => i.active),
-    vat: taxCodes.filter((t) => t.active && ["vat_output", "vat_zero_rated", "non_vat"].includes(t.kind)),
+    vat: taxCodes.filter((t) => t.active && [sale ? "vat_output" : "vat_input", "vat_zero_rated", "non_vat"].includes(t.kind)),
     other: taxCodes.filter((t) => t.active && t.kind === "other_tax"),
-    invoices: invoices.filter((i) => i.status === "posted"),
+    wht: taxCodes.filter((t) => t.active && t.kind === "withholding"),
+    invoices: invoices.filter((i) => i.status === "posted" && i.type === "invoice"),
   };
 }
 
-async function salesForm(kind, doc) {
+/** New or existing sales invoice, credit note, purchase invoice or debit note. */
+async function documentForm(kind, doc) {
   try {
-    const c = await salesChoices();
-    const creditNote = kind === "credit_note";
-    const path = creditNote ? "credit-notes" : "sales-invoices";
-    const name = creditNote ? "credit note" : "invoice";
+    const spec = DOCS[kind];
+    const sale = spec.side === "sale";
+    const c = await documentChoices(spec.side);
+    const partyField = sale ? "customer_id" : "supplier_id";
     const base = state.ledger.base_currency;
     const currency = doc?.currency || base;
-    const form = openForm(doc ? `Edit ${name} ${doc.invoice_no}` : `New ${name}`, `
+    const form = openForm(doc ? `Edit ${spec.name} ${doc.invoice_no}` : `New ${spec.name}`, `
       <div class="grid">
-        <label class="wide">Customer <select name="customer_id" required>${options(c.customers, doc?.customer_id, (p) => p.name, "Choose a customer")}</select></label>
+        <label class="wide">${sale ? "Customer" : "Supplier"} <select name="party" required>${options(c.parties, doc?.[partyField], (p) => p.name, `Choose a ${sale ? "customer" : "supplier"}`)}</select></label>
         <label>Date <input type="date" name="date" value="${doc?.date ?? today()}" required></label>
-        ${creditNote
-          ? `<label>Corrects invoice <select name="original_invoice_id">${options(c.invoices, doc?.original_invoice_id, (i) => `SI ${i.invoice_no} · ${i.date} · ${i.gross_total}`, "None")}</select></label>`
-          : `<label>Due date <input type="date" name="due_date" value="${doc?.due_date ?? ""}" title="Leave empty for the customer's payment terms"></label>`}
-        <label>Reference <input name="reference" value="${esc(doc?.reference ?? "")}"></label>
+        ${spec.note
+          ? `<label>Corrects invoice <select name="original_invoice_id">${options(c.invoices, doc?.original_invoice_id, (i) => `${sale ? "SI" : "PI"} ${i.invoice_no} · ${i.date} · ${i.gross_total}`, "None")}</select></label>`
+          : `<label>Due date <input type="date" name="due_date" value="${doc?.due_date ?? ""}" title="Leave empty for the payment terms"></label>`}
+        <label>${sale ? "Reference" : "Supplier's invoice no."} <input name="reference" value="${esc(doc?.reference ?? "")}"></label>
         <label>Currency <select name="currency">${[...new Set([base, "USD", "KHR"])].map((x) => `<option ${x === currency ? "selected" : ""}>${x}</option>`).join("")}</select></label>
         <label data-rate>Exchange rate <input name="exchange_rate" inputmode="decimal" value="${doc?.exchange_rate ?? ""}" placeholder="${base} rate of the date"></label>
         <label class="wide">Description <input name="description" value="${esc(doc?.description ?? "")}"></label>
       </div>
-      <table class="lines">
-        <tr><th>Item</th><th>Account</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th><th>VAT</th><th>Other tax</th><th></th></tr>
-      </table>
+      <table class="lines"></table>
       <p><button type="button" class="secondary" data-add>Add line</button></p>
-      <p id="sales-totals" class="totals"></p>
+      <p id="form-totals" class="totals"></p>
       <p class="actions">
         ${doc ? `<button type="button" class="danger" data-delete>Delete</button>` : ""}
         <span class="spacer"></span>
@@ -155,105 +202,264 @@ async function salesForm(kind, doc) {
         <button type="submit" class="secondary" data-post="false">Save draft</button>
         <button type="submit" data-post="true">Save and post</button>
       </p>`);
-    const table = form.querySelector("table.lines");
-    const addLine = (l) => {
-      const tr = table.insertRow();
-      tr.dataset.adjusted = l?.tax_adjusted ? JSON.stringify({ tax_amount: l.tax_amount, tax_reason: l.tax_reason }) : "";
-      tr.innerHTML = `
-        <td><select name="item_id">${options(c.items, l?.item_id, (i) => i.name, "")}</select></td>
-        <td><select name="account_id">${options(c.accounts, l?.account_id, (a) => `${a.code} ${a.name}`, "Choose")}</select></td>
-        <td><input name="description" value="${esc(l?.description ?? "")}"></td>
-        <td><input name="quantity" class="num" inputmode="decimal" value="${l?.quantity ?? ""}"></td>
-        <td><input name="unit_price" class="num" inputmode="decimal" value="${l?.unit_price ?? ""}"></td>
-        <td><input name="amount" class="num" inputmode="decimal" value="${l && !l.quantity ? l.net_amount : ""}" placeholder="qty × price"></td>
-        <td><select name="tax_code_id">${options(c.vat, l?.tax_code_id, (t) => t.name, "None")}</select></td>
-        <td><select name="other_tax_code_id">${options(c.other, l?.other_tax_code_id, (t) => t.name, "None")}</select></td>
-        <td><button type="button" class="link" title="Remove line" data-remove>×</button></td>`;
-      const item = tr.querySelector("[name=item_id]");
-      item.onchange = () => {
-        const i = c.items.find((x) => x.id === item.value);
-        if (!i) return;
-        if (i.default_account_id) tr.querySelector("[name=account_id]").value = i.default_account_id;
-        if (i.default_tax_code_id) tr.querySelector("[name=tax_code_id]").value = i.default_tax_code_id;
-        const description = tr.querySelector("[name=description]");
-        if (!description.value) description.value = i.name;
-        totals();
-      };
-      tr.querySelector("[data-remove]").onclick = () => { tr.remove(); totals(); };
-    };
-    const rows = () => [...table.rows].slice(1);
-    const rate = (id, list) => Number(list.find((t) => t.id === id)?.rate ?? 0) / 100;
-    const net = (tr) => {
-      const v = (n) => tr.querySelector(`[name=${n}]`).value.trim();
-      return v("amount") !== "" ? Number(v("amount")) : Number(v("quantity") || 0) * Number(v("unit_price") || 0);
-    };
+
+    const columns = [
+      { name: "item_id", head: "Item", cell: (l) => `<select name="item_id">${options(c.items, l?.item_id, (i) => i.name, "")}</select>`,
+        init: (tr) => { field(tr, "item_id").onchange = () => fillFromItem(tr, c.items); } },
+      { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(c.accounts, l?.account_id, (a) => `${a.code} ${a.name}`, "Choose")}</select>` },
+      { name: "description", head: "Description", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },
+      { name: "quantity", head: "Qty", num: true, cell: (l) => `<input name="quantity" class="num" inputmode="decimal" value="${l?.quantity ?? ""}">` },
+      { name: "unit_price", head: "Unit price", num: true, cell: (l) => `<input name="unit_price" class="num" inputmode="decimal" value="${l?.unit_price ?? ""}">` },
+      { name: "amount", head: "Amount", num: true, cell: (l) => `<input name="amount" class="num" inputmode="decimal" value="${l && !l.quantity ? l.net_amount : ""}" placeholder="qty × price">` },
+      { name: "tax_code_id", head: "VAT", cell: (l) => `<select name="tax_code_id">${options(c.vat, l?.tax_code_id, (t) => t.name, "None")}</select>` },
+      ...(sale
+        ? [{ name: "other_tax_code_id", head: "Other tax", cell: (l) => `<select name="other_tax_code_id">${options(c.other, l?.other_tax_code_id, (t) => t.name, "None")}</select>` }]
+        : [
+          { name: "valid_tax_invoice", head: "Tax invoice", cell: (l) => `<input type="checkbox" name="valid_tax_invoice" title="A valid tax invoice was received; without one the VAT is not deductible" ${l?.valid_tax_invoice === false ? "" : "checked"}>` },
+          { name: "withholding_code_id", head: "WHT", cell: (l) => `<select name="withholding_code_id">${options(c.wht, l?.withholding_code_id, (t) => t.name, "None")}</select>` },
+        ]),
+    ];
     // An estimate for the person entering; the server calculates and rounds the figures that are saved.
     const totals = () => {
-      let n = 0, other = 0, vat = 0;
-      for (const tr of rows()) {
-        const amount = net(tr);
-        const o = amount * rate(tr.querySelector("[name=other_tax_code_id]").value, c.other);
-        n += amount; other += o; vat += (amount + o) * rate(tr.querySelector("[name=tax_code_id]").value, c.vat);
+      let net = 0, other = 0, vat = 0, wht = 0;
+      for (const tr of grid.rows()) {
+        const amount = value(tr, "amount") !== null ? num(value(tr, "amount")) : num(value(tr, "quantity")) * num(value(tr, "unit_price"));
+        const o = amount * rateOf(value(tr, "other_tax_code_id"), c.other);
+        net += amount; other += o; vat += (amount + o) * rateOf(value(tr, "tax_code_id"), c.vat); wht += amount * rateOf(value(tr, "withholding_code_id"), c.wht);
       }
       const cur = form.elements.currency.value;
-      const fmt = (x) => x.toLocaleString(undefined, { minimumFractionDigits: cur === "KHR" ? 0 : 2, maximumFractionDigits: cur === "KHR" ? 0 : 2 });
-      $("sales-totals").innerHTML = `Net ${fmt(n)}${other ? ` · other tax ${fmt(other)}` : ""} · VAT ${fmt(vat)} · <b>total ${fmt(n + other + vat)} ${cur}</b>
+      $("form-totals").innerHTML = `Net ${money(net, cur)}${other ? ` · other tax ${money(other, cur)}` : ""} · VAT ${money(vat, cur)}
+        ${wht ? ` · WHT −${money(wht, cur)}` : ""} · <b>${sale ? "total" : "payable"} ${money(net + other + vat - wht, cur)} ${cur}</b>
         <span class="muted small">estimate; saved figures are calculated by the server</span>`;
     };
+    const grid = lineGrid(form.querySelector("table.lines"), columns, totals);
     const showRate = () => form.querySelector("[data-rate]").classList.toggle("hidden", form.elements.currency.value === base);
     form.elements.currency.onchange = () => { showRate(); totals(); };
-    table.oninput = totals;
-    table.onchange = totals;
-    form.querySelector("[data-add]").onclick = () => addLine();
-    for (const l of doc?.lines ?? [null, null]) addLine(l);
+    form.querySelector("[data-add]").onclick = () => grid.add();
+    for (const l of doc?.lines ?? [null, null]) grid.add(l);
     showRate();
     totals();
 
-    let post = true;
-    for (const b of form.querySelectorAll("[data-post]")) b.onclick = () => { post = b.dataset.post === "true"; };
-    form.onsubmit = (event) => {
-      event.preventDefault();
-      busy(form, async () => {
-        const f = form.elements;
-        const text = (v) => (v.trim() === "" ? null : v.trim());
-        const lines = rows().map((tr) => {
-          const get = (n) => text(tr.querySelector(`[name=${n}]`).value);
-          return {
-            account_id: get("account_id"), item_id: get("item_id"), description: get("description"),
-            quantity: get("quantity"), unit_price: get("unit_price"), amount: get("amount"),
-            tax_code_id: get("tax_code_id"), other_tax_code_id: get("other_tax_code_id"),
-            ...(tr.dataset.adjusted ? JSON.parse(tr.dataset.adjusted) : {}),
-          };
-        }).filter((l) => l.account_id || l.amount || l.unit_price || l.description);
-        if (!f.customer_id.value) throw new Error("Choose a customer.");
-        if (!lines.length) throw new Error("Add at least one line.");
-        if (lines.some((l) => !l.account_id)) throw new Error("Every line needs an account.");
-        const body = {
-          customer_id: f.customer_id.value, date: f.date.value, reference: text(f.reference.value), description: text(f.description.value), lines, post,
-          ...(creditNote ? { original_invoice_id: text(f.original_invoice_id.value) } : { due_date: text(f.due_date.value) }),
-          ...(f.currency.value !== base ? { currency: f.currency.value, exchange_rate: text(f.exchange_rate.value) } : {}),
-        };
-        const url = `${ledgerUrl()}/${path}`;
-        const result = await (doc ? write("PUT", `${url}/${doc.id}`, body, doc.version) : write("POST", url, body));
-        $("form-dialog").close();
-        await refreshLedger();
-        const parties = await api(`${ledgerUrl()}/parties`);
-        showSale(result.data, (id) => parties.find((p) => p.id === id)?.name ?? "");
-      });
-    };
-    form.querySelector("[data-delete]")?.addEventListener("click", () => busy(form, async () => {
-      if (!confirm(`Delete ${name} ${doc.invoice_no}?${doc.status === "posted" ? " Its journal is removed too." : ""}`)) return;
-      await write("DELETE", `${ledgerUrl()}/${path}/${doc.id}`, undefined, doc.version);
+    const url = `${ledgerUrl()}/${spec.path}`;
+    onSave(form, async (post) => {
+      const f = form.elements;
+      const text = (v) => (v.trim() === "" ? null : v.trim());
+      const lines = grid.rows().map((tr) => ({
+        ...Object.fromEntries(columns.map((col) => [col.name, value(tr, col.name)])),
+        ...(tr.dataset.adjusted ? JSON.parse(tr.dataset.adjusted) : {}),
+      })).filter((l) => l.account_id || l.amount || l.unit_price || l.description);
+      if (!f.party.value) throw new Error(`Choose a ${sale ? "customer" : "supplier"}.`);
+      if (!lines.length) throw new Error("Add at least one line.");
+      if (lines.some((l) => !l.account_id)) throw new Error("Every line needs an account.");
+      const body = {
+        [partyField]: f.party.value, date: f.date.value, reference: text(f.reference.value), description: text(f.description.value), lines, post,
+        ...(spec.note ? { original_invoice_id: text(f.original_invoice_id.value) } : { due_date: text(f.due_date.value) }),
+        ...(f.currency.value !== base ? { currency: f.currency.value, exchange_rate: text(f.exchange_rate.value) } : {}),
+      };
+      const result = await (doc ? write("PUT", `${url}/${doc.id}`, body, doc.version) : write("POST", url, body));
       $("form-dialog").close();
       await refreshLedger();
-    }));
+      (sale ? showSale : showPurchase)(result.data, await partyNames());
+    });
+    onDelete(form, doc, `${spec.name} ${doc?.invoice_no}`, `${url}/${doc?.id}`, doc?.status === "posted" ? " Its journal is removed too." : "");
   } catch (error) {
     showError(error);
   }
 }
 
-async function editSale(kind, id) {
+function fillFromItem(tr, items) {
+  const item = items.find((x) => x.id === value(tr, "item_id"));
+  if (!item) return;
+  if (item.default_account_id && [...field(tr, "account_id").options].some((o) => o.value === item.default_account_id)) field(tr, "account_id").value = item.default_account_id;
+  if (item.default_tax_code_id && [...field(tr, "tax_code_id").options].some((o) => o.value === item.default_tax_code_id)) field(tr, "tax_code_id").value = item.default_tax_code_id;
+  if (!value(tr, "description")) field(tr, "description").value = item.name;
+}
+
+/** Opens the form for a document from its dialog: side is sale or purchase, type the document's own type. */
+async function editDocument(side, type, id) {
   $("journal-dialog").close();
-  const doc = (await api(`${ledgerUrl()}/${kind === "credit_note" ? "credit-notes" : "sales-invoices"}`)).find((d) => d.id === id);
-  if (doc) salesForm(kind, doc);
+  const kind = side === "sale" ? type : type === "debit_note" ? "debit_note" : "purchase_invoice";
+  const doc = (await api(`${ledgerUrl()}/${DOCS[kind].path}`)).find((d) => d.id === id);
+  if (doc) documentForm(kind, doc);
+}
+
+/** Wires Save draft / Save and post: the clicked button decides whether the document posts. */
+function onSave(form, save) {
+  let post = true;
+  for (const b of form.querySelectorAll("[data-post]")) b.onclick = () => { post = b.dataset.post === "true"; };
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    busy(form, () => save(post));
+  };
+}
+
+function onDelete(form, record, label, url, warning = "") {
+  form.querySelector("[data-delete]")?.addEventListener("click", () => busy(form, async () => {
+    if (!confirm(`Delete ${label}?${warning}`)) return;
+    await write("DELETE", url, undefined, record.version);
+    $("form-dialog").close();
+    await refreshLedger();
+  }));
+}
+
+// ---- Payments and receipts (Manager.io style) ----
+
+/**
+ * A payment or receipt from one bank account. Each line either posts to an account (with VAT and WHT where they
+ * apply) or settles with the party: leave the account empty, or choose the Payable or Receivable account, and
+ * optionally name the invoice. Settlement without an invoice takes the party's oldest open items.
+ */
+async function paymentForm(type, doc) {
+  try {
+    const receipt = type === "receipt";
+    const path = receipt ? "receipts" : "payments";
+    const [banks, parties, accounts, taxCodes, sales, purchases] = await Promise.all([
+      api(`${ledgerUrl()}/bank-accounts`), api(`${ledgerUrl()}/parties`), api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/tax-codes`),
+      api(`${ledgerUrl()}/sales-invoices`), api(`${ledgerUrl()}/purchase-invoices`),
+    ]);
+    const vat = taxCodes.filter((t) => t.active && [receipt ? "vat_output" : "vat_input", "vat_zero_rated", "non_vat"].includes(t.kind));
+    const wht = taxCodes.filter((t) => t.active && t.kind === "withholding");
+    const lineAccounts = accounts.filter((a) => a.postable && a.active && !a.is_bank);
+    const invoices = [...sales.map((i) => ({ ...i, label: `SI ${i.invoice_no}`, party: i.customer_id })), ...purchases.map((i) => ({ ...i, label: `PI ${i.invoice_no}`, party: i.supplier_id, gross_total: i.payable_total }))]
+      .filter((i) => i.status === "posted" && i.type === "invoice");
+    const name = receipt ? "receipt" : "payment";
+    const form = openForm(doc ? `Edit ${name} ${doc.payment_no}` : `New ${name}`, `
+      <div class="grid">
+        <label class="wide">${receipt ? "Received into" : "Paid from"} <select name="bank_account_id">${options(banks.map((b) => ({ ...b, id: b.account_id })), doc?.bank_account_id, (b) => `${b.code} ${b.name} · ${b.currency}`)}</select></label>
+        <label class="wide">${receipt ? "Received from" : "Paid to"} <select name="party_id">${options(parties.filter((p) => p.active), doc?.party_id, (p) => p.name, "No party")}</select></label>
+        <label>Date <input type="date" name="date" value="${doc?.date ?? today()}" required></label>
+        <label>Reference <input name="reference" value="${esc(doc?.reference ?? "")}"></label>
+        <label class="wide">Description <input name="description" value="${esc(doc?.description ?? "")}"></label>
+      </div>
+      <p class="muted small">Leave the account empty (or choose Accounts payable / receivable) to settle with the party; name an invoice to settle that one, otherwise the oldest open items are settled first.</p>
+      <table class="lines"></table>
+      <p><button type="button" class="secondary" data-add>Add line</button></p>
+      <p id="form-totals" class="totals"></p>
+      <p class="actions">
+        ${doc ? `<button type="button" class="danger" data-delete>Delete</button>` : ""}
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-cancel>Cancel</button>
+        <button type="submit" class="secondary" data-post="false">Save draft</button>
+        <button type="submit" data-post="true">Save and post</button>
+      </p>`);
+    const invoiceOptions = (selected) => options(invoices.filter((i) => i.party === form.elements.party_id.value), selected, (i) => `${i.label} · ${i.date} · ${i.gross_total}`, "Oldest first");
+    const columns = [
+      { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(lineAccounts, l?.kind === "account" ? l.account_id : l?.account_id, (a) => `${a.code} ${a.name}`, "Settle with party")}</select>` },
+      { name: "invoice_id", head: "Invoice", cell: (l) => `<select name="invoice_id">${invoiceOptions(l?.invoice_id)}</select>` },
+      { name: "description", head: "Description", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },
+      { name: "amount", head: "Amount", num: true, cell: (l) => `<input name="amount" class="num" inputmode="decimal" value="${l?.amount ?? ""}">` },
+      { name: "tax_code_id", head: "VAT", cell: (l) => `<select name="tax_code_id">${options(vat, l?.tax_code_id, (t) => t.name, "None")}</select>` },
+      ...(receipt ? [] : [{ name: "valid_tax_invoice", head: "Tax invoice", cell: (l) => `<input type="checkbox" name="valid_tax_invoice" ${l?.valid_tax_invoice === false ? "" : "checked"}>` }]),
+      { name: "withholding_code_id", head: "WHT", cell: (l) => `<select name="withholding_code_id">${options(wht, l?.withholding_code_id, (t) => t.name, "None")}</select>` },
+    ];
+    const totals = () => {
+      let total = 0;
+      for (const tr of grid.rows()) {
+        const amount = num(value(tr, "amount"));
+        total += amount + amount * rateOf(value(tr, "tax_code_id"), vat) - amount * rateOf(value(tr, "withholding_code_id"), wht);
+      }
+      const bank = banks.find((b) => b.account_id === form.elements.bank_account_id.value);
+      $("form-totals").innerHTML = `<b>${receipt ? "Received" : "Paid"} ${money(total, bank?.currency)} ${bank?.currency ?? ""}</b> <span class="muted small">estimate</span>`;
+    };
+    const grid = lineGrid(form.querySelector("table.lines"), columns, totals);
+    form.elements.party_id.onchange = () => { for (const tr of grid.rows()) field(tr, "invoice_id").innerHTML = invoiceOptions(value(tr, "invoice_id")); };
+    form.elements.bank_account_id.onchange = totals;
+    form.querySelector("[data-add]").onclick = () => grid.add();
+    for (const l of doc?.lines ?? [null]) grid.add(l);
+    totals();
+
+    const url = `${ledgerUrl()}/${path}`;
+    onSave(form, async (post) => {
+      const f = form.elements;
+      const text = (v) => (v.trim() === "" ? null : v.trim());
+      const lines = grid.rows().map((tr) => ({
+        ...Object.fromEntries(columns.map((col) => [col.name, value(tr, col.name)])),
+        ...(tr.dataset.adjusted ? JSON.parse(tr.dataset.adjusted) : {}),
+      })).filter((l) => l.amount);
+      if (!lines.length) throw new Error("Add at least one line with an amount.");
+      const body = {
+        bank_account_id: f.bank_account_id.value, party_id: text(f.party_id.value), date: f.date.value,
+        reference: text(f.reference.value), description: text(f.description.value), lines, post,
+      };
+      const result = await (doc ? write("PUT", `${url}/${doc.id}`, body, doc.version) : write("POST", url, body));
+      $("form-dialog").close();
+      await refreshLedger();
+      showPayment(result.data, await partyNames());
+    });
+    onDelete(form, doc, `${name} ${doc?.payment_no}`, `${url}/${doc?.id}`);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function editPayment(type, id) {
+  $("journal-dialog").close();
+  const doc = (await api(`${ledgerUrl()}/${type === "receipt" ? "receipts" : "payments"}`)).find((d) => d.id === id);
+  if (doc) paymentForm(type, doc);
+}
+
+// ---- Manual journals ----
+
+/** A journal entered by hand. Journals made by documents change only through their document. */
+async function journalForm(j) {
+  try {
+    const [accounts, parties] = await Promise.all([api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/parties`)]);
+    const postable = accounts.filter((a) => a.postable && a.active);
+    const form = openForm(j ? `Edit journal ${j.journal_no}` : "New journal", `
+      <div class="grid">
+        <label>Date <input type="date" name="accounting_date" value="${j?.accounting_date ?? today()}" required></label>
+        <label>Reference <input name="reference" value="${esc(j?.reference ?? "")}"></label>
+        <label class="wide">Description <input name="description" value="${esc(j?.description ?? "")}"></label>
+      </div>
+      <table class="lines"></table>
+      <p><button type="button" class="secondary" data-add>Add line</button></p>
+      <p id="form-totals" class="totals"></p>
+      <p class="actions">
+        ${j ? `<button type="button" class="danger" data-delete>Delete</button>` : ""}
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-cancel>Cancel</button>
+        <button type="submit" class="secondary" data-post="false">Save draft</button>
+        <button type="submit" data-post="true">Save and post</button>
+      </p>`);
+    const amount = (v) => (v && Number(v) !== 0 ? v : "");
+    const columns = [
+      { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(postable, l?.account_id, (a) => `${a.code} ${a.name}`, "Choose")}</select>` },
+      { name: "description", head: "Description", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },
+      { name: "debit", head: "Debit", num: true, cell: (l) => `<input name="debit" class="num" inputmode="decimal" value="${amount(l?.debit)}">` },
+      { name: "credit", head: "Credit", num: true, cell: (l) => `<input name="credit" class="num" inputmode="decimal" value="${amount(l?.credit)}">` },
+      { name: "party_id", head: "Party", cell: (l) => `<select name="party_id">${options(parties, l?.party_id, (p) => p.name, "")}</select>` },
+    ];
+    const totals = () => {
+      let dr = 0, cr = 0;
+      for (const tr of grid.rows()) { dr += num(value(tr, "debit")); cr += num(value(tr, "credit")); }
+      const diff = Math.round((dr - cr) * 100) / 100;
+      $("form-totals").innerHTML = `Debit ${money(dr)} · credit ${money(cr)} · ${diff === 0 ? `<span class="ok">balanced</span>` : `<span class="error">difference ${money(diff)}</span>`}`;
+    };
+    const grid = lineGrid(form.querySelector("table.lines"), columns, totals);
+    form.querySelector("[data-add]").onclick = () => grid.add();
+    for (const l of j?.lines ?? [null, null]) grid.add(l);
+    totals();
+
+    const url = `${ledgerUrl()}/journals`;
+    onSave(form, async (post) => {
+      const f = form.elements;
+      const text = (v) => (v.trim() === "" ? null : v.trim());
+      const lines = grid.rows().map((tr) => Object.fromEntries(columns.map((col) => [col.name, value(tr, col.name)])))
+        .filter((l) => l.account_id || l.debit || l.credit);
+      if (lines.some((l) => !l.account_id)) throw new Error("Every line needs an account.");
+      const body = { accounting_date: f.accounting_date.value, reference: text(f.reference.value), description: text(f.description.value), lines, post };
+      const result = await (j ? write("PUT", `${url}/${j.id}`, body, j.version) : write("POST", url, body));
+      $("form-dialog").close();
+      await refreshLedger();
+      showJournal(result.data);
+    });
+    onDelete(form, j, `journal ${j?.journal_no}`, `${url}/${j?.id}`);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function editJournal(id) {
+  $("journal-dialog").close();
+  journalForm(await api(`${ledgerUrl()}/journals/${id}`));
 }

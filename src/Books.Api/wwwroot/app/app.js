@@ -173,7 +173,8 @@ function showPayment(d, party) {
     ${d.lines.map((l) => `<tr><td>${l.kind === "account" ? esc(accountName(l.account_id)) : `${esc(accountName(l.control_account_id))} · ${l.kind === "invoice" ? "settles an invoice" : "party balance"}`}</td>
       <td>${esc(l.description ?? "")}</td><td class="num">${l.amount}</td><td class="num">${blank(l.tax_amount)}</td><td class="num">${blank(l.withholding_amount)}</td><td class="num">${l.total}</td></tr>`).join("")}
     <tr class="total"><td colspan="5">Total</td><td class="num">${d.total}</td></tr></table>
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}`;
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}
+    ${canEdit() ? `<p><button class="secondary" onclick="editPayment('${d.type}', '${d.id}')">Edit</button></p>` : ""}`;
   $("journal-dialog").showModal();
 }
 
@@ -237,8 +238,9 @@ const accountName = (id) => {
 };
 
 async function renderJournals() {
-  const journals = await api(`${ledgerUrl()}/journals`);
-  $("tab-journals").innerHTML = `<p class="muted small">Posted journals, plus your own drafts. Click a row for its lines.</p>
+  const journals = (await api(`${ledgerUrl()}/journals`)).filter((j) => j.status !== "deleted");
+  $("tab-journals").innerHTML = `${canEdit() ? `<p><button onclick="journalForm()">New journal</button></p>` : ""}
+    <p class="muted small">Posted journals, plus your own drafts. Click a row for its lines.</p>
     <table><tr><th>No.</th><th>Date</th><th>Reference</th><th>Description</th><th>Status</th><th class="num">Amount</th></tr>
     ${journals.map((j) => `<tr class="click" data-id="${j.id}"><td>${j.journal_no}</td><td>${j.accounting_date}</td><td>${esc(j.reference)}</td>
       <td>${esc(j.description)}</td><td><span class="pill ${j.status}">${j.status}</span></td>
@@ -253,7 +255,8 @@ function showJournal(j) {
     <p class="muted">${j.accounting_date} · ${esc(j.reference ?? "")} · ${esc(j.description ?? "")} · revision ${j.revision_no}, version ${j.version}</p>
     <table><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr>
     ${j.lines.map((l) => `<tr><td>${esc(accountName(l.account_id))}</td><td class="num">${l.debit === "0.00" ? "" : l.debit}</td><td class="num">${l.credit === "0.00" ? "" : l.credit}</td></tr>`).join("")}</table>
-    ${j.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}`;
+    ${j.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}
+    ${canEdit() && !j.source_kind && j.status !== "deleted" ? `<p><button class="secondary" onclick="editJournal('${j.id}')">Edit</button></p>` : ""}`;
   $("journal-dialog").showModal();
 }
 
@@ -336,7 +339,7 @@ async function renderSales() {
   const khr = (d) => (d.tax_currency ? `${Number(d.tax_currency.gross_total).toLocaleString()} ៛` : "");
   const a = aging.totals;
   $("tab-sales").innerHTML = `
-    ${canEdit() ? `<p><button onclick="salesForm('invoice')">New invoice</button> <button class="secondary" onclick="salesForm('credit_note')">New credit note</button></p>` : ""}
+    ${canEdit() ? `<p><button onclick="documentForm('invoice')">New invoice</button> <button class="secondary" onclick="documentForm('credit_note')">New credit note</button></p>` : ""}
     <h3>Sales invoices and credit notes</h3>
     <table><tr><th>No.</th><th>Date</th><th>Customer</th><th>Reference</th><th class="num">Net</th><th class="num">VAT</th><th class="num">Gross</th><th class="num">Gross KHR</th><th>Status</th></tr>
     ${docs.map((d) => `<tr class="click" data-id="${d.id}"><td>${d.type === "credit_note" ? "CN" : "SI"} ${d.invoice_no}</td><td>${d.date}</td>
@@ -366,7 +369,7 @@ function showSale(d, party) {
       at ${t.rate} ${esc(t.rate_source)} of ${t.rate_date}${t.reason ? ` · ${esc(t.reason)}` : ""}</p>` : ""}
     ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}
     <p><button class="secondary" onclick="openPdf('${d.type === "credit_note" ? "credit-notes" : "sales-invoices"}/${d.id}/pdf')">Print PDF</button>
-      ${canEdit() ? `<button class="secondary" onclick="editSale('${d.type}', '${d.id}')">Edit</button>` : ""}</p>`;
+      ${canEdit() ? `<button class="secondary" onclick="editDocument('sale', '${d.type}', '${d.id}')">Edit</button>` : ""}</p>`;
   $("journal-dialog").showModal();
 }
 
@@ -390,8 +393,9 @@ async function renderBank() {
   const latest = statements[0];
   const r = await api(`${ledgerUrl()}/bank-accounts/${bank.account_id ?? bank.id}/reconciliation?asOf=${latest?.to ?? "2026-10-31"}${latest ? `&statementBalance=${latest.closing_balance}` : ""}`);
   const party = (id) => parties.find((p) => p.id === id)?.name ?? "";
-  const docs = [...payments, ...receipts].filter((d) => d.bank_account_id === (bank.account_id ?? bank.id)).sort((a, b) => a.date.localeCompare(b.date));
+  const docs = [...payments, ...receipts].filter((d) => d.bank_account_id === (bank.account_id ?? bank.id) && d.status !== "deleted").sort((a, b) => a.date.localeCompare(b.date));
   $("tab-bank").innerHTML = `
+    ${canEdit() ? `<p><button onclick="paymentForm('payment')">New payment</button> <button class="secondary" onclick="paymentForm('receipt')">New receipt</button></p>` : ""}
     <p><label>Account <select id="bank-pick">${banks.map((b) => `<option value="${b.account_id ?? b.id}" ${b === bank ? "selected" : ""}>${esc(b.code)} ${esc(b.name)} · ${esc(b.bank_name)}</option>`).join("")}</select></label></p>
     <h3>Payments and receipts</h3>
     <table><tr><th>No.</th><th>Date</th><th>Party</th><th>Reference</th><th>Lines</th><th class="num">In</th><th class="num">Out</th><th>Status</th></tr>
@@ -468,6 +472,7 @@ async function renderPurchases() {
     <td>${d.status === "posted" ? `<span class="pill posted">posted</span> No. ${d.journal_no}` : `<span class="pill draft">${d.status}</span> ${d.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("");
   const a = aging.totals;
   $("tab-purchases").innerHTML = `
+    ${canEdit() ? `<p><button onclick="documentForm('purchase_invoice')">New purchase invoice</button> <button class="secondary" onclick="documentForm('debit_note')">New debit note</button></p>` : ""}
     <h3>Purchase invoices and debit notes</h3>
     <table><tr><th>No.</th><th>Date</th><th>Supplier</th><th>Reference</th><th class="num">Net</th><th class="num">VAT</th><th class="num">WHT</th><th class="num">Payable</th><th>Status</th></tr>
     ${docRows([...invoices, ...notes].filter((d) => d.status !== "deleted"))}</table>
@@ -492,7 +497,8 @@ function showPurchase(d, party) {
     <tr class="total"><td colspan="2">Totals · gross ${d.gross_total} · payable ${d.payable_total}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td><td></td><td class="num">${d.withholding_total}</td></tr></table>
     ${d.tax_currency ? `<p class="muted">${d.tax_currency.currency} at ${d.tax_currency.rate} (${esc(d.tax_currency.rate_source)}, ${d.tax_currency.rate_date})${d.tax_currency.reason ? ` · ${esc(d.tax_currency.reason)}` : ""}:
       gross ${d.tax_currency.gross_total} · VAT ${d.tax_currency.tax_total}</p>` : ""}
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}`;
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}
+    ${canEdit() ? `<p><button class="secondary" onclick="editDocument('purchase', '${d.type}', '${d.id}')">Edit</button></p>` : ""}`;
   $("journal-dialog").showModal();
 }
 
