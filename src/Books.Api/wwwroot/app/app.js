@@ -363,8 +363,16 @@ function showSale(d, party) {
     <tr class="total"><td colspan="2">Gross ${d.gross_total}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td></tr></table>
     ${t ? `<p>Total including VAT: <b>${Number(t.gross_total).toLocaleString()} ${t.currency}</b> (VAT ${Number(t.tax_total).toLocaleString()} ${t.currency})
       at ${t.rate} ${esc(t.rate_source)} of ${t.rate_date}${t.reason ? ` · ${esc(t.reason)}` : ""}</p>` : ""}
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}`;
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}
+    <p><button class="secondary" onclick="openPdf('${d.type === "credit_note" ? "credit-notes" : "sales-invoices"}/${d.id}/pdf')">Print PDF</button></p>`;
   $("journal-dialog").showModal();
+}
+
+// The PDF needs the bearer token, so it is fetched and opened as a blob.
+async function openPdf(path) {
+  const response = await fetch(`${ledgerUrl()}/${path}`, { headers: { Authorization: `Bearer ${state.token}` } });
+  if (!response.ok) return showError(new Error(`PDF failed: ${response.status}`));
+  window.open(URL.createObjectURL(await response.blob()), "_blank");
 }
 
 async function renderBank() {

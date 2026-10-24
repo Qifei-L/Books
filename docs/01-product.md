@@ -51,7 +51,7 @@ Replace our Manager.io bookkeeping with a system that:
 | M6 Sales | Sales invoices, credit notes, KHR totals, AR aging, MCP batch tools | Done |
 | M7 Cash and bank | Payments and receipts (Manager.io style), settlement by party, statement import through MCP, clearing and reconciliation | Done |
 | M8 Tax reporting | Monthly return on GDT forms (T7 01, WT 03), versioned definitions, reconciliation, filing | Done |
-| M9 Invoice printing | Sales invoices and credit notes as PDF in Khmer and English, three styles, KHR total | Next |
+| M9 Invoice printing | Sales invoices and credit notes as PDF in Khmer and English, three styles, KHR total | Part 1 done (PDF, settings) |
 | M10 Inventory and fixed assets | Inventory items, stock movements from purchases and sales, cost of sales; fixed asset register and depreciation | Planned |
 | M11 Other monthly taxes | Tax on salary from imported payroll results (TOS 01) is done; specific, accommodation and public lighting tax (T7 01) | Part done |
 | M12 Multi-currency | Foreign-currency bank accounts, documents and parties; exchange differences | Planned |

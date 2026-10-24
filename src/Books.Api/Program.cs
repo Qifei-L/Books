@@ -38,6 +38,8 @@ builder.Services.AddMcpServer()
     .WithTools<BooksTaxTools>()
     .WithTools<BooksBankTools>();
 
+InvoicePdf.Configure();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
