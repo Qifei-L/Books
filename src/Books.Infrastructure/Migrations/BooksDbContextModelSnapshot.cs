@@ -1713,10 +1713,23 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("account_id");
 
+                    b.Property<decimal>("CostAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("cost_amount");
+
+                    b.Property<Guid?>("CostOfSalesAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cost_of_sales_account_id");
+
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("description");
+
+                    b.Property<Guid?>("InventoryAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inventory_account_id");
 
                     b.Property<Guid?>("ItemId")
                         .HasColumnType("uuid")
@@ -2229,7 +2242,7 @@ namespace Books.Infrastructure.Migrations
 
                     b.ToTable("account_usages", null, t =>
                         {
-                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', 'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable')");
+                            t.HasCheckConstraint("ck_account_usages_usage", "usage IN ('payable', 'receivable', 'bank', 'output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable', 'salary_expense', 'nssf_expense', 'salaries_payable', 'salary_tax_payable', 'nssf_payable', 'other_tax_payable', 'inventory', 'cost_of_sales')");
                         });
                 });
 
@@ -2419,6 +2432,10 @@ namespace Books.Infrastructure.Migrations
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid")
                         .HasColumnName("org_id");
+
+                    b.Property<bool>("TrackInventory")
+                        .HasColumnType("boolean")
+                        .HasColumnName("track_inventory");
 
                     b.Property<string>("Unit")
                         .HasMaxLength(20)

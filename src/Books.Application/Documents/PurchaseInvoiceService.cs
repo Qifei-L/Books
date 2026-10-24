@@ -178,9 +178,20 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
             {
                 throw BooksProblem.Invalid($"Line {i}: account_id must be an account of this ledger.");
             }
-            if (line.ItemId is { } itemId && !await db.Items.AnyAsync(x => x.LedgerId == ledger.Id && x.Id == itemId, ct))
+            var accountId = line.AccountId;
+            if (line.ItemId is { } itemId)
             {
-                throw BooksProblem.Invalid($"Line {i}: item_id must be an item of this ledger.");
+                var item = await db.Items.AsNoTracking().SingleOrDefaultAsync(x => x.LedgerId == ledger.Id && x.Id == itemId, ct)
+                    ?? throw BooksProblem.Invalid($"Line {i}: item_id must be an item of this ledger.");
+                if (item.TrackInventory)
+                {
+                    // Manager.io style: an inventory item is bought into the inventory account, whatever account was given.
+                    if (line.Quantity is null or 0)
+                    {
+                        throw BooksProblem.Invalid($"Line {i}: {item.Name} is an inventory item; give its quantity.");
+                    }
+                    accountId = await Inventory.AccountAsync(db, ledger.Id, Usage.Inventory, ct);
+                }
             }
             var net = line.Amount ?? (line is { Quantity: { } q, UnitPrice: { } p }
                 ? decimal.Round(q * p, minor, MidpointRounding.AwayFromZero)
@@ -218,7 +229,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
                 // Withholding is calculated per line on the net amount (VAT excluded) and totalled on the invoice.
                 withholding = TaxCalculator.ForLine(net, code.Rate, minor).Amount;
             }
-            lines.Add(new PurchaseInvoiceLine(line.AccountId, line.Description, line.ItemId, line.Quantity, line.UnitPrice, net,
+            lines.Add(new PurchaseInvoiceLine(accountId, line.Description, line.ItemId, line.Quantity, line.UnitPrice, net,
                 line.TaxCodeId, tax, line.ValidTaxInvoice, line.WithholdingCodeId, withholding));
         }
 

@@ -169,7 +169,7 @@ internal sealed class SalesInvoiceLineConfiguration : IEntityTypeConfiguration<S
         b.Property(x => x.Description).HasMaxLength(1000);
         b.Property(x => x.TaxReason).HasMaxLength(500);
         foreach (var amount in new[] { nameof(SalesInvoiceLine.NetAmount), nameof(SalesInvoiceLine.TaxCalculated), nameof(SalesInvoiceLine.TaxAmount),
-                     nameof(SalesInvoiceLine.Quantity), nameof(SalesInvoiceLine.UnitPrice), nameof(SalesInvoiceLine.OtherTaxAmount) })
+                     nameof(SalesInvoiceLine.Quantity), nameof(SalesInvoiceLine.UnitPrice), nameof(SalesInvoiceLine.OtherTaxAmount), nameof(SalesInvoiceLine.CostAmount) })
         {
             b.Property(amount).HasPrecision(20, 4);
         }

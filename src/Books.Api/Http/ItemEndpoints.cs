@@ -7,7 +7,8 @@ public static class ItemEndpoints
 {
     public sealed record CategoryRequest(string Name);
 
-    public sealed record ItemRequest(string Name, string? Description, string? Unit, Guid? CategoryId, Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool? Active);
+    public sealed record ItemRequest(string Name, string? Description, string? Unit, Guid? CategoryId, Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool? Active,
+        bool? TrackInventory = null);
 
     public static void MapItemEndpoints(this RouteGroupBuilder api)
     {
@@ -30,5 +31,5 @@ public static class ItemEndpoints
     }
 
     private static ItemInput Input(ItemRequest body) =>
-        new(body.Name, body.Description, body.Unit, body.CategoryId, body.DefaultAccountId, body.DefaultTaxCodeId, body.Active ?? true);
+        new(body.Name, body.Description, body.Unit, body.CategoryId, body.DefaultAccountId, body.DefaultTaxCodeId, body.Active ?? true, body.TrackInventory ?? false);
 }
