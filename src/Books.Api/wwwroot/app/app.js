@@ -1,4 +1,4 @@
-// Read-only preview of Books, for local testing only. Plain JavaScript, no build step.
+// Preview of Books, for local testing only. Plain JavaScript, no build step; data entry is in forms.js.
 const state = { token: sessionStorage.getItem("books.token"), org: null, ledger: null, accounts: [] };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -306,9 +306,9 @@ async function renderSetup() {
   const roles = (p) => [p.is_customer ? "customer" : null, p.is_supplier ? "supplier" : null].filter(Boolean).join(", ");
   const taxName = (id) => taxCodes.find((t) => t.id === id)?.name ?? "";
   $("tab-setup").innerHTML = `
-    <h3>Parties</h3>
+    <h3>Customers and suppliers ${canEdit() ? `<button class="secondary small" onclick="partyForm()">New</button>` : ""}</h3>
     <table><tr><th>Name</th><th>Role</th><th>Tax ID</th><th>Contact</th><th class="num">Terms (days)</th></tr>
-    ${parties.map((p) => `<tr><td>${esc(p.name)}</td><td>${roles(p)}</td><td>${esc(p.tax_id)}</td><td>${esc(p.contact_name)}</td><td class="num">${p.payment_terms_days ?? ""}</td></tr>`).join("")}</table>
+    ${parties.map((p) => `<tr ${canEdit() ? `class="click" onclick="editParty('${p.id}')"` : ""}><td>${esc(p.name)}${p.active ? "" : ` <span class="pill">inactive</span>`}</td><td>${roles(p)}</td><td>${esc(p.tax_id)}</td><td>${esc(p.contact_name)}</td><td class="num">${p.payment_terms_days ?? ""}</td></tr>`).join("")}</table>
     <h3 style="margin-top:16px">Tax codes</h3>
     <table><tr><th>Name</th><th>Kind</th><th class="num">Rate %</th><th>Account</th><th>Effective</th></tr>
     ${taxCodes.map((t) => `<tr><td>${esc(t.name)}</td><td>${t.kind.replaceAll("_", " ")}</td><td class="num">${t.rate}</td><td>${t.account_id ? esc(accountName(t.account_id)) : ""}</td>
@@ -332,10 +332,11 @@ async function renderSales() {
     api(`${ledgerUrl()}/reports/ar-aging?asOf=2026-10-31`),
   ]);
   const party = (id) => parties.find((p) => p.id === id)?.name ?? "";
-  const docs = [...invoices, ...notes];
+  const docs = [...invoices, ...notes].filter((d) => d.status !== "deleted");
   const khr = (d) => (d.tax_currency ? `${Number(d.tax_currency.gross_total).toLocaleString()} ៛` : "");
   const a = aging.totals;
   $("tab-sales").innerHTML = `
+    ${canEdit() ? `<p><button onclick="salesForm('invoice')">New invoice</button> <button class="secondary" onclick="salesForm('credit_note')">New credit note</button></p>` : ""}
     <h3>Sales invoices and credit notes</h3>
     <table><tr><th>No.</th><th>Date</th><th>Customer</th><th>Reference</th><th class="num">Net</th><th class="num">VAT</th><th class="num">Gross</th><th class="num">Gross KHR</th><th>Status</th></tr>
     ${docs.map((d) => `<tr class="click" data-id="${d.id}"><td>${d.type === "credit_note" ? "CN" : "SI"} ${d.invoice_no}</td><td>${d.date}</td>
@@ -364,7 +365,8 @@ function showSale(d, party) {
     ${t ? `<p>Total including VAT: <b>${Number(t.gross_total).toLocaleString()} ${t.currency}</b> (VAT ${Number(t.tax_total).toLocaleString()} ${t.currency})
       at ${t.rate} ${esc(t.rate_source)} of ${t.rate_date}${t.reason ? ` · ${esc(t.reason)}` : ""}</p>` : ""}
     ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}
-    <p><button class="secondary" onclick="openPdf('${d.type === "credit_note" ? "credit-notes" : "sales-invoices"}/${d.id}/pdf')">Print PDF</button></p>`;
+    <p><button class="secondary" onclick="openPdf('${d.type === "credit_note" ? "credit-notes" : "sales-invoices"}/${d.id}/pdf')">Print PDF</button>
+      ${canEdit() ? `<button class="secondary" onclick="editSale('${d.type}', '${d.id}')">Edit</button>` : ""}</p>`;
   $("journal-dialog").showModal();
 }
 
@@ -468,7 +470,7 @@ async function renderPurchases() {
   $("tab-purchases").innerHTML = `
     <h3>Purchase invoices and debit notes</h3>
     <table><tr><th>No.</th><th>Date</th><th>Supplier</th><th>Reference</th><th class="num">Net</th><th class="num">VAT</th><th class="num">WHT</th><th class="num">Payable</th><th>Status</th></tr>
-    ${docRows([...invoices, ...notes])}</table>
+    ${docRows([...invoices, ...notes].filter((d) => d.status !== "deleted"))}</table>
     <h3 style="margin-top:16px">AP aging at ${aging.as_of}</h3>
     <p>${aging.matches_control ? `<span class="ok">Equals the payable balance ${aging.control_balance}</span>` : `<span class="error">Does not equal the payable balance ${aging.control_balance}</span>`}</p>
     <table><tr><th>Supplier</th><th class="num">Not due</th><th class="num">1–30</th><th class="num">31–60</th><th class="num">61–90</th><th class="num">Over 90</th><th class="num">Total</th></tr>
