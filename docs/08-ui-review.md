@@ -1,21 +1,21 @@
 # UI review notes (2026-10-25)
 
-Where the preview app stands after the shell, Sales, Purchases, Cash and bank, Inventory, Business parties, the
-chart and tax settings, and the shared list work, what was decided on the way, and what is deliberately still
-missing. Branch `ui/sales-pages`, pull request #98 against `main`. The app change is confined to
-`src/Books.Api/wwwroot/app`: `app.js`, `index.html`, `app.css`, `forms.js`, `setup.js`, `inventory.js`,
-`stock.js`, `list.js`.
+Where the preview app stands after the shell, Sales, Purchases, Cash and bank, Inventory, Payroll, Fixed
+assets, Journals, Business parties, the chart and tax settings, and the shared list work, what was decided on
+the way, and what is deliberately still missing. Branch `ui/sales-pages`, pull request #98 against `main`. The
+app change is confined to `src/Books.Api/wwwroot/app`: `app.js`, `index.html`, `app.css`, `forms.js`,
+`setup.js`, `inventory.js`, `stock.js`, `payroll.js`, `list.js`.
 
 ## Shape
 
 | Level | What it is |
 | --- | --- |
 | Shell | A fixed bar (organization, company, period, user), a grouped sidebar, one scrolling page with a title and a one-line purpose, and the page action at the right of that title |
-| Modules | A module opens into its own pages and stays open while one of them is shown. Sales: Invoices, Credit notes, Reports, Settings. Purchases: Invoices, Debit notes, Reports. Cash and bank: Transactions, Statements. Inventory: Stock on hand, Adjustments, Transfers, Assemblies |
+| Modules | A module opens into its own pages and stays open while one of them is shown. Sales: Invoices, Credit notes, Reports, Settings. Purchases: Invoices, Debit notes, Reports. Cash and bank: Transactions, Statements. Inventory: Stock on hand, Adjustments, Transfers, Assemblies. Fixed assets: Assets, Depreciation runs |
 | Pages | One list, one job. `PAGES` holds the title, the purpose and the render function; a page renders the first time it is opened and a save re-reads only the open page |
-| Lists | Two renderers: `renderDocList` for the eight document lists, and the simpler `renderSimpleList` for master data. `DOC_KINDS` says the path or loader, the party, the amount columns, the extra columns, the row cells and which dialog opens; `SIMPLE_KINDS` says the columns and the form a row opens |
+| Lists | Two renderers: `renderDocList` for the eleven document lists, and the simpler `renderSimpleList` for master data. `DOC_KINDS` says the path or loader, the party, the amount columns, the extra columns, the row cells and which dialog opens; `SIMPLE_KINDS` says the columns and the form a row opens |
 | Records | Business parties. A business party is the one record behind both a customer and a supplier |
-| Books and tax | Chart of accounts holds the accounts and their bank/cash details; Tax return holds the month's return and the tax codes behind it |
+| Books and tax | Chart of accounts holds the accounts and their bank/cash details; Tax return holds the month's return and the tax codes behind it; Payroll and Journals are document lists |
 
 ## List mechanics
 
@@ -50,6 +50,12 @@ Quantity, Components and Value. None has Posted/Draft tabs: a draft adjustment c
 and the draft warning, a transfer and an assembly are posted when saved. The rows open a detail, and the row
 menu still offers Delete; adjustments also have Edit and the Stock adjustment / Stock count menu.
 
+The last document lists are Journals, Pay runs and Depreciation runs. Journals show their revision, amount
+and status; a source journal opens its document and offers no Edit, a manual one does. Pay runs show the
+employee count, currency and payroll totals, and open an inspector below the table with the employee lines,
+search and paging. Depreciation runs are one row per month with a Total; the asset register stays on Assets
+and the run opens its detail.
+
 ## Decisions worth knowing
 
 - **Bank transactions are one list for one account.** Payments, receipts and transfers answer one question —
@@ -80,6 +86,13 @@ menu still offers Delete; adjustments also have Edit and the Stock adjustment / 
   they show the draft warning; transfers and assemblies are posted when saved. Quantity and Value use
   ordinary cells instead of the document lists' net/VAT/gross: a transfer's amount column is Quantity, and
   an assembly carries both a Quantity and a Value.
+- **Journals are the posting list.** One row per journal with its revision, amount and status; no tabs.
+  A journal created by a document opens that document and does not offer Edit; a manual journal does.
+- **Pay runs are imported, not entered here.** The list shows the employee count, currency and the payroll
+  totals; the inspector below it opens from a row with the employee lines, search and paging. There is no New
+  pay run button because the payroll system owns that entry.
+- **Depreciation runs have their own page.** The asset register stays on Assets; Depreciation runs lists one
+  posted journal per month, with a Total and a detail of the assets it depreciated.
 - **Customers and suppliers are business parties.** One record serves both roles, because a company can be
   both; the page, the new button and the form call it a business party, while the role checkboxes still say
   Customer and Supplier. The list is the first user of the simple master-data variant: search, role and
@@ -121,6 +134,11 @@ menu still offers Delete; adjustments also have Edit and the Stock adjustment / 
 - Inventory items, categories and locations are still on the Stock on hand page, not separate master-data
   pages; an item's category has no editor yet. A bill of materials is still set through the API or AI (the
   handoff's open question); assemblies can be made but not edited, and deleting one removes its journal.
+- Pay runs have an inspector with the employee lines, but not the separate employees list the owner asked
+  for. The Fixed asset register is still its own plain table (the asset form edits an asset); only the
+  depreciation runs moved to the list component.
+- Groups, usages and members still have no form/list page; business parties, tax codes, items and locations
+  are edited where they are shown.
 
 ## Where the code lives
 
@@ -129,17 +147,19 @@ lists: the period presets, filter state, column choice and order, sorting, pagin
 row menu. A kind can also supply a `load` (one endpoint or several), `facets` (the type and bank account
 filters), `extraColumns` and `cells` (a category, a bank account, a quantity, a component list), `pathOf` and
 `nounOf` (a merged list deletes and labels the right document), `amountHeader` and `formatTotal` (a quantity
-instead of money), `noEdit` for a document that is posted on save, and `tabs: false` for a list that shows
-posted and draft together. `SIMPLE_KINDS` and `renderSimpleList` are the master-data variant: fixed columns,
-search, a role or status filter, sortable headers, a row count and a form from the row.
+instead of money), `noEdit` and `editWhen` (a document that is posted on save, or a source journal),
+`after` for an inspector under the table, and `tabs: false` for a list that shows posted and draft together.
+`SIMPLE_KINDS` and `renderSimpleList` are the master-data variant: fixed columns, search, a role or status
+filter, sortable headers, a row count and a form from the row.
 
 `app.js` keeps the page registry, the dialogs and the reports, plus the Statements page
 (`renderBankStatements`), the Chart of accounts and its account form (`renderChart`, `accountForm`), and the
 Tax return with its tax code section (`renderTax`). `inventory.js` keeps the Stock on hand page, the stock
 adjustment form and the item and movement dialogs; `stock.js` keeps locations, stock by location, the
-transfer and assembly forms and their detail dialogs. `setup.js` keeps the settings pages, the transfer form
-and the tax code form; `forms.js` keeps the document forms, including the payment/receipt category picker and
-the business party form. A new document list adds one `DOC_KINDS` entry and one page entry; a new master-data
+transfer and assembly forms and their detail dialogs; `payroll.js` keeps the pay run inspector under the
+list. `setup.js` keeps the settings pages, the tax code form, the fixed asset register and the depreciation
+run form/detail. `forms.js` keeps the document forms, including the payment/receipt category picker and the
+business party form. A new document list adds one `DOC_KINDS` entry and one page entry; a new master-data
 list adds one `SIMPLE_KINDS` entry and one page entry.
 
 ## Running the tests on this machine
@@ -193,6 +213,10 @@ sample data.
   assemblies show Quantity, Components and Value. A row opens its detail; adjustments also offer Edit,
   while transfers and assemblies are posted on save and only delete. Items and locations stay on Stock on
   hand with their forms and stock by location.
+- Journals: the list has no tabs and a Revision column; `editWhen` hides Edit on source journals, which open
+  the document instead. Pay runs show the currency and totals, with the inspector under the table; the
+  inspector keeps its own employee search and paging. Depreciation runs are a period row with a Total and a
+  detail; the register stays on Assets.
 - `showTab` and `PAGES.actions`: header actions are remembered per page so returning to a rendered page
   restores them without rendering again.
 - `openRowMenu`: closes on the next click elsewhere; Delete sends `If-Match` through `write`, and a merged
@@ -214,17 +238,15 @@ sample data.
 
 ## Next slices, as agreed with the owner (2026-10-25)
 
-The list component in `list.js` now covers the four sales and purchase lists, the bank transactions list,
-the three inventory document lists and the business parties simple list. The owner's picks for what to
-convert next, and what each one needs from the component:
+The list component in `list.js` now covers every document list: the sales and purchase lists, bank
+transactions, the three inventory documents, journals, pay runs and depreciation runs — plus the business
+parties simple list. What is left is master data, not documents:
 
 | Module | Pages to build | What `list.js` needs first |
 | --- | --- | --- |
-| Payroll | Pay runs, plus an employees list the owner asked for | A page without tabs; a row count column |
-| Fixed assets | Depreciation runs; the asset register | No tabs; a period column |
-| Journals | Journals with drafts and posted, editable | No tabs; a revision column |
-| Master data | Groups, usages and members (accounts and bank details are in the Chart of accounts; business parties is done, tax codes are in the Tax return) | The simple list now exists; each remaining page needs its own form and, if wanted, typing in cells |
+| Payroll | An employees list (the pay runs are done) | The simple list, with a row count (already there) |
+| Master data | Groups, usages and members (accounts and bank details are in the Chart of accounts; business parties and tax codes are done) | The simple list now exists; each remaining page needs its own form and, if wanted, typing in cells |
 
-Order agreed: Cash and bank, Business parties and Inventory are done; Payroll comes next, then the rest.
-What remains for the rows above is mostly the quantity/value cells, which now exist, and the rest of the
-master data.
+Order agreed: Cash and bank, Business parties, Inventory, the chart/bank and tax merges, and the remaining
+document lists are done. What remains is the employees list and the rest of the master data; the quantity
+and value cells from the inventory slice now exist.
