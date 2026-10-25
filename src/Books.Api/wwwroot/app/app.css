@@ -205,10 +205,12 @@ table.list td, table.list th { overflow: hidden; }
 @media (max-width: 1120px) {
   table.list .col-fx { display: none; }
   table.list.bank .col-category { display: none; }
+  table.list.chart .col-purpose { display: none; }
   table.list td, table.list th { padding-left: 6px; padding-right: 6px; font-size: 13px; }
 }
 @media (max-width: 960px) {
   table.list .col-khr, table.list .col-reference { display: none; }
+  table.list.chart .col-bank { width: 200px; }
   .cell-sub { white-space: normal; }
 }
 th.sortable { cursor: pointer; user-select: none; }
@@ -232,6 +234,15 @@ th.sorted { color: var(--ink); }
 table.list.simple { table-layout: fixed; width: 100%; }
 .simple-meta { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .simple-meta .spacer { flex: 1; }
+/* The chart of accounts carries the bank/cash details in a column, and a GL button per account. */
+table.list.chart { width: 100%; }
+table.list.chart .col-code { width: 80px; }
+table.list.chart .col-status { width: 92px; }
+table.list.chart .col-purpose { width: 150px; }
+table.list.chart .col-bank { width: 260px; }
+table.list.chart .col-actions { width: 56px; text-align: right; }
+#account-bank-section { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 10px; }
+#account-bank-section h4 { margin: 0 0 4px; }
 .tabs .count { font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; margin-left: 5px; }
 .tabs button.active .count { color: var(--ink); }
 /* Statements: one imported statement per block, with its own counts and lines. */

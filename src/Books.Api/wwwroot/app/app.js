@@ -290,7 +290,6 @@ const NAV = [
     { id: "bank", label: "Cash and bank", children: [
       { id: "bank-transactions", label: "Transactions" },
       { id: "bank-statements", label: "Statements" },
-      { id: "bank-settings", label: "Settings" },
     ] },
     { id: "payroll", label: "Payroll" },
   ] },
@@ -300,7 +299,6 @@ const NAV = [
   ] },
   { group: "Records", items: [
     { id: "parties", label: "Business parties" },
-    { id: "taxcodes", label: "Tax codes" },
   ] },
   { group: "Books", items: [
     { id: "journals", label: "Journals" },
@@ -349,19 +347,17 @@ const PAGES = {
   "purchases-reports": { title: "Purchases reports", sub: "Purchases · who we owe, how late, and their statements", render: () => renderAging("purchases") },
   "bank-transactions": { title: "Bank transactions", sub: "Cash and bank · payments, receipts and transfers in one list", render: () => renderDocList("transaction") },
   "bank-statements": { title: "Statements", sub: "Cash and bank · the bank's balance against the books, and the lines behind it", render: () => renderBankStatements() },
-  "bank-settings": { title: "Cash and bank settings", sub: "Cash and bank · the accounts payments, receipts, transfers and statements use", render: () => renderBanks() },
   payroll: { title: "Payroll", sub: "Pay runs received from the payroll system; Books does not calculate pay", render: () => renderPayroll() },
   inventory: { title: "Inventory", sub: "Stock on hand, adjustments, locations, transfers and assemblies", render: () => renderInventory() },
   assets: { title: "Fixed assets", sub: "The register and monthly depreciation", render: () => renderAssets() },
   parties: { title: "Business parties", sub: "Records · customers and suppliers are one business party, with tax ID and payment terms", render: () => renderSimpleList("party") },
-  taxcodes: { title: "Tax codes", sub: "Rates, tax accounts and the return category each code feeds", render: () => renderTaxCodes() },
   journals: { title: "Journals", sub: "Every posting, with its revision and its source document", render: () => renderJournals() },
-  chart: { title: "Chart of accounts", sub: "Groups are headings that never take postings; accounts carry the balances", render: () => renderChart() },
+  chart: { title: "Chart of accounts", sub: "Accounts carry the balances; a bank or cash account is an Assets account with bank details", render: () => renderChart() },
   pl: { title: "Profit and loss", sub: "Income and cost and expense over a period", render: () => runReport("pl") },
   bs: { title: "Balance sheet", sub: "Assets, liabilities and equity at a date", render: () => runReport("bs") },
   tb: { title: "Trial balance", sub: "Opening, period and closing balances by account", render: () => runReport("tb") },
   gl: { title: "GL detail", sub: "Every line in one account, with a running balance", render: () => runReport("gl") },
-  tax: { title: "Tax return", sub: "The month's return on the GDT forms, with filing", render: () => renderTax(state.taxPeriod ?? "2026-10") },
+  tax: { title: "Tax return", sub: "The month's return on the GDT forms, the tax codes behind it, and filing", render: () => renderTax(state.taxPeriod ?? "2026-10") },
   "settings-ledger": { title: "Ledger and periods", sub: "Currency, fiscal year, close date and year-end revaluation", render: () => renderSettingsLedger() },
   "settings-org": { title: "Organization", sub: "The organization, its companies and the exchange rates they share", render: () => renderSettingsOrg() },
 };
@@ -441,31 +437,155 @@ async function loadAccounts() {
 
 const TYPES = { assets: "Assets", liabilities: "Liabilities", equity: "Equity", income: "Income", cost_and_expense: "Cost & Expense" };
 
+// The chart of accounts is also where a bank or cash account is set up: a bank account is an Assets
+// account with bank details, so the chart shows those details and its form edits both in one place.
 async function renderChart() {
+  await loadAccounts();
+  const banks = await api(`${ledgerUrl()}/bank-accounts`);
+  state.banks = banks;
   const groups = state.groups ?? [];
   const accounts = state.accounts ?? [];
   const purposeOf = state.purposeOf ?? {};
+  const bankOf = (id) => banks.find((b) => b.account_id === id);
+  setActions(canEdit() ? `<button onclick="accountForm()">New account</button>` : "");
   const rows = [];
   for (const [type, label] of Object.entries(TYPES)) {
     const typeGroups = groups.filter((g) => g.type === type);
     const loose = accounts.filter((a) => a.type === type && !a.group_id);
     if (!typeGroups.length && !loose.length) continue;
-    rows.push(`<tr class="group"><td colspan="4">${label}</td></tr>`);
+    rows.push(`<tr class="group"><td colspan="6">${label}</td></tr>`);
     for (const group of typeGroups) {
-      rows.push(`<tr><td colspan="4"><strong>${esc(group.name)}</strong> <span class="muted small">group, never posted to</span></td></tr>`);
-      for (const a of accounts.filter((x) => x.group_id === group.id)) rows.push(accountRow(a, purposeOf, true));
+      rows.push(`<tr><td colspan="6"><strong>${esc(group.name)}</strong> <span class="muted small">group, never posted to</span></td></tr>`);
+      for (const a of accounts.filter((x) => x.group_id === group.id)) rows.push(accountRow(a, purposeOf, true, bankOf(a.id)));
     }
-    for (const a of loose) rows.push(accountRow(a, purposeOf, false));
+    for (const a of loose) rows.push(accountRow(a, purposeOf, false, bankOf(a.id)));
   }
-  $("tab-chart").innerHTML = `<table><tr><th>Code</th><th>Account</th><th>Status</th><th>System purpose</th></tr>${rows.join("")}</table>`;
+  $("tab-chart").innerHTML = `<p class="muted small">Groups are headings that never take postings. Click an account to edit it, including its bank details; <b>GL</b> opens its detail.</p>
+    <table class="list chart"><tr><th class="col-code">Code</th><th>Account</th><th class="col-status">Status</th><th class="col-purpose">System purpose</th><th class="col-bank">Bank details</th><th class="col-actions"></th></tr>${rows.join("")}</table>`;
   const year = new Date().getFullYear();
-  for (const tr of $("tab-chart").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, `${year}-01-01`, `${year}-12-31`);
+  for (const tr of $("tab-chart").querySelectorAll("tr[data-account]")) {
+    tr.onclick = () => canEdit()
+      ? openAccount(tr.dataset.account)
+      : openGl(tr.dataset.account, `${year}-01-01`, `${year}-12-31`);
+  }
+  for (const button of $("tab-chart").querySelectorAll("button[data-gl]")) {
+    button.onclick = (event) => {
+      event.stopPropagation();
+      openGl(button.dataset.gl, `${year}-01-01`, `${year}-12-31`);
+    };
+  }
 }
 
-function accountRow(a, purposeOf, indented) {
+function accountRow(a, purposeOf, indented, bank) {
   const status = [a.active ? "active" : "inactive", a.used ? "used" : null].filter(Boolean).join(", ");
-  return `<tr class="click" data-account="${a.id}"><td>${esc(a.code)}</td><td style="padding-left:${indented ? 24 : 8}px">${esc(a.name)}</td><td class="muted">${status}</td><td>${esc(purposeOf[a.id] ?? "")}</td></tr>`;
+  const bankDetails = bank
+    ? `<div class="cell-main"><span class="pill posted">bank</span> <span class="cell-clip" title="${esc(`${bank.bank_name}${bank.account_number ? ` · ${bank.account_number}` : ""} · ${bank.currency}`)}">${esc(bank.bank_name)}</span></div>
+      <div class="cell-sub">${bank.account_number ? `${esc(bank.account_number)} · ` : ""}${esc(bank.currency)}</div>`
+    : a.is_bank ? `<span class="pill">bank</span>` : "";
+  return `<tr class="click" data-account="${a.id}">
+    <td class="col-code">${esc(a.code)}</td>
+    <td class="col-name" style="padding-left:${indented ? 24 : 8}px">${esc(a.name)}</td>
+    <td class="muted col-status">${status}</td>
+    <td class="col-purpose">${esc(purposeOf[a.id] ?? "")}</td>
+    <td class="col-bank">${bankDetails}</td>
+    <td class="col-actions"><button type="button" class="secondary small" data-gl="${a.id}" title="GL detail">GL</button></td>
+  </tr>`;
 }
+
+function openAccount(id) {
+  const account = (state.accounts ?? []).find((a) => a.id === id);
+  if (account) accountForm(account);
+}
+
+/** New or existing account, plus its bank details when it is an Assets account used as a bank. */
+async function accountForm(a) {
+  try {
+    const groups = state.groups ?? [];
+    const banks = state.banks ?? await api(`${ledgerUrl()}/bank-accounts`);
+    const bank = a ? banks.find((b) => b.account_id === a.id) : null;
+    const base = state.ledger.base_currency;
+    const typeOptions = Object.entries(TYPES)
+      .map(([value, label]) => `<option value="${value}" ${(a?.type ?? "assets") === value ? "selected" : ""}>${label}</option>`).join("");
+    const form = openForm(a ? `Edit ${a.code} ${a.name}` : "New account", `
+      <div class="grid">
+        <label>Code <input name="code" value="${esc(a?.code ?? "")}" placeholder="1130" required></label>
+        <label class="wide">Name <input name="name" value="${esc(a?.name ?? "")}" required></label>
+        <label>Type <select name="type" ${bank ? "disabled" : ""}>${typeOptions}</select></label>
+        <label>Group <select name="group_id"></select></label>
+        ${a ? `<label class="check"><input type="checkbox" name="active" ${a.active ? "checked" : ""}> Active</label>` : ""}
+      </div>
+      <div id="account-bank-section">
+        <h4>Bank or cash account</h4>
+        <p class="muted small">An Assets account can also be a bank or cash account. Payments, receipts, transfers and statements use it. Its currency is fixed once set.</p>
+        ${bank ? `<p class="muted small">Currency ${esc(bank.currency)} (fixed)</p>` : `<label class="check"><input type="checkbox" name="is_bank"> This is a bank or cash account</label>`}
+        <div class="grid" id="account-bank-fields">
+          <label class="wide">Bank <input name="bank_name" value="${esc(bank?.bank_name ?? "")}" placeholder="ABA Bank, Cash"></label>
+          <label>Account number <input name="account_number" value="${esc(bank?.account_number ?? "")}"></label>
+          ${bank ? "" : `<label>Currency <select name="bank_currency">${[...new Set([base, "USD", "KHR"])].map((c) => `<option>${c}</option>`).join("")}</select></label>`}
+        </div>
+      </div>
+      <p class="actions"><span class="spacer"></span>
+        <button type="button" class="secondary" data-cancel>Cancel</button>
+        <button type="submit">Save</button></p>`);
+
+    const fillGroups = (selected) => {
+      const list = groups.filter((g) => g.type === form.elements.type.value);
+      form.elements.group_id.innerHTML = `<option value="">No group</option>`
+        + list.map((g) => `<option value="${g.id}" ${g.id === selected ? "selected" : ""}>${esc(g.name)}</option>`).join("");
+    };
+    const canHaveBank = () => !!bank || !!a?.is_bank || !a
+      || (a.type === "assets" && a.postable && !a.is_control && !a.is_bank && (a.usages ?? []).length === 0);
+    const toggleBank = () => {
+      const assets = form.elements.type.value === "assets";
+      const allowed = canHaveBank() && assets;
+      const check = form.elements.is_bank;
+      const wanted = !!bank || (allowed && !!check?.checked);
+      form.querySelector("#account-bank-section").classList.toggle("hidden", !allowed);
+      check?.closest("label")?.classList.toggle("hidden", !allowed || !!bank);
+      form.querySelector("#account-bank-fields").classList.toggle("hidden", !wanted);
+    };
+    fillGroups(a?.group_id ?? "");
+    form.elements.type.onchange = () => { fillGroups(""); toggleBank(); };
+    if (form.elements.is_bank) form.elements.is_bank.onchange = toggleBank;
+    toggleBank();
+
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      busy(form, async () => {
+        const f = form.elements;
+        const text = (v) => (v.trim() === "" ? null : v.trim());
+        const code = f.code.value.trim();
+        const name = f.name.value.trim();
+        if (!code || !name) throw new Error("Code and name are required.");
+        const type = bank ? a.type : f.type.value;
+        const groupId = f.group_id.value || null;
+        const wantsBank = !!bank || (canHaveBank() && type === "assets" && !!f.is_bank?.checked);
+        const bankName = f.bank_name.value.trim();
+        if (wantsBank && !bankName) throw new Error("Bank is required for a bank or cash account.");
+        const accountUrl = `${ledgerUrl()}/accounts`;
+        const bankUrl = `${ledgerUrl()}/bank-accounts`;
+        if (a) {
+          await write("PATCH", `${accountUrl}/${a.id}`, { code, name, type, group_id: groupId, active: f.active.checked }, a.version);
+          if (bank) {
+            await write("PUT", `${bankUrl}/${a.id}`, { bank_name: bankName, account_number: text(f.account_number.value) }, bank.version);
+          } else if (wantsBank) {
+            await write("POST", bankUrl, { account_id: a.id, bank_name: bankName, account_number: text(f.account_number.value), currency: f.bank_currency.value });
+          }
+        } else {
+          const created = await write("POST", accountUrl, { code, name, type, group_id: groupId });
+          if (wantsBank) {
+            await write("POST", bankUrl, { account_id: created.data.id, bank_name: bankName, account_number: text(f.account_number.value), currency: f.bank_currency.value });
+          }
+        }
+        $("form-dialog").close();
+        await refreshLedger();
+      });
+    };
+  } catch (error) {
+    showError(error);
+  }
+}
+
 
 const accountName = (id) => {
   const a = state.accounts.find((x) => x.id === id);
@@ -630,7 +750,7 @@ async function renderBankStatements() {
   const banks = await api(`${ledgerUrl()}/bank-accounts`);
   state.banks = banks;
   if (!banks.length) {
-    $(container).innerHTML = `<p class="muted">No bank or cash accounts yet. Add one in <b>Cash and bank → Settings</b>; a bank account is an asset account with the bank details that payments, receipts and statements use.</p>`;
+    $(container).innerHTML = `<p class="muted">No bank or cash accounts yet. Add one in <b>Books → Chart of accounts</b>; a bank account is an Assets account with the bank details that payments, receipts and statements use.</p>`;
     return;
   }
   const bank = banks.find((b) => b.account_id === state.statementAccount) ?? banks[0];
@@ -763,16 +883,36 @@ async function renderBankStatements() {
   }
 }
 
+// The tax return and the tax codes live together: the return is computed from the codes, so a change to
+// a rate or account is made next to the figures it feeds.
+function taxCodesSection(taxCodes) {
+  const manage = isAdmin();
+  return `<h3 style="margin-top:20px">Tax codes ${manage ? `<button class="secondary small" onclick="taxCodeForm()">New tax code</button>` : ""}</h3>
+    <p class="muted small">A rate change for a period is a new code with effective dates, so earlier documents keep the rate they were posted with.</p>
+    ${taxCodes.length ? `<table><tr><th>Name</th><th>Kind</th><th class="num">Rate %</th><th>Account</th><th>Return category</th><th>Effective</th></tr>
+      ${taxCodes.map((t) => `<tr ${manage ? `class="click" data-tax="${t.id}"` : ""}><td>${esc(t.name)}${t.active ? "" : ` <span class="pill">inactive</span>`}</td><td>${t.kind.replaceAll("_", " ")}</td><td class="num">${t.rate}</td>
+        <td>${t.account_id ? esc(accountName(t.account_id)) : ""}</td><td>${esc(t.return_category ?? "")}</td>
+        <td>${t.effective_from ? `from ${t.effective_from}` : ""}${t.effective_to ? ` to ${t.effective_to}` : ""}</td></tr>`).join("")}</table>`
+      : `<p class="muted small">No tax codes yet.</p>`}`;
+}
+
 async function renderTax(period) {
+  state.taxPeriod = period;
+  const taxCodes = await api(`${ledgerUrl()}/tax-codes`);
+  const months = Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, "0")}`);
   let r;
   try {
     r = await api(`${ledgerUrl()}/tax-returns/${period}`);
   } catch (e) {
-    $("tab-tax").innerHTML = `<p class="muted">${esc(e.message)}</p>`;
+    $("tab-tax").innerHTML = `
+      <p class="filter-bar"><label>Month <select id="tax-period">${months.map((m) => `<option ${m === period ? "selected" : ""}>${m}</option>`).join("")}</select></label></p>
+      <p class="muted">${esc(e.message)}</p>
+      ${taxCodesSection(taxCodes)}`;
+    $("tax-period").onchange = (event) => renderTax(event.target.value);
+    for (const tr of $("tab-tax").querySelectorAll("tr[data-tax]")) tr.onclick = () => taxCodeForm(taxCodes.find((t) => t.id === tr.dataset.tax));
     return;
   }
   const sections = [...new Set(r.boxes.map((b) => b.section))];
-  const months = Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, "0")}`);
   $("tab-tax").innerHTML = `
     <p class="filter-bar"><label>Month <select id="tax-period">${months.map((m) => `<option ${m === period ? "selected" : ""}>${m}</option>`).join("")}</select></label>
       <a class="button" href="#" id="tax-xlsx">Excel</a>
@@ -788,10 +928,11 @@ async function renderTax(period) {
     ${r.reconciliation.map((x) => `<tr><td>${esc(x.label)}</td><td>${x.accounts.join(", ")}</td><td class="num">${x.ledger_amount}</td><td class="num">${x.return_amount}</td>
       <td class="num ${x.matches ? "ok" : "error"}">${x.difference}</td><td>${x.other_postings.map((o) => `<a href="#" onclick="event.preventDefault(); openJournalNo(${o.journal_no})">No. ${o.journal_no}</a> ${esc(o.reference ?? "")} ${o.amount}`).join("; ")}</td></tr>`).join("")}</table>
     ${r.adjusted_lines.length ? `<h3>Lines with overridden VAT</h3><table><tr><th>Document</th><th>Party</th><th class="num">Calculated</th><th class="num">Entered</th><th>Reason</th></tr>
-      ${r.adjusted_lines.map((l) => `<tr><td>${l.document_type} ${l.document_no}</td><td>${esc(l.party)}</td><td class="num">${l.tax_calculated}</td><td class="num">${l.tax_amount}</td><td>${esc(l.tax_reason ?? "")}</td></tr>`).join("")}</table>` : ""}`;
+      ${r.adjusted_lines.map((l) => `<tr><td>${l.document_type} ${l.document_no}</td><td>${esc(l.party)}</td><td class="num">${l.tax_calculated}</td><td class="num">${l.tax_amount}</td><td>${esc(l.tax_reason ?? "")}</td></tr>`).join("")}</table>` : ""}
+    ${taxCodesSection(taxCodes)}`;
   $("tax-period").onchange = (e) => renderTax(e.target.value);
   $("tax-xlsx").onclick = (e) => { e.preventDefault(); download(`${ledgerUrl()}/tax-returns/${period}.xlsx`, `tax-return-${period}.xlsx`); };
-  for (const tr of $("tab-tax").querySelectorAll("tr.click")) {
+  for (const tr of $("tab-tax").querySelectorAll("tr[data-box].click")) {
     tr.onclick = async () => {
       const box = await api(`${ledgerUrl()}/tax-returns/${period}/boxes/${tr.dataset.box}`);
       $("journal-body").innerHTML = `<h3>${esc(box.label)} · ${box.period}</h3><p class="muted">${box.amount} · ${box.tax_currency_amount ?? ""}</p>
@@ -801,6 +942,7 @@ async function renderTax(period) {
       $("journal-dialog").showModal();
     };
   }
+  for (const tr of $("tab-tax").querySelectorAll("tr[data-tax]")) tr.onclick = () => taxCodeForm(taxCodes.find((t) => t.id === tr.dataset.tax));
 }
 
 function showPurchase(d, party) {
