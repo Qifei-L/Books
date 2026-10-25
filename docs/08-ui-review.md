@@ -20,6 +20,10 @@ so a document dated later in the year is never hidden), then the party (a combob
 at a few dozen parties and cannot show a tax ID), then search, which filters as it is typed. View controls
 (extra columns, density) sit at the right.
 
+The row's identity is the party, with the date and (unless it has a column of its own) the reference under it;
+the system number stays out of the list. Columns and rows per page are chosen in the toolbar — 25, 50, 100 or
+all — and the totals row always sums every filtered document, not the visible page.
+
 The table borrows from QuickBooks: the number, date and reference are one two-line cell; one amount column
 headed with its currency; a single status badge; days late inline on the due date; a row menu on hover
 (Open, Print PDF, Edit, Delete); sticky header and totals row. From Manager.io: sortable headers, a totals

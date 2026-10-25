@@ -534,9 +534,11 @@ function presetRange(preset, f) {
 }
 
 const docTab = (kind) => ((state.docTab ??= {})[kind] ??= "posted");
-const docSort = (kind) => ((state.docSort ??= {})[kind] ??= { key: "invoice", dir: "desc" });
+const docSort = (kind) => ((state.docSort ??= {})[kind] ??= { key: "date", dir: "desc" });
 // Optional columns, off by default: the list shows one amount and the rest is detail.
-const docColumns = (kind) => ((state.docCols ??= {})[kind] ??= new Set());
+// Columns on by default: the owner's choice on 2026-10-25. Amount is always shown and is not in the set.
+const DOC_COLUMN_DEFAULTS = ["net_total", "tax_total", "other_tax_total", "description", "fx"];
+const docColumns = (kind) => ((state.docCols ??= {})[kind] ??= new Set(DOC_COLUMN_DEFAULTS));
 const docDensity = () => (state.density ??= "comfortable");
 const docPageSize = () => (state.pageSize ??= 50);
 const overdueDays = (d) => Math.floor((new Date(today()) - new Date(d.due_date)) / 86400000);
@@ -570,12 +572,18 @@ async function renderDocList(kind) {
   const amountLabel = k.amounts[k.amounts.length - 1].label;
 
   const sortValue = (d) => {
+    const party = parties.find((p) => p.id === d[k.partyKey]);
     switch (sort.key) {
-      case "invoice": return Number(d.invoice_no);
       case "date": return d.date;
       case "due": return d.due_date ?? "";
       case "party": return partyName(d).toLowerCase();
+      case "party_tax_id": return (party?.tax_id ?? "").toLowerCase();
+      case "party_terms": return Number(party?.payment_terms_days ?? 0);
       case "status": return d.status;
+      case "description": return (d.description ?? "").toLowerCase();
+      case "lines_count": return d.lines?.length ?? 0;
+      case "other_tax_total": return Number(d.other_tax_total ?? 0);
+      case "fx": return d.currency ?? "";
       case "khr": return Number(d.tax_currency?.gross_total ?? 0);
       case "amount": return Number(d[amountKey] ?? 0);
       case "journal": return Number(d.journal_no ?? 0);
@@ -592,19 +600,29 @@ async function renderDocList(kind) {
   const late = posted.filter((d) => d.due_date && d.due_date < today());
   const currency = state.ledger.base_currency;
   const chosen = docColumns(kind);
-  const optional = (key, label, num = false) => ({ key, label, num, sortable: true, w: num ? "112px" : "150px", opt: true });
+  const partyOf = (d) => parties.find((p) => p.id === d[k.partyKey]);
+  const fxOf = (d) => `${d.currency || currency}${d.exchange_rate ? ` @ ${d.exchange_rate}` : ""}`;
 
-  // Fixed widths for everything except the party column, which takes what is left.
+  // Every column the list knows about. `always` ones cannot be turned off; `optional` ones start off
+  // unless docColumnDefaults() says otherwise.
+  const optional = (key, label, opts = {}) => ({ key, label, sortable: true, ...(key.includes("total") || key === "lines_count" || key === "party_terms" ? { num: true } : {}), w: opts.w ?? "120px", opt: true });
+
   const columns = [
-    { key: "invoice", label: k.side === "sale" ? "Invoice" : "Bill", sortable: true, w: "250px" },
-    ...(k.third === "due" ? [{ key: "due", label: "Due", sortable: true, w: "150px" }] : [{ key: "ref", label: k.refLabel, w: "130px" }]),
     { key: "party", label: k.partyLabel, sortable: true },
-    ...(chosen.has("reference") ? [optional("reference", "Reference")] : []),
-    ...k.amounts.slice(0, -1).filter((a) => chosen.has(a.key)).map((a) => optional(a.key, a.label, true)),
-    { key: "amount", label: `${amountLabel} (${currency})`, num: true, sortable: true, w: "132px" },
-    ...(chosen.has("khr") ? [optional("khr", "KHR", true)] : []),
-    { key: "status", label: "Status", sortable: true, w: "116px" },
-    ...(chosen.has("journal") ? [optional("journal", "Journal")] : []),
+    { key: "due", label: "Due", sortable: true, w: "150px" },
+    ...(chosen.has("date") ? [optional("date", "Date", { w: "110px" })] : []),
+    ...(chosen.has("reference") ? [optional("reference", "Reference", { w: "150px" })] : []),
+    ...k.amounts.slice(0, -1).filter((a) => chosen.has(a.key)).map((a) => optional(a.key, a.label, { w: "104px" })),
+    ...(chosen.has("other_tax_total") ? [optional("other_tax_total", "Other tax", { w: "104px" })] : []),
+    { key: "amount", label: `${amountLabel} (${currency})`, num: true, sortable: true, w: "130px" },
+    ...(chosen.has("fx") ? [optional("fx", "Currency", { w: "130px" })] : []),
+    ...(chosen.has("khr") ? [optional("khr", "KHR", { w: "128px" })] : []),
+    { key: "status", label: "Status", sortable: true, w: "104px" },
+    ...(chosen.has("description") ? [optional("description", "Description", { w: "200px" })] : []),
+    ...(chosen.has("lines_count") ? [optional("lines_count", "Lines", { w: "74px" })] : []),
+    ...(chosen.has("party_tax_id") ? [optional("party_tax_id", "Tax ID", { w: "140px" })] : []),
+    ...(chosen.has("party_terms") ? [optional("party_terms", "Terms (days)", { w: "110px" })] : []),
+    ...(chosen.has("journal") ? [optional("journal", "Journal No.", { w: "110px" })] : []),
     { key: "menu", label: "", w: "46px" },
   ];
 
@@ -616,18 +634,26 @@ async function renderDocList(kind) {
 
   const cell = (d) => {
     const lateDays = d.status === "posted" && d.due_date && d.due_date < today() ? overdueDays(d) : 0;
+    const party = partyOf(d);
+    // The first cell is the row's identity: who it is for, and when. The system number stays out of the
+    // list; the reference joins the second line only while it has no column of its own.
     const reference = chosen.has("reference") ? esc(d.reference ?? "") : "";
     return {
-      invoice: `<div class="cell-main">${k.prefix} ${d.invoice_no}</div>
+      party: `<div class="cell-main"><span class="cell-clip" title="${esc(partyName(d))}">${esc(partyName(d))}</span></div>
         <div class="cell-sub">${d.date}${!reference && d.reference ? ` · ${esc(d.reference)}` : ""}</div>`,
       due: d.due_date ? `${d.due_date}${lateDays > 0 ? ` <span class="late" title="${lateDays} days overdue">${lateDays}d late</span>` : ""}` : "",
-      ref: d.original_invoice_id ? `${k.refPrefix} ${counterpartNo(d.original_invoice_id)}` : "",
-      party: `<span class="cell-clip" title="${esc(partyName(d))}">${esc(partyName(d))}</span>`,
+      date: d.date,
       reference: `<span class="cell-clip" title="${esc(d.reference ?? "")}">${reference}</span>`,
       amount: money(d[amountKey]),
       khr: khr(d),
+      fx: fxOf(d),
       status: `<span class="pill ${d.status}">${d.status}</span>`,
+      description: `<span class="cell-clip" title="${esc(d.description ?? "")}">${esc(d.description ?? "")}</span>`,
+      lines_count: d.lines?.length ?? "",
+      party_tax_id: `<span class="cell-clip" title="${esc(party?.tax_id ?? "")}">${esc(party?.tax_id ?? "")}</span>`,
+      party_terms: party?.payment_terms_days ?? "",
       journal: d.journal_no ? `No. ${d.journal_no}` : "",
+      other_tax_total: money(d.other_tax_total),
       menu: `<button class="row-menu-btn" data-menu="${d.id}" title="Actions">⋯</button>`,
       ...Object.fromEntries(k.amounts.slice(0, -1).map((a) => [a.key, money(d[a.key])])),
     };
@@ -647,10 +673,10 @@ async function renderDocList(kind) {
   }).join("");
 
   const totals = `<tr class="total">${columns.map((c) => {
-    if (c.key === "invoice") return `<td>Total</td>`;
+    if (c.key === "party") return `<td>Total</td>`;
     if (c.key === "status") return `<td>${sorted.length} ${sorted.length === 1 ? k.noun : k.plural}</td>`;
     if (c.key === "amount") return `<td class="num">${money(sum(sorted, amountKey))}</td>`;
-    if (c.num) return `<td class="num">${money(sum(sorted, c.key))}</td>`;
+    if (c.num && c.key !== "lines_count" && c.key !== "party_terms") return `<td class="num">${money(sum(sorted, c.key))}</td>`;
     return `<td></td>`;
   }).join("")}</tr>`;
 
@@ -686,9 +712,16 @@ async function renderDocList(kind) {
   const chipRow = chips || filtered ? `<div class="chips">${chips}${filtered ? `<button class="link" id="${k.container}-clear">Clear all</button>` : ""}</div>` : "";
 
   const extras = [
+    { key: "date", label: "Date" },
     { key: "reference", label: "Reference" },
     ...k.amounts.slice(0, -1).map((a) => ({ key: a.key, label: a.label })),
+    { key: "other_tax_total", label: "Other tax" },
+    { key: "fx", label: "Currency" },
     { key: "khr", label: "KHR" },
+    { key: "description", label: "Description" },
+    { key: "lines_count", label: "Lines" },
+    { key: "party_tax_id", label: "Tax ID" },
+    { key: "party_terms", label: "Terms (days)" },
     { key: "journal", label: "Journal No." },
   ];
   const columnsMenu = `<div class="popover hidden" id="${ids.colsMenu}">${extras.map((c) => `
