@@ -60,7 +60,7 @@ Replace our Manager.io bookkeeping with a system that:
 | M15 Data entry for people | Forms in the app for the work people do by hand: customers and suppliers, sales, purchases, payments and receipts, journals; same API, rules and audit as AI clients | In progress (journal dimensions done) |
 | M15.1 Journal dimensions | Manual journals post AR/AP with a party; class and location on journal, sales and purchase lines; class master data, API and page; manual VAT/other tax entered gross and split into net + tax; GL Detail shows class, location and party | Done |
 | M16 Report dimensions | TB, BS, P&L and GL Detail filter by class and location; the same filters reach the app and Excel; unfiltered totals unchanged | Done |
-| M17 Attachments (implements M13) | Files attached to invoices, bills, payments and journals; upload, download, delete, audit and MCP | In progress |
+| M17 Attachments (implements M13) | Files attached to invoices, bills, payments and journals; upload, download, delete, audit and MCP | Planned (next, after the full-page record surface) |
 | Later | Remaining document dimensions; M14 organization-shared data; annual income tax return; CamInvoice | Planned |
 
 MCP tools ship with each milestone, not at the end.
