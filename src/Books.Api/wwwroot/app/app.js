@@ -148,6 +148,7 @@ async function chooseLedger(ledger) {
   // The cached document lists belong to the previous company.
   state.docData = {};
   state.docSearchIndex = {};
+  state.banks = null;
   await loadAccounts();
   await showTab(state.tab ?? "sales-invoices", true);
 }
@@ -221,13 +222,35 @@ function showPayment(d, party) {
   $("journal-body").innerHTML = `<h3>${d.type === "receipt" ? "Receipt" : "Payment"} ${d.payment_no} <span class="pill ${d.status}">${d.status}</span></h3>
     <p class="muted">${esc(accountName(d.bank_account_id))} · ${d.date} · ${esc(party(d.party_id))} · ${esc(d.reference ?? "")} · ${esc(d.description ?? "")}
       ${d.exchange_rate ? ` · ${d.currency} at ${d.exchange_rate}` : ""}</p>
-    <table><tr><th>Line</th><th>Description</th><th class="num">Amount</th><th class="num">VAT</th><th class="num">WHT</th><th class="num">Total</th></tr>
+    <table><tr><th>Category</th><th>Description</th><th class="num">Amount</th><th class="num">VAT</th><th class="num">WHT</th><th class="num">Total</th></tr>
     ${d.lines.map((l) => `<tr><td>${l.kind === "account" ? esc(accountName(l.account_id)) : `${esc(accountName(l.control_account_id))} · ${l.kind === "invoice" ? "settles an invoice" : "party balance"}`}</td>
       <td>${esc(l.description ?? "")}</td><td class="num">${l.amount}</td><td class="num">${blank(l.tax_amount)}</td><td class="num">${blank(l.withholding_amount)}</td><td class="num">${l.total}</td></tr>`).join("")}
-    <tr class="total"><td colspan="5">Total</td><td class="num">${d.total}</td></tr></table>
+    <tr class="total"><td colspan="5">Total</td><td class="num">${d.total} ${d.currency ?? ""}</td></tr></table>
     ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}${journalButton(d)}
     ${canEdit() ? `<p><button class="secondary" onclick="editPayment('${d.type}', '${d.id}')">Edit</button></p>` : ""}`;
   $("journal-dialog").showModal();
+}
+
+// Transfers have no party and no line grid; the detail is the two accounts, what was sent and received,
+// the fee and the journal. Editing is a form of its own (setup.js).
+function showTransfer(d) {
+  const from = `${accountName(d.from_account_id)} (${bankCurrency(d.from_account_id)})`;
+  const to = `${accountName(d.to_account_id)} (${bankCurrency(d.to_account_id)})`;
+  $("journal-body").innerHTML = `<h3>Bank transfer ${d.transfer_no} <span class="pill ${d.status}">${d.status}</span></h3>
+    <p class="muted">${d.date} · ${esc(from)} → ${esc(to)} · ${esc(d.reference ?? "")} · ${esc(d.description ?? "")}</p>
+    <table><tr><th>From</th><th>To</th><th class="num">Sent</th><th class="num">Received</th><th class="num">Fee</th></tr>
+      <tr><td>${esc(from)}</td><td>${esc(to)}</td><td class="num">${money(d.amount, bankCurrency(d.from_account_id))} ${bankCurrency(d.from_account_id)}</td>
+      <td class="num">${d.to_amount ? `${money(d.to_amount, bankCurrency(d.to_account_id))} ${bankCurrency(d.to_account_id)}` : "same currency"}</td>
+      <td class="num">${Number(d.fee_amount) ? money(d.fee_amount, bankCurrency(d.from_account_id)) : "—"}</td></tr></table>
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}
+    ${canEdit() ? `<p><button class="secondary" onclick="editTransfer('${d.id}')">Edit</button></p>` : ""}`;
+  $("journal-dialog").showModal();
+}
+
+async function editTransfer(id) {
+  $("journal-dialog").close();
+  const transfer = (await api(`${ledgerUrl()}/transfers`)).find((t) => t.id === id);
+  if (transfer) transferForm(transfer);
 }
 
 async function showStatement(kind, partyId, asOf) {
@@ -261,7 +284,11 @@ const NAV = [
       { id: "purchases-debit-notes", label: "Debit notes" },
       { id: "purchases-reports", label: "Reports" },
     ] },
-    { id: "bank", label: "Cash and bank" },
+    { id: "bank", label: "Cash and bank", children: [
+      { id: "bank-transactions", label: "Transactions" },
+      { id: "bank-statements", label: "Statements" },
+      { id: "bank-settings", label: "Settings" },
+    ] },
     { id: "payroll", label: "Payroll" },
   ] },
   { group: "Stock and assets", items: [
@@ -270,7 +297,6 @@ const NAV = [
   ] },
   { group: "Records", items: [
     { id: "parties", label: "Customers and suppliers" },
-    { id: "banks", label: "Bank accounts" },
     { id: "taxcodes", label: "Tax codes" },
   ] },
   { group: "Books", items: [
@@ -318,12 +344,13 @@ const PAGES = {
   "purchases-invoices": { title: "Purchase invoices", sub: "Purchases · posted and draft bills, and what we owe", render: () => renderDocList("purchase_invoice") },
   "purchases-debit-notes": { title: "Purchase debit notes", sub: "Purchases · debits raised against a bill", render: () => renderDocList("debit_note") },
   "purchases-reports": { title: "Purchases reports", sub: "Purchases · who we owe, how late, and their statements", render: () => renderAging("purchases") },
-  bank: { title: "Cash and bank", sub: "Payments, receipts, transfers, statements and reconciliation", render: () => renderBank() },
+  "bank-transactions": { title: "Bank transactions", sub: "Cash and bank · payments, receipts and transfers in one list", render: () => renderDocList("transaction") },
+  "bank-statements": { title: "Statements", sub: "Cash and bank · the bank's balance against the books, and the lines behind it", render: () => renderBankStatements() },
+  "bank-settings": { title: "Cash and bank settings", sub: "Cash and bank · the accounts payments, receipts, transfers and statements use", render: () => renderBanks() },
   payroll: { title: "Payroll", sub: "Pay runs received from the payroll system; Books does not calculate pay", render: () => renderPayroll() },
   inventory: { title: "Inventory", sub: "Stock on hand, adjustments, locations, transfers and assemblies", render: () => renderInventory() },
   assets: { title: "Fixed assets", sub: "The register and monthly depreciation", render: () => renderAssets() },
   parties: { title: "Customers and suppliers", sub: "One record for each party, with tax ID and payment terms", render: () => renderParties() },
-  banks: { title: "Bank accounts", sub: "Cash and bank accounts in the chart of accounts", render: () => renderBanks() },
   taxcodes: { title: "Tax codes", sub: "Rates, tax accounts and the return category each code feeds", render: () => renderTaxCodes() },
   journals: { title: "Journals", sub: "Every posting, with its revision and its source document", render: () => renderJournals() },
   chart: { title: "Chart of accounts", sub: "Groups are headings that never take postings; accounts carry the balances", render: () => renderChart() },
@@ -591,52 +618,145 @@ async function openPdf(path) {
   window.open(URL.createObjectURL(await response.blob()), "_blank");
 }
 
-async function renderBank() {
-  const [banks, payments, receipts, parties, transfers] = await Promise.all([
-    api(`${ledgerUrl()}/bank-accounts`), api(`${ledgerUrl()}/payments`), api(`${ledgerUrl()}/receipts`), api(`${ledgerUrl()}/parties`),
-    api(`${ledgerUrl()}/transfers`),
-  ]);
+// Statements and reconciliation: one bank account at a time, the bank's balance against the books, the
+// postings still pending, and the imported statement lines. Clearing changes no posting, so it is safe
+// for a person to do; the statement drafts are posted in the same page.
+async function renderBankStatements() {
+  setActions("");
+  const container = "tab-bank-statements";
+  const banks = await api(`${ledgerUrl()}/bank-accounts`);
+  state.banks = banks;
   if (!banks.length) {
-    $("tab-bank").innerHTML = `<p class="muted">No bank accounts.</p>`;
+    $(container).innerHTML = `<p class="muted">No bank or cash accounts yet. Add one in <b>Cash and bank → Settings</b>; a bank account is an asset account with the bank details that payments, receipts and statements use.</p>`;
     return;
   }
-  const bank = banks.find((b) => b.id === state.bankId) ?? banks[0];
-  const statements = await api(`${ledgerUrl()}/bank-accounts/${bank.account_id ?? bank.id}/statements`);
+  const bank = banks.find((b) => b.account_id === state.statementAccount) ?? banks[0];
+  state.statementAccount = bank.account_id;
+  state.statementAsOf ??= {};
+  state.statementBalance ??= {};
+  const statements = await api(`${ledgerUrl()}/bank-accounts/${bank.account_id}/statements`);
   const latest = statements[0];
-  const r = await api(`${ledgerUrl()}/bank-accounts/${bank.account_id ?? bank.id}/reconciliation?asOf=${latest?.to ?? "2026-10-31"}${latest ? `&statementBalance=${latest.closing_balance}` : ""}`);
-  const party = (id) => parties.find((p) => p.id === id)?.name ?? "";
-  const docs = [...payments, ...receipts].filter((d) => d.bank_account_id === (bank.account_id ?? bank.id) && d.status !== "deleted").sort((a, b) => a.date.localeCompare(b.date));
-  const shownTransfers = transfers.filter((t) => t.status !== "deleted");
-  $("tab-bank").innerHTML = `
-    ${canEdit() ? `<p><button onclick="paymentForm('payment')">New payment</button> <button class="secondary" onclick="paymentForm('receipt')">New receipt</button></p>` : ""}
-    <p><label>Account <select id="bank-pick">${banks.map((b) => `<option value="${b.account_id ?? b.id}" ${b === bank ? "selected" : ""}>${esc(b.code)} ${esc(b.name)} · ${esc(b.bank_name)}</option>`).join("")}</select></label></p>
-    <h3>Payments and receipts</h3>
-    <table><tr><th>No.</th><th>Date</th><th>Party</th><th>Reference</th><th>Lines</th><th class="num">In</th><th class="num">Out</th><th>Status</th></tr>
-    ${docs.map((d) => `<tr class="click" data-pay="${d.id}"><td>${d.type === "receipt" ? "RC" : "PM"} ${d.payment_no}</td><td>${d.date}</td><td>${esc(party(d.party_id))}</td><td>${esc(d.reference ?? "")}</td>
-      <td>${d.lines.map((l) => `${l.kind === "account" ? esc(accountName(l.account_id)) : l.kind === "invoice" ? "invoice" : "party balance"} ${l.amount}`).join("; ")}</td>
-      <td class="num">${d.type === "receipt" ? d.total : ""}</td><td class="num">${d.type === "payment" ? d.total : ""}</td>
-      <td>${d.status === "posted" ? `<span class="pill posted">posted</span>` : `<span class="pill draft">${d.status}</span> ${d.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>
-    <h3 style="margin-top:16px">Bank transfers ${canEdit() ? `<button class="secondary small" onclick="transferForm()">New</button>` : ""}</h3>
-    ${shownTransfers.length ? `<table><tr><th>No.</th><th>Date</th><th>From</th><th>To</th><th class="num">Amount</th><th class="num">Fee</th><th>Journal</th></tr>
-      ${shownTransfers.map((t) => `<tr ${canEdit() ? `class="click" data-transfer="${t.id}"` : ""}><td>${t.transfer_no}</td><td>${t.date}</td><td>${esc(accountName(t.from_account_id))}</td><td>${esc(accountName(t.to_account_id))}</td>
-        <td class="num">${t.amount}${t.to_amount ? ` → ${t.to_amount}` : ""}</td><td class="num">${t.fee_amount}</td>
-        <td>${t.status === "posted" ? `posted, journal No. ${t.journal_no}` : `<span class="pill draft">${t.status}</span> ${t.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>`
-      : `<p class="muted small">No transfers yet. A transfer moves money between two bank accounts, in one journal.</p>`}
-    <h3 style="margin-top:16px">Reconciliation at ${r.as_of}</h3>
-    <p>Book ${r.book_balance} · cleared ${r.cleared_balance}${r.statement_balance ? ` · statement ${r.statement_balance} · ${r.reconciled ? `<span class="ok">reconciled</span>` : `<span class="error">difference ${r.difference}</span>`}` : ""}</p>
-    <table><tr><th>Pending</th><th>Date</th><th>Source</th><th>Reference</th><th class="num">Amount</th></tr>
-    ${r.pending.slice(-15).map((p) => `<tr class="click" data-journal="${p.journal_id}"><td>No. ${p.journal_no}</td><td>${p.date}</td><td>${p.source}</td><td>${esc(p.reference ?? "")}</td><td class="num">${p.amount}</td></tr>`).join("")}</table>
-    ${r.pending.length > 15 ? `<p class="muted">${r.pending.length - 15} earlier pending postings not shown.</p>` : ""}
-    ${statements.map((st) => `<h3 style="margin-top:16px">Statement ${st.from} – ${st.to}</h3>
-      <p class="muted">Opening ${st.opening_balance} · closing ${st.closing_balance} · ${st.matched} matched · ${st.drafted} to Suspense (drafts) · ${st.duplicates} duplicates</p>
-      <table><tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Status</th></tr>
-      ${st.lines.map((l) => `<tr class="${l.status === "duplicate" ? "" : "click"}" data-line-journal="${l.journal_id ?? ""}" data-line-payment="${l.payment_id ?? ""}" data-line-kind="${Number(l.amount) > 0 ? "receipt" : "payment"}"><td>${l.date}</td><td>${esc(l.description ?? "")}</td><td class="num">${l.amount}</td><td><span class="pill ${l.status === "matched" ? "posted" : "draft"}">${l.status}</span></td></tr>`).join("")}</table>`).join("")}`;
-  $("bank-pick").onchange = (e) => { state.bankId = e.target.value; renderBank(); };
-  for (const tr of $("tab-bank").querySelectorAll("tr[data-pay]")) tr.onclick = () => showPayment(docs.find((d) => d.id === tr.dataset.pay), party);
-  for (const tr of $("tab-bank").querySelectorAll("tr[data-transfer]")) tr.onclick = () => transferForm(shownTransfers.find((t) => t.id === tr.dataset.transfer));
-  for (const tr of $("tab-bank").querySelectorAll("tr[data-journal]")) tr.onclick = () => openJournal(tr.dataset.journal);
-  for (const tr of $("tab-bank").querySelectorAll("tr[data-line-kind]")) {
-    tr.onclick = () => tr.dataset.lineJournal ? openJournal(tr.dataset.lineJournal) : tr.dataset.linePayment && openDocument(tr.dataset.lineKind, tr.dataset.linePayment);
+  const asOf = state.statementAsOf[bank.account_id] ?? latest?.to ?? today();
+  const balance = state.statementBalance[bank.account_id] ?? latest?.closing_balance ?? "";
+  const query = `asOf=${asOf}${balance !== "" ? `&statementBalance=${encodeURIComponent(balance)}` : ""}`;
+  const r = await api(`${ledgerUrl()}/bank-accounts/${bank.account_id}/reconciliation?${query}`);
+  const currency = r.currency ?? bank.currency;
+  const amount = (value) => `${money(Number(value), currency)} ${currency}`;
+  const figure = (label, value) => `<div class="figure"><span class="muted small">${label}</span><b>${value}</b></div>`;
+  const cleared = r.reconciled === true
+    ? `<span class="ok">Reconciled: the cleared balance equals the statement balance</span>`
+    : r.reconciled === false
+      ? `<span class="error">Difference ${amount(r.difference)}: the statement is ${Number(r.difference) > 0 ? "above" : "below"} the cleared balance</span>`
+      : `<span class="muted">Enter the statement's closing balance to compare it with the cleared balance.</span>`;
+  const visiblePending = r.pending.slice(-100);
+
+  $(container).innerHTML = `
+    <form class="filter-bar" id="statement-form">
+      <label>Bank account <select name="account">
+        ${banks.map((b) => `<option value="${b.account_id}" ${b.account_id === bank.account_id ? "selected" : ""}>${esc(b.code)} ${esc(b.name)} · ${esc(b.bank_name)} · ${esc(b.currency)}</option>`).join("")}
+      </select></label>
+      <label>As of <input type="date" name="asOf" value="${asOf}"></label>
+      <label>Statement balance <input name="balance" class="num" inputmode="decimal" value="${esc(balance)}" placeholder="closing balance"></label>
+      <button type="submit">Reconcile</button>
+      <span class="spacer"></span>
+      <span class="muted small">${statements.length ? `Latest statement ${statements[0].from} – ${statements[0].to}` : "No statement imported yet"}</span>
+    </form>
+    <div class="figures">
+      ${figure("Book balance", amount(r.book_balance))}
+      ${figure("Cleared", amount(r.cleared_balance))}
+      ${figure("Statement", r.statement_balance == null ? "—" : amount(r.statement_balance))}
+      ${figure("Difference", r.difference == null ? "—" : amount(r.difference))}
+    </div>
+    <p>${cleared}</p>
+
+    <h3>Pending postings <span class="muted small">— cheques in transit, deposits not yet credited; clearing changes no posting</span></h3>
+    ${r.pending.length
+      ? `<div class="select-bar hidden" id="statement-bar"><b id="statement-bar-count">0</b> selected
+          <span class="muted small" id="statement-bar-total"></span><span class="spacer"></span>
+          ${canEdit() ? `<button type="button" class="small" data-clear-selected>Mark cleared on ${asOf}</button>` : ""}
+        </div>
+        <table class="list"><tr>${canEdit() ? `<th style="width:34px"></th>` : ""}<th>No.</th><th>Date</th><th>Source</th><th>Reference</th><th>Description</th><th class="num">Amount</th></tr>
+        ${visiblePending.map((p) => `<tr class="click" data-journal="${p.journal_id}">
+          ${canEdit() ? `<td><input type="checkbox" class="pending-check" data-clear-journal="${p.journal_id}" title="Select to clear"></td>` : ""}
+          <td>No. ${p.journal_no}</td><td>${p.date}</td><td>${esc(p.source.replaceAll("_", " "))}</td><td>${esc(p.reference ?? "")}</td>
+          <td>${esc(p.description ?? "")}</td><td class="num">${amount(p.amount)}</td></tr>`).join("")}</table>
+        ${r.pending.length > visiblePending.length ? `<p class="muted small">${r.pending.length - visiblePending.length} earlier pending postings not shown.</p>` : ""}`
+      : `<p class="muted">Every posting through ${asOf} is cleared.</p>`}
+
+    <h3 style="margin-top:20px">Statements <span class="muted small">— imported through MCP; a line clears a matching posting or becomes a draft to Suspense</span></h3>
+    ${statements.length
+      ? statements.map((st) => `<div class="statement">
+          <div class="statement-head">
+            <div><b>${st.from} – ${st.to}</b>
+              <span class="muted small">Opening ${amount(st.opening_balance)} · closing ${amount(st.closing_balance)} · ${st.matched} matched · ${st.drafted} to Suspense · ${st.duplicates} duplicates</span></div>
+            ${canEdit() && st.drafted ? `<button type="button" class="secondary small" data-post-drafts="${st.id}">Post ${st.drafted} draft${st.drafted === 1 ? "" : "s"}</button>` : ""}
+          </div>
+          <table class="list"><tr><th>Date</th><th>Description</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr>
+          ${st.lines.map((l) => `<tr class="${l.status === "duplicate" ? "" : "click"}" data-line-journal="${l.journal_id ?? ""}" data-line-payment="${l.payment_id ?? ""}" data-line-kind="${Number(l.amount) > 0 ? "receipt" : "payment"}">
+            <td>${l.date}</td><td>${esc(l.description ?? "")}</td><td>${esc(l.reference ?? "")}</td>
+            <td class="num">${amount(l.amount)}</td>
+            <td><span class="pill ${l.status === "matched" ? "posted" : l.status === "drafted" ? "draft" : ""}">${l.status}</span></td></tr>`).join("")}</table>
+        </div>`).join("")
+      : `<p class="muted">No statement imported for ${esc(bank.code)} ${esc(bank.name)} yet. Bank statements arrive through MCP; their unmatched lines become drafts to Suspense for a person to post.</p>`}`;
+
+  $("statement-form").onsubmit = (event) => {
+    event.preventDefault();
+    const form = event.target;
+    state.statementAccount = form.account.value;
+    state.statementAsOf[form.account.value] = form.asOf.value;
+    state.statementBalance[form.account.value] = form.balance.value.trim();
+    renderBankStatements();
+  };
+  $("statement-form").account.onchange = (event) => {
+    state.statementAccount = event.target.value;
+    renderBankStatements();
+  };
+
+  // Clearing: tick pending postings and mark them cleared on the statement date.
+  const paintStatementBar = () => {
+    const picked = [...$(container).querySelectorAll(".pending-check:checked")].map((box) => box.dataset.clearJournal);
+    const bar = $("statement-bar");
+    if (!bar) return;
+    bar.classList.toggle("hidden", picked.length === 0);
+    $("statement-bar-count").textContent = picked.length;
+    $("statement-bar-total").textContent = picked.length
+      ? amount(r.pending.filter((p) => picked.includes(p.journal_id)).reduce((s, p) => s + Number(p.amount), 0))
+      : "";
+  };
+  for (const box of $(container).querySelectorAll(".pending-check")) {
+    box.onchange = paintStatementBar;
+    box.onclick = (event) => event.stopPropagation();
+  }
+  for (const tr of $(container).querySelectorAll("tr[data-journal]")) {
+    if (tr.classList.contains("click")) tr.onclick = () => openJournal(tr.dataset.journal);
+  }
+  $(container).querySelector("[data-clear-selected]")?.addEventListener("click", async () => {
+    const picked = [...$(container).querySelectorAll(".pending-check:checked")].map((box) => box.dataset.clearJournal);
+    if (!picked.length) return;
+    try {
+      await write("POST", `${ledgerUrl()}/bank-accounts/${bank.account_id}/clearings`, { cleared_on: asOf, journal_ids: picked });
+      await refreshLedger();
+    } catch (error) {
+      showError(error);
+    }
+  });
+  paintStatementBar();
+
+  // A statement's unmatched lines are drafts to Suspense; posting them is the last step of importing it.
+  for (const button of $(container).querySelectorAll("[data-post-drafts]")) {
+    button.onclick = async () => {
+      try {
+        await write("POST", `${ledgerUrl()}/bank-statements/${button.dataset.postDrafts}/post-drafts`);
+        await refreshLedger();
+      } catch (error) {
+        showError(error);
+      }
+    };
+  }
+  for (const tr of $(container).querySelectorAll("tr[data-line-kind]")) {
+    tr.onclick = () => tr.dataset.lineJournal
+      ? openJournal(tr.dataset.lineJournal)
+      : tr.dataset.linePayment && openDocument(tr.dataset.lineKind, tr.dataset.linePayment);
   }
 }
 

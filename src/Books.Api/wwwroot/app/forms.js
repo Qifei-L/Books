@@ -364,7 +364,7 @@ async function paymentForm(type, doc) {
         <label data-rate>Exchange rate <input name="exchange_rate" inputmode="decimal" value="${doc?.exchange_rate ?? ""}" placeholder="rate of the date"></label>
         <label class="wide">Description <input name="doc_description" value="${esc(doc?.description ?? "")}"></label>
       </div>
-      <p class="muted small">Leave the account empty (or choose Accounts payable / receivable) to settle with the party; name an invoice to settle that one, otherwise the oldest open items are settled first.</p>
+      <p class="muted small">The category is what the money was for: leave it empty (or choose Accounts payable / receivable) to settle with the party, or choose an account for a direct payment or fee. Name an invoice to settle that one, otherwise the oldest open items are settled first.</p>
       <table class="lines"></table>
       <p><button type="button" class="secondary" data-add>Add line</button></p>
       <p id="form-totals" class="totals"></p>
@@ -377,7 +377,7 @@ async function paymentForm(type, doc) {
       </p>`);
     const invoiceOptions = (selected) => options(invoices.filter((i) => i.party === form.elements.party_id.value), selected, (i) => `${i.label} · ${i.date} · ${i.gross_total}`, "Oldest first");
     const columns = [
-      { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(lineAccounts, l?.kind === "account" ? l.account_id : l?.account_id, (a) => `${a.code} ${a.name}`, "Settle with party")}</select>` },
+      { name: "account_id", head: "Category", cell: (l) => `<select name="account_id">${options(lineAccounts, l?.kind === "account" ? l.account_id : l?.account_id, (a) => `${a.code} ${a.name}`, "Settle with party")}</select>` },
       { name: "invoice_id", head: "Invoice", cell: (l) => `<select name="invoice_id">${invoiceOptions(l?.invoice_id)}</select>` },
       { name: "description", head: "Description", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },
       { name: "amount", head: "Amount", num: true, cell: (l) => `<input name="amount" class="num" inputmode="decimal" value="${l?.amount ?? ""}">` },

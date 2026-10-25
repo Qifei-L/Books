@@ -16,14 +16,16 @@ async function renderParties() {
 
 async function renderBanks() {
   const banks = await api(`${ledgerUrl()}/bank-accounts`);
-  $("tab-banks").innerHTML = `
-    ${canEdit() ? `<p><button onclick="bankForm()">New bank account</button></p>` : ""}
-    ${banks.length ? `<table><tr><th>Account</th><th>Bank</th><th>Number</th><th>Currency</th></tr>
+  state.banks = banks;
+  setActions(canEdit() ? `<button onclick="bankForm()">New bank account</button>` : "");
+  $("tab-bank-settings").innerHTML = `
+    <p class="muted small">A bank account is an asset account in the chart with its bank details; that is what payments, receipts, transfers and statements use. A cash box is set up the same way with bank name “Cash”.</p>
+    ${banks.length ? `<table><tr><th>Account</th><th>Bank</th><th>Number</th><th>Currency</th><th></th></tr>
       ${banks.map((b) => `<tr ${canEdit() ? `class="click" data-bank="${b.account_id}"` : ""}><td>${esc(b.code)} ${esc(b.name)}</td><td>${esc(b.bank_name)}</td>
-        <td>${esc(b.account_number)}</td><td>${b.currency}</td></tr>`).join("")}</table>`
-      : `<p class="muted small">No bank accounts yet. Create an asset account in the chart first, then mark it as a bank here.</p>`}
-    <p class="muted small">Money moved between these accounts is under <b>Cash and bank</b>, with payments and receipts.</p>`;
-  for (const tr of $("tab-banks").querySelectorAll("tr[data-bank]")) tr.onclick = () => bankForm(banks.find((b) => b.account_id === tr.dataset.bank));
+        <td>${esc(b.account_number)}</td><td>${b.currency}</td><td class="muted small">${b.currency === state.ledger.base_currency ? "base currency" : "foreign currency"}</td></tr>`).join("")}</table>`
+      : `<p class="muted small">No bank or cash accounts yet. ${canEdit() ? "Create one with <b>New bank account</b>; it can also create the asset account in the chart." : "An administrator can add one here."}</p>`}
+    <p class="muted small">Editing a bank account changes its bank name and number only. Its currency is fixed once set, and an account already used in the ledger cannot become a foreign-currency account.</p>`;
+  for (const tr of $("tab-bank-settings").querySelectorAll("tr[data-bank]")) tr.onclick = () => bankForm(banks.find((b) => b.account_id === tr.dataset.bank));
 }
 
 async function renderTaxCodes() {
@@ -102,20 +104,43 @@ const orNull = (v) => (v.trim() === "" ? null : v.trim());
 async function bankForm(b) {
   const accounts = await api(`${ledgerUrl()}/accounts`);
   const candidates = accounts.filter((a) => a.type === "assets" && a.postable && !a.is_control && !a.is_bank && a.usages.length === 0);
-  simpleForm(b ? `Edit ${b.code} ${b.name}` : "New bank account", `
-    ${b ? "" : `<label class="wide">Account <select name="account_id">${options(candidates, null, (a) => `${a.code} ${a.name}`, "Choose an asset account")}</select></label>
+  const form = simpleForm(b ? `Edit ${b.code} ${b.name}` : "New bank account", `
+    ${b ? "" : `<label class="wide">Chart account <select name="account_id">
+        ${candidates.map((a) => `<option value="${a.id}">${esc(a.code)} ${esc(a.name)}</option>`).join("")}
+        <option value="__new" ${candidates.length ? "" : "selected"}>Create a new asset account…</option>
+      </select></label>
+      <div class="grid" id="bank-new-account" ${candidates.length ? "hidden" : ""}>
+        <label>Code <input name="code" placeholder="1130"></label>
+        <label class="wide">Name <input name="name" placeholder="ABA Bank EUR"></label>
+      </div>
       <label>Currency <select name="currency">${[...new Set([state.ledger.base_currency, "USD", "KHR"])].map((c) => `<option>${c}</option>`).join("")}</select></label>`}
     <label>Bank <input name="bank_name" value="${esc(b?.bank_name ?? "")}" required></label>
     <label>Account number <input name="account_number" value="${esc(b?.account_number ?? "")}"></label>`,
   async (f) => {
     if (!orNull(f.bank_name.value)) throw new Error("Bank is required.");
     const url = `${ledgerUrl()}/bank-accounts`;
-    if (b) await write("PUT", `${url}/${b.account_id}`, { bank_name: f.bank_name.value.trim(), account_number: orNull(f.account_number.value) }, b.version);
-    else {
-      if (!f.account_id.value) throw new Error("Choose the account; create it in the chart first if it does not exist.");
-      await write("POST", url, { account_id: f.account_id.value, bank_name: f.bank_name.value.trim(), account_number: orNull(f.account_number.value), currency: f.currency.value });
+    if (b) {
+      await write("PUT", `${url}/${b.account_id}`, { bank_name: f.bank_name.value.trim(), account_number: orNull(f.account_number.value) }, b.version);
+      return;
     }
-  }, `<p class="muted small">A bank account is an asset account in the chart, marked as a bank so payments, receipts and statements can use it. Its currency is fixed once set; an account already posted to in ${state.ledger.base_currency} cannot become a foreign-currency account.</p>`);
+    let accountId = f.account_id.value;
+    if (accountId === "__new") {
+      const code = f.code.value.trim();
+      const name = f.name.value.trim();
+      if (!code || !name) throw new Error("Give the new chart account a code and a name.");
+      const created = await write("POST", `${ledgerUrl()}/accounts`, { code, name, type: "assets" });
+      accountId = created.data.id;
+    }
+    if (!accountId) throw new Error("Choose the chart account, or create one.");
+    await write("POST", url, { account_id: accountId, bank_name: f.bank_name.value.trim(), account_number: orNull(f.account_number.value), currency: f.currency.value });
+  }, `<p class="muted small">A bank account is an asset account in the chart, marked as a bank so payments, receipts and statements can use it. Its currency is fixed once set; an account already posted to in ${state.ledger.base_currency} cannot become a foreign-currency account. Creating a new account here adds it to the chart as an Assets account.</p>`);
+  if (!b) {
+    const select = form.elements.account_id;
+    const fresh = form.querySelector("#bank-new-account");
+    const toggle = () => fresh?.classList.toggle("hidden", select.value !== "__new");
+    select.onchange = toggle;
+    toggle();
+  }
 }
 
 async function transferForm(t) {

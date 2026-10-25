@@ -112,6 +112,9 @@ tr.click:hover td { background: #f3f6fe; }
 .pill { font-size: 11px; padding: 0 7px; border-radius: 9px; border: 1px solid var(--line); color: var(--muted); }
 .pill.posted { color: #1e6b3a; border-color: #b7dfc4; }
 .pill.draft { color: var(--warn); border-color: #f0d79a; }
+/* The type of a merged bank transaction: Payment, Receipt or Transfer. It is a label, not a status. */
+.type-tag { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.type-tag.transfer { color: var(--accent); }
 .issue { color: var(--muted); }
 .warning { background: var(--warn-bg); color: var(--warn); padding: 6px 10px; border-radius: 6px; margin: 6px 0; }
 .error { color: var(--bad); }
@@ -143,7 +146,7 @@ table.lines input.num { text-align: right; min-width: 70px; }
 .chip button { background: none; border: none; color: var(--muted); padding: 0 4px; font-size: 14px; line-height: 1; border-radius: 50%; }
 .chip button:hover { color: var(--bad); background: none; }
 .combo { position: relative; display: inline-block; }
-.combo input { min-width: 190px; }
+.combo input { min-width: 170px; }
 .combo-list { position: absolute; z-index: 20; top: 100%; left: 0; min-width: 100%; max-height: 260px; overflow-y: auto; background: #fff; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 18px rgba(20, 30, 60, .12); margin-top: 2px; }
 .combo-list button { display: block; width: 100%; text-align: left; background: #fff; border: none; border-radius: 0; color: var(--ink); padding: 6px 10px; font-size: 13.5px; white-space: nowrap; }
 .combo-list button:hover, .combo-list button:focus { background: #f2f5fb; }
@@ -190,6 +193,9 @@ tr:hover .row-menu-btn { visibility: visible; }
 .cell-clip { display: inline; }
 /* A narrow window shrinks the text columns and the party column; the table stops overflowing. */
 table.list { max-width: 100%; }
+/* The bank list has fixed columns and a party column that takes the rest: seven kinds of money movement
+   plus a description do not fit an auto-laid table at every width. */
+table.list.bank { table-layout: fixed; width: 100%; }
 table.list td, table.list th { overflow: hidden; }
 /* A narrower window drops the wide, secondary columns before the table would scroll sideways.
    (A container query would be more precise, but `container-type` breaks the sticky header.) */
@@ -198,6 +204,7 @@ table.list td, table.list th { overflow: hidden; }
 }
 @media (max-width: 1120px) {
   table.list .col-fx { display: none; }
+  table.list.bank .col-category { display: none; }
   table.list td, table.list th { padding-left: 6px; padding-right: 6px; font-size: 13px; }
 }
 @media (max-width: 960px) {
@@ -210,7 +217,7 @@ th.sortable .caret { font-size: 9px; margin-left: 4px; color: var(--accent); }
 th.sorted { color: var(--ink); }
 .filter-bar .spacer { flex: 1 1 24px; }
 /* The list's primary action sits with the filters, at the left, where Manager.io keeps it. */
-.filter-bar .new-doc { align-self: flex-end; padding: 5px 12px; font-size: 13px; margin-right: 4px; white-space: nowrap; }.filter-bar .search { flex: 1 1 240px; }
+.filter-bar .new-doc { align-self: flex-end; padding: 5px 12px; font-size: 13px; margin-right: 4px; white-space: nowrap; }.filter-bar .search { flex: 1 1 180px; max-width: 240px; }
 .filter-bar .search input { width: 100%; }
 
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 2px 0 16px; }
@@ -218,8 +225,15 @@ th.sorted { color: var(--ink); }
 .tabs button:hover { color: var(--ink); background: none; }
 .tabs button.active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
 .tabs-meta { margin-left: auto; align-self: center; font-size: 12px; color: var(--muted); padding-bottom: 4px; }
+/* A list without Posted/Draft tabs says the same thing in one quiet line: what is shown, and how many
+   drafts are not in the books. */
+.list-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 2px 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .tabs .count { font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; margin-left: 5px; }
 .tabs button.active .count { color: var(--ink); }
+/* Statements: one imported statement per block, with its own counts and lines. */
+.statement { margin: 0 0 18px; }
+.statement-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 6px; }
+.statement-head .muted { display: block; font-size: 12px; }
 /* A month group and its subtotal, and the action bar that appears with a selection. */
 tr.group-head td { background: #eef2f8; font-weight: 600; font-size: 13px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 tr.subtotal td { background: #fafbfc; font-weight: 600; border-bottom: 1px solid var(--line); }
