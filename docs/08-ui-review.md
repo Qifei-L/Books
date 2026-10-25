@@ -1,18 +1,19 @@
 # UI review notes (2026-10-25)
 
-Where the preview app stands after the shell, Sales, Purchases, Cash and bank, Business parties, the chart and
-tax settings, and the shared list work, what was decided on the way, and what is deliberately still missing.
-Branch `ui/sales-pages`, pull request #98 against `main`. The app change is confined to
-`src/Books.Api/wwwroot/app`: `app.js`, `index.html`, `app.css`, `forms.js`, `setup.js`, `list.js`.
+Where the preview app stands after the shell, Sales, Purchases, Cash and bank, Inventory, Business parties, the
+chart and tax settings, and the shared list work, what was decided on the way, and what is deliberately still
+missing. Branch `ui/sales-pages`, pull request #98 against `main`. The app change is confined to
+`src/Books.Api/wwwroot/app`: `app.js`, `index.html`, `app.css`, `forms.js`, `setup.js`, `inventory.js`,
+`stock.js`, `list.js`.
 
 ## Shape
 
 | Level | What it is |
 | --- | --- |
 | Shell | A fixed bar (organization, company, period, user), a grouped sidebar, one scrolling page with a title and a one-line purpose, and the page action at the right of that title |
-| Modules | A module opens into its own pages and stays open while one of them is shown. Sales: Invoices, Credit notes, Reports, Settings. Purchases: Invoices, Debit notes, Reports. Cash and bank: Transactions, Statements |
+| Modules | A module opens into its own pages and stays open while one of them is shown. Sales: Invoices, Credit notes, Reports, Settings. Purchases: Invoices, Debit notes, Reports. Cash and bank: Transactions, Statements. Inventory: Stock on hand, Adjustments, Transfers, Assemblies |
 | Pages | One list, one job. `PAGES` holds the title, the purpose and the render function; a page renders the first time it is opened and a save re-reads only the open page |
-| Lists | Two renderers: `renderDocList` for the five document lists, and the simpler `renderSimpleList` for master data. `DOC_KINDS` says the path or loader, the party, the amount columns, the extra columns, the row cells and which dialog opens; `SIMPLE_KINDS` says the columns and the form a row opens |
+| Lists | Two renderers: `renderDocList` for the eight document lists, and the simpler `renderSimpleList` for master data. `DOC_KINDS` says the path or loader, the party, the amount columns, the extra columns, the row cells and which dialog opens; `SIMPLE_KINDS` says the columns and the form a row opens |
 | Records | Business parties. A business party is the one record behind both a customer and a supplier |
 | Books and tax | Chart of accounts holds the accounts and their bank/cash details; Tax return holds the month's return and the tax codes behind it |
 
@@ -43,6 +44,12 @@ filter, a status filter, search and sortable columns; the footer counts the reco
 form. The business party is the one record behind both a customer and a supplier, which is why the page is
 not called "Customers and suppliers".
 
+Inventory documents are three more lists: Stock adjustments show their items and Value, Stock transfers show
+the two locations and their Items and Quantity (no currency), and Assemblies show the made item, its
+Quantity, Components and Value. None has Posted/Draft tabs: a draft adjustment carries its status in the row
+and the draft warning, a transfer and an assembly are posted when saved. The rows open a detail, and the row
+menu still offers Delete; adjustments also have Edit and the Stock adjustment / Stock count menu.
+
 ## Decisions worth knowing
 
 - **Bank transactions are one list for one account.** Payments, receipts and transfers answer one question —
@@ -68,6 +75,11 @@ not called "Customers and suppliers".
 - **Tax codes live with the tax return.** The separate Records > Tax codes page is gone: the month's return
   and the codes that feed it are one page, because a rate or account change is made next to the figures it
   changes. Administrators still get New tax code and the code form from that page.
+- **Inventory is four pages.** Stock on hand keeps the report, the items and the locations (with stock by
+  location); the three documents have their own pages. Stock adjustments are the only ones with drafts, so
+  they show the draft warning; transfers and assemblies are posted when saved. Quantity and Value use
+  ordinary cells instead of the document lists' net/VAT/gross: a transfer's amount column is Quantity, and
+  an assembly carries both a Quantity and a Value.
 - **Customers and suppliers are business parties.** One record serves both roles, because a company can be
   both; the page, the new button and the form call it a business party, while the role checkboxes still say
   Customer and Supplier. The list is the first user of the simple master-data variant: search, role and
@@ -106,23 +118,29 @@ not called "Customers and suppliers".
 - The Chart of accounts form creates and edits accounts and their bank details, but groups and usages still
   have no editor, and an unused account can only be deleted through the API. Tax codes keep their own form
   inside the Tax return page.
+- Inventory items, categories and locations are still on the Stock on hand page, not separate master-data
+  pages; an item's category has no editor yet. A bill of materials is still set through the API or AI (the
+  handoff's open question); assemblies can be made but not edited, and deleting one removes its journal.
 
 ## Where the code lives
 
 `wwwroot/app/list.js` holds everything the lists share. `DOC_KINDS` and `renderDocList` cover the document
 lists: the period presets, filter state, column choice and order, sorting, paging, grouping, selection and the
 row menu. A kind can also supply a `load` (one endpoint or several), `facets` (the type and bank account
-filters), `extraColumns` and `cells` (a category, a bank account, a type), `pathOf` and `nounOf` (a merged
-list deletes and labels the right document), and `tabs: false` for a list that shows posted and draft
-together. `SIMPLE_KINDS` and `renderSimpleList` are the master-data variant: fixed columns, search, a role or
-status filter, sortable headers, a row count and a form from the row.
+filters), `extraColumns` and `cells` (a category, a bank account, a quantity, a component list), `pathOf` and
+`nounOf` (a merged list deletes and labels the right document), `amountHeader` and `formatTotal` (a quantity
+instead of money), `noEdit` for a document that is posted on save, and `tabs: false` for a list that shows
+posted and draft together. `SIMPLE_KINDS` and `renderSimpleList` are the master-data variant: fixed columns,
+search, a role or status filter, sortable headers, a row count and a form from the row.
 
 `app.js` keeps the page registry, the dialogs and the reports, plus the Statements page
 (`renderBankStatements`), the Chart of accounts and its account form (`renderChart`, `accountForm`), and the
-Tax return with its tax code section (`renderTax`). `setup.js` keeps the settings pages, the transfer form
+Tax return with its tax code section (`renderTax`). `inventory.js` keeps the Stock on hand page, the stock
+adjustment form and the item and movement dialogs; `stock.js` keeps locations, stock by location, the
+transfer and assembly forms and their detail dialogs. `setup.js` keeps the settings pages, the transfer form
 and the tax code form; `forms.js` keeps the document forms, including the payment/receipt category picker and
-the business party form. A new document list adds one `DOC_KINDS` entry and one page entry; a new
-master-data list adds one `SIMPLE_KINDS` entry and one page entry.
+the business party form. A new document list adds one `DOC_KINDS` entry and one page entry; a new master-data
+list adds one `SIMPLE_KINDS` entry and one page entry.
 
 ## Running the tests on this machine
 
@@ -170,6 +188,11 @@ sample data.
 - Business parties: search looks in the name, tax ID, contact, email, phone and address; the role and status
   filters combine; the header sorts; the row count is not a total. A save or delete clears the cached list
   and re-reads the open page, like the document lists.
+- Inventory: the three documents are ordinary `DOC_KINDS` entries with `tabs: false`. Adjustments show
+  Items and Value and keep the draft warning; transfers show Items and a Quantity total with no currency;
+  assemblies show Quantity, Components and Value. A row opens its detail; adjustments also offer Edit,
+  while transfers and assemblies are posted on save and only delete. Items and locations stay on Stock on
+  hand with their forms and stock by location.
 - `showTab` and `PAGES.actions`: header actions are remembered per page so returning to a rendered page
   restores them without rendering again.
 - `openRowMenu`: closes on the next click elsewhere; Delete sends `If-Match` through `write`, and a merged
@@ -191,19 +214,17 @@ sample data.
 
 ## Next slices, as agreed with the owner (2026-10-25)
 
-The list component in `list.js` now covers the four sales and purchase lists, the bank transactions list and
-the business parties simple list. The owner's picks for what to convert next, and what each one needs from
-the component:
+The list component in `list.js` now covers the four sales and purchase lists, the bank transactions list,
+the three inventory document lists and the business parties simple list. The owner's picks for what to
+convert next, and what each one needs from the component:
 
 | Module | Pages to build | What `list.js` needs first |
 | --- | --- | --- |
-| Inventory | Stock adjustments, Stock transfers, Assemblies (the three documents); Items, categories and locations stay master data | A page without Posted/Draft tabs; cells for quantity and value instead of net/VAT/gross |
 | Payroll | Pay runs, plus an employees list the owner asked for | A page without tabs; a row count column |
 | Fixed assets | Depreciation runs; the asset register | No tabs; a period column |
 | Journals | Journals with drafts and posted, editable | No tabs; a revision column |
 | Master data | Groups, usages and members (accounts and bank details are in the Chart of accounts; business parties is done, tax codes are in the Tax return) | The simple list now exists; each remaining page needs its own form and, if wanted, typing in cells |
 
-Order agreed: Business parties is done, and so are the chart/bank and tax-return/code merges; Inventory is
-next, then the rest. Cash and bank is done too: its list needed a custom loader, a category column, row cells
-that are not amount keys, and a variant without the Posted/Draft tabs, and those exist. What remains for the
-rows above is mostly the quantity/value cells and the rest of the master data.
+Order agreed: Cash and bank, Business parties and Inventory are done; Payroll comes next, then the rest.
+What remains for the rows above is mostly the quantity/value cells, which now exist, and the rest of the
+master data.
