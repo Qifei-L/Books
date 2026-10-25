@@ -294,7 +294,12 @@ const NAV = [
     { id: "payroll", label: "Payroll" },
   ] },
   { group: "Stock and assets", items: [
-    { id: "inventory", label: "Inventory" },
+    { id: "inventory", label: "Inventory", children: [
+      { id: "inventory-stock", label: "Stock on hand" },
+      { id: "inventory-adjustments", label: "Adjustments" },
+      { id: "inventory-transfers", label: "Transfers" },
+      { id: "inventory-assemblies", label: "Assemblies" },
+    ] },
     { id: "assets", label: "Fixed assets" },
   ] },
   { group: "Records", items: [
@@ -348,7 +353,10 @@ const PAGES = {
   "bank-transactions": { title: "Bank transactions", sub: "Cash and bank · payments, receipts and transfers for one account, with money in and out", render: () => renderDocList("transaction") },
   "bank-statements": { title: "Statements", sub: "Cash and bank · the bank's balance against the books, and the lines behind it", render: () => renderBankStatements() },
   payroll: { title: "Payroll", sub: "Pay runs received from the payroll system; Books does not calculate pay", render: () => renderPayroll() },
-  inventory: { title: "Inventory", sub: "Stock on hand, adjustments, locations, transfers and assemblies", render: () => renderInventory() },
+  "inventory-stock": { title: "Stock on hand", sub: "Inventory · quantities, items and locations", render: () => renderInventoryStock() },
+  "inventory-adjustments": { title: "Stock adjustments", sub: "Inventory · write-offs, stock found and counts", render: () => renderDocList("stock_adjustment") },
+  "inventory-transfers": { title: "Stock transfers", sub: "Inventory · quantities moved between locations", render: () => renderDocList("stock_transfer") },
+  "inventory-assemblies": { title: "Assemblies", sub: "Inventory · items made from a bill of materials", render: () => renderDocList("assembly") },
   assets: { title: "Fixed assets", sub: "The register and monthly depreciation", render: () => renderAssets() },
   parties: { title: "Business parties", sub: "Records · customers and suppliers are one business party, with tax ID and payment terms", render: () => renderSimpleList("party") },
   journals: { title: "Journals", sub: "Every posting, with its revision and its source document", render: () => renderJournals() },

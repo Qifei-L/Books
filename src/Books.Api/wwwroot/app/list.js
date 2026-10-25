@@ -137,6 +137,93 @@ const DOC_KINDS = {
     open: (d, c) => (d.doc_kind === "transfer" ? showTransfer(d) : showPayment(d, c.nameOf)),
     edit: (d) => (d.doc_kind === "transfer" ? transferForm(d) : editPayment(d.doc_kind, d.id)),
   },
+  // Stock adjustments and counts: no Posted/Draft tabs, status in the row. The Value column is money; the
+  // Items column is the quantity side, which is not summed across units.
+  stock_adjustment: {
+    path: "stock-adjustments", container: "inventory-adjustments", noun: "stock adjustment", plural: "stock adjustments", prefix: "SA",
+    numberKey: "adjustment_no", newLabel: "New adjustment",
+    newMenu: [
+      { label: "Stock adjustment", run: () => adjustmentForm() },
+      { label: "Stock count", run: () => adjustmentForm(null, true) },
+    ],
+    filterParty: false, partyLabel: "Adjustment",
+    hide: BANK_HIDDEN, extra: "none", tabs: false, hideGroup: true, searchHint: "SA, reference, item, description, value",
+    amounts: [{ key: "total_value", label: "Value" }],
+    columnOrder: ["party", "date", "reference", "lines", "amount", "status", "description"],
+    columnDefaults: ["description"],
+    extraColumns: {
+      lines: { label: "Items", always: true, sortable: true, w: "250px", value: (d, c) => (d.lines ?? []).map((l) => c.itemName(l.item_id)).join(" ").toLowerCase() },
+    },
+    cells: {
+      party: (d, c) => stockAdjustmentIdentity(d, c),
+      lines: (d, c) => stockAdjustmentLines(d, c),
+    },
+    load: async () => {
+      const [docs, items] = await Promise.all([api(`${ledgerUrl()}/stock-adjustments`), api(`${ledgerUrl()}/items`)]);
+      return { docs, items };
+    },
+    searchText: (d, c) => [d.description, d.reference, ...(d.lines ?? []).map((l) => `${c.itemName(l.item_id)} ${l.description ?? ""}`)].join(" "),
+    open: (d, c) => showAdjustment(d, c.itemName),
+    edit: (d) => editAdjustment(d.id),
+  },
+  // Stock transfers move quantity only, so the value column is Quantity, formatted without a currency.
+  stock_transfer: {
+    path: "stock-transfers", container: "inventory-transfers", noun: "stock transfer", plural: "stock transfers", prefix: "ST",
+    numberKey: "transfer_no", newLabel: "New transfer", newAction: "transferStockForm()",
+    filterParty: false, partyLabel: "Transfer",
+    hide: BANK_HIDDEN, extra: "none", tabs: false, hideGroup: true, searchHint: "ST, item, location, reference",
+    amounts: [{ key: "quantity", label: "Quantity" }], amountHeader: "Quantity",
+    formatTotal: (total) => quantityText(total),
+    columnOrder: ["party", "date", "reference", "items", "amount", "status", "description"],
+    columnDefaults: ["description"],
+    extraColumns: {
+      items: { label: "Items", always: true, sortable: true, w: "230px", value: (d, c) => (d.lines ?? []).map((l) => c.itemName(l.item_id)).join(" ").toLowerCase() },
+    },
+    cells: {
+      party: (d, c) => stockTransferIdentity(d, c),
+      items: (d, c) => stockTransferLines(d, c),
+      amount: (d) => quantityText(d.quantity),
+    },
+    load: async () => {
+      const [docs, items, locations] = await Promise.all([
+        api(`${ledgerUrl()}/stock-transfers`), api(`${ledgerUrl()}/items`), api(`${ledgerUrl()}/locations`),
+      ]);
+      return {
+        docs: docs.map((d) => ({ ...d, quantity: d.lines.reduce((total, l) => total + Number(l.quantity), 0) })),
+        items, locations,
+      };
+    },
+    searchText: (d, c) => [d.reference, d.description, c.locationName(d.from_location_id), c.locationName(d.to_location_id),
+      ...(d.lines ?? []).map((l) => c.itemName(l.item_id))].join(" "),
+    open: (d, c) => showStockTransfer(d, c.itemName, c.locationName),
+    noEdit: true,
+  },
+  // Assemblies are posted when made: the row is the made item, its quantity and components, and the value.
+  assembly: {
+    path: "assemblies", container: "inventory-assemblies", noun: "assembly", plural: "assemblies", prefix: "AS",
+    numberKey: "assembly_no", newLabel: "Make assembly", newAction: "assemblyForm()",
+    filterParty: false, partyLabel: "Assembly",
+    hide: BANK_HIDDEN, extra: "none", tabs: false, hideGroup: true, searchHint: "AS, item, component, reference",
+    amounts: [{ key: "value", label: "Value" }],
+    columnOrder: ["party", "date", "reference", "quantity", "components", "amount", "status", "description"],
+    columnDefaults: ["description"],
+    extraColumns: {
+      quantity: { label: "Quantity", num: true, always: true, sortable: true, noTotal: true, w: "100px", value: (d) => Number(d.quantity) },
+      components: { label: "Components", always: true, sortable: true, w: "250px", value: (d, c) => (d.components ?? []).map((x) => c.itemName(x.component_id)).join(" ").toLowerCase() },
+    },
+    cells: {
+      party: (d, c) => assemblyIdentity(d, c),
+      quantity: (d) => quantityText(d.quantity),
+      components: (d, c) => assemblyComponents(d, c),
+    },
+    load: async () => {
+      const [docs, items] = await Promise.all([api(`${ledgerUrl()}/assemblies`), api(`${ledgerUrl()}/items`)]);
+      return { docs, items };
+    },
+    searchText: (d, c) => [d.reference, d.description, c.itemName(d.item_id), ...(d.components ?? []).map((x) => c.itemName(x.component_id))].join(" "),
+    open: (d, c) => showAssembly(d, c.itemName),
+    noEdit: true,
+  },
 };
 
 const DOC_PRESETS = ["this-month", "last-month", "this-quarter", "this-year", "last-year", "custom"];
@@ -244,6 +331,11 @@ const bankLabel = (id) => {
   return b ? `${b.code} ${b.name}` : "";
 };
 const bankCurrency = (id) => bankOf(id)?.currency ?? state.ledger?.base_currency;
+// Quantities are not money: no currency decimals, but up to four places for a fraction of a unit.
+const quantityText = (value) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: 4 }) : String(value ?? "");
+};
 const bankCell = (id) => {
   const b = bankOf(id);
   if (!b) return "";
@@ -296,6 +388,39 @@ const transactionBankCell = (d) => {
     <div class="cell-sub">${d.direction === "in" ? "←" : "→"} ${esc(other)}</div>`;
 };
 
+// ---- Inventory rows ----
+const stockAdjustmentIdentity = (d, c) => {
+  const names = (d.lines ?? []).map((l) => c.itemName(l.item_id)).filter(Boolean);
+  const name = d.description || names.slice(0, 2).join(", ") || "Stock adjustment";
+  const reference = !c.chosen.has("reference") && d.reference ? ` · ${esc(d.reference)}` : "";
+  return `<div class="cell-main"><span class="cell-clip" title="${esc(name)}">${esc(name)}</span></div>
+    <div class="cell-sub">${d.date}${reference}</div>`;
+};
+const stockAdjustmentLines = (d, c) => {
+  const parts = (d.lines ?? []).map((l) => `${c.itemName(l.item_id)} ${quantityText(l.quantity)}`);
+  return `<span class="cell-clip" title="${esc(parts.join("; "))}">${esc(parts.join("; "))}</span>`;
+};
+const stockTransferIdentity = (d, c) => {
+  const name = `${c.locationName(d.from_location_id)} → ${c.locationName(d.to_location_id)}`;
+  const reference = !c.chosen.has("reference") && d.reference ? ` · ${esc(d.reference)}` : "";
+  return `<div class="cell-main"><span class="cell-clip" title="${esc(name)}">${esc(c.locationName(d.from_location_id))} <span class="muted">→</span> ${esc(c.locationName(d.to_location_id))}</span></div>
+    <div class="cell-sub">${d.date}${reference}</div>`;
+};
+const stockTransferLines = (d, c) => {
+  const parts = (d.lines ?? []).map((l) => c.itemName(l.item_id));
+  return `<span class="cell-clip" title="${esc(parts.join("; "))}">${esc(parts.join("; "))}</span>`;
+};
+const assemblyIdentity = (d, c) => {
+  const name = c.itemName(d.item_id) || "Assembly";
+  const reference = !c.chosen.has("reference") && d.reference ? ` · ${esc(d.reference)}` : "";
+  return `<div class="cell-main"><span class="cell-clip" title="${esc(name)}">${esc(name)}</span></div>
+    <div class="cell-sub">${d.date}${reference}</div>`;
+};
+const assemblyComponents = (d, c) => {
+  const parts = (d.components ?? []).map((x) => `${c.itemName(x.component_id)} ${quantityText(x.quantity)}`);
+  return `<span class="cell-clip" title="${esc(parts.join("; "))}">${esc(parts.join("; "))}</span>`;
+};
+
 async function loadDocData(k) {
   if (k.load) return k.load();
   const [docs, counterparts, parties] = await Promise.all([
@@ -323,9 +448,13 @@ async function renderDocList(kind) {
   const counterparts = data.counterparts ?? [];
   const parties = data.parties ?? [];
   const banks = data.banks ?? state.banks ?? [];
+  const items = data.items ?? [];
+  const locations = data.locations ?? [];
   if (data.banks) state.banks = banks;
   const nameOf = (id) => parties.find((p) => p.id === id)?.name ?? "";
   const partyName = (d) => d.party_label ?? (k.partyText ? k.partyText(d) : nameOf(d[k.partyKey]));
+  const itemName = (id) => items.find((i) => i.id === id)?.name ?? "";
+  const locationName = (id) => locations.find((l) => l.id === id)?.name ?? "";
   const counterpartNo = (id) => counterparts.find((c) => c.id === id)?.invoice_no ?? "";
   const khr = (d) => (d.tax_currency ? `${money(d.tax_currency.gross_total, "KHR")} ៛` : "");
   const sum = (list, key) => list.reduce((s, d) => s + Number(d[key] ?? 0), 0).toFixed(2);
@@ -339,7 +468,7 @@ async function renderDocList(kind) {
   const currencyOf = k.currencyOf ?? (() => currency);
   const amountKey = k.amounts[k.amounts.length - 1].key;
   const amountLabel = k.amounts[k.amounts.length - 1].label;
-  const ctx = { docs, parties, counterparts, banks, nameOf, partyName, chosen, numberOf, currencyOf, amountKey, amountLabel };
+  const ctx = { docs, parties, counterparts, banks, items, locations, itemName, locationName, nameOf, partyName, chosen, numberOf, currencyOf, amountKey, amountLabel };
   const facets = f.facets ??= {};
   const facetDefs = (k.facets ?? []).map((def) => ({ ...def, options: def.options(ctx) }));
   // A required facet is a choice, not a filter: the page always works on one bank account and never adds
@@ -351,6 +480,7 @@ async function renderDocList(kind) {
   const facetLabel = (def, value) => def.options.find((o) => o.value === value)?.label ?? value;
   const activeFacets = facetDefs.filter((def) => !def.required && facetValue(def));
   const amountTotal = (list, key = amountKey, separator = "<br>") => {
+    if (k.formatTotal) return k.formatTotal(sum(list, key));
     if (!k.currencyOf) return money(sum(list, key));
     const groups = new Map();
     for (const d of list) {
@@ -403,7 +533,7 @@ async function renderDocList(kind) {
     reference: { label: "Reference", sortable: true, w: "132px" },
     ...Object.fromEntries(k.amounts.slice(0, -1).map((a) => [a.key, { label: a.label, sortable: true, num: true, always: !!a.always, w: a.w ?? "84px" }])),
     other_tax_total: { label: "Other tax", sortable: true, num: true, w: "84px" },
-    amount: { label: k.currencyOf ? amountLabel : `${amountLabel} (${currency})`, always: true, sortable: true, num: true, valueKey: amountKey, w: k.amountWidth ?? "116px" },
+    amount: { label: k.amountHeader ?? (k.currencyOf ? amountLabel : `${amountLabel} (${currency})`), always: true, sortable: true, num: true, valueKey: amountKey, w: k.amountWidth ?? "116px" },
     fx: { label: "Currency", sortable: true, w: "84px" },
     khr: { label: "KHR", sortable: true, num: true, w: "112px" },
     status: { label: "Status", always: true, sortable: true, w: k.statusWidth ?? "80px" },
@@ -905,7 +1035,7 @@ async function renderDocList(kind) {
       openRowMenu(button, [
         { label: "Open", run: () => openDoc(doc) },
         ...((k.canPrint ?? k.side === "sale") ? [{ label: "Print PDF", run: () => openPdf(`${k.path}/${doc.id}/pdf`) }] : []),
-        ...(canEdit() ? [{ label: "Edit", run: () => (k.edit ? k.edit(doc, ctx) : editDocument(k.side, doc.type, doc.id)) }] : []),
+        ...(canEdit() && !k.noEdit ? [{ label: "Edit", run: () => (k.edit ? k.edit(doc, ctx) : editDocument(k.side, doc.type, doc.id)) }] : []),
         ...(canEdit() ? [{
           label: "Delete", danger: true, run: async () => {
             if (!confirm(`Delete ${nounOf(doc)} ${numberOf(doc)}?${doc.status === "posted" ? " Its journal is removed too." : ""}`)) return;
