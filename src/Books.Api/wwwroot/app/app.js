@@ -598,6 +598,9 @@ function docColumnOrder(kind, all) {
   return state.docOrder[kind];
 }
 const docDensity = () => (state.density ??= "comfortable");
+const groupByMonth = (kind) => ((state.groupByMonth ??= {})[kind] ??= false);
+const docSelection = (kind) => ((state.selection ??= {})[kind] ??= new Set());
+const monthLabel = (key) => new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${key}-01T00:00:00Z`));
 const colsOpen = (kind) => ((state.colsOpen ??= {})[kind] ??= false);
 const docPageSize = () => (state.pageSize ??= 50);
 const overdueDays = (d) => Math.floor((new Date(today()) - new Date(d.due_date)) / 86400000);
@@ -625,7 +628,7 @@ async function renderDocList(kind) {
   const counterpartNo = (id) => counterparts.find((c) => c.id === id)?.invoice_no ?? "";
   const khr = (d) => (d.tax_currency ? `${money(d.tax_currency.gross_total, "KHR")} ៛` : "");
   const sum = (list, key) => list.reduce((s, d) => s + Number(d[key] ?? 0), 0).toFixed(2);
-  const ids = { filter: `${k.container}-filter`, tabs: `${k.container}-tabs`, party: `${k.container}-party`, list: `${k.container}-party-list`, search: `${k.container}-search`, cols: `${k.container}-cols`, colsMenu: `${k.container}-cols-menu`, density: `${k.container}-density` };
+  const ids = { filter: `${k.container}-filter`, tabs: `${k.container}-tabs`, party: `${k.container}-party`, list: `${k.container}-party-list`, search: `${k.container}-search`, cols: `${k.container}-cols`, colsMenu: `${k.container}-cols-menu`, density: `${k.container}-density`, group: `${k.container}-group`, bar: `${k.container}-bar`, selectAll: `${k.container}-selectall` };
 
   const inPeriod = docs.filter((d) => d.status !== "deleted");
   const inRange = inPeriod.filter((d) => d.date >= range.from && d.date <= range.to);
@@ -689,14 +692,16 @@ async function renderDocList(kind) {
     journal: { label: "Journal No.", sortable: true, w: "110px" },
   };
   const order = docColumnOrder(kind, Object.keys(META));
-  const columns = order
-    .filter((key) => META[key] && (META[key].always || chosen.has(key)))
-    .map((key) => ({ key, ...META[key] }))
+  const columns = [{ key: "select", label: "", w: "34px" }]
+    .concat(order
+      .filter((key) => META[key] && (META[key].always || chosen.has(key)))
+      .map((key) => ({ key, ...META[key] })))
     .concat([{ key: "menu", label: "", w: "46px" }]);
 
   const header = columns.map((c) => {
     const cls = [c.num ? "num" : "", c.sortable ? "sortable" : "", c.sortable && sort.key === c.key ? "sorted" : ""].filter(Boolean).join(" ");
     const caret = c.sortable && sort.key === c.key ? `<span class="caret">${sort.dir === "asc" ? "▲" : "▼"}</span>` : "";
+    if (c.key === "select") return `<th style="width:${c.w}"><input type="checkbox" id="${ids.selectAll}" title="Select all on this page"></th>`;
     return `<th class="${cls}" ${c.sortable ? `data-sort="${c.key}"` : ""}${c.w ? ` style="width:${c.w}"` : ""}>${c.label}${caret}</th>`;
   }).join("");
 
@@ -707,6 +712,7 @@ async function renderDocList(kind) {
     // list; the reference joins the second line only while it has no column of its own.
     const reference = chosen.has("reference") ? esc(d.reference ?? "") : "";
     return {
+      select: `<input type="checkbox" class="row-check" data-select="${d.id}" ${docSelection(kind).has(d.id) ? "checked" : ""}>`,
       party: `<div class="cell-main"><span class="cell-clip" title="${esc(partyName(d))}">${esc(partyName(d))}</span></div>
         <div class="cell-sub">${d.date}${!reference && d.reference ? ` · ${esc(d.reference)}` : ""}</div>`,
       due: d.due_date ? `${d.due_date}${lateDays > 0 ? ` <span class="late" title="${lateDays} days overdue">${lateDays}d late</span>` : ""}` : "",
@@ -727,20 +733,42 @@ async function renderDocList(kind) {
     };
   };
 
-  // Paging keeps a long year readable; the totals row still sums every filtered document.
+  // Grouping by month means whole months, so paging steps aside while it is on.
+  const grouped = groupByMonth(kind);
   const pageSize = docPageSize();
   state.docPage ??= {};
-  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const page = Math.min(state.docPage[kind] ?? 1, pageCount);
+  const pageCount = grouped ? 1 : Math.max(1, Math.ceil(sorted.length / pageSize));
+  const page = grouped ? 1 : Math.min(state.docPage[kind] ?? 1, pageCount);
   state.docPage[kind] = page;
-  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
+  const paged = grouped ? sorted : sorted.slice((page - 1) * pageSize, page * pageSize);
 
-  const body = paged.map((d) => {
+  const rowHtml = (d) => {
     const cells = cell(d);
     return `<tr class="click" data-id="${d.id}">${columns.map((c) => `<td class="${c.num ? "num" : ""}">${cells[c.key] ?? ""}</td>`).join("")}</tr>`;
-  }).join("");
+  };
+  const subtotalRow = (list, key) => `<tr class="subtotal">${columns.map((c) => {
+    if (c.key === "select" || c.key === "menu") return `<td></td>`;
+    if (c.key === "party") return `<td><span class="muted">Subtotal</span></td>`;
+    if (c.key === "amount") return `<td class="num">${money(sum(list, amountKey))}</td>`;
+    if (c.num && c.key !== "lines_count" && c.key !== "party_terms") return `<td class="num">${money(sum(list, c.key))}</td>`;
+    if (c.key === "status") return `<td>${list.length} ${list.length === 1 ? k.noun : k.plural}</td>`;
+    return `<td></td>`;
+  }).join("")}</tr>`;
+
+  const body = grouped
+    ? (() => {
+        const months = new Map();
+        for (const d of sorted) {
+          const key = d.date.slice(0, 7);
+          if (!months.has(key)) months.set(key, []);
+          months.get(key).push(d);
+        }
+        return [...months.entries()].map(([key, list]) => `<tr class="group-head"><td colspan="${columns.length}">${monthLabel(key)}</td></tr>${list.map(rowHtml).join("")}${subtotalRow(list, key)}`).join("");
+      })()
+    : paged.map(rowHtml).join("");
 
   const totals = `<tr class="total">${columns.map((c) => {
+    if (c.key === "select" || c.key === "menu") return `<td></td>`;
     if (c.key === "party") return `<td>Total</td>`;
     if (c.key === "status") return `<td>${sorted.length} ${sorted.length === 1 ? k.noun : k.plural}</td>`;
     if (c.key === "amount") return `<td class="num">${money(sum(sorted, amountKey))}</td>`;
@@ -814,6 +842,7 @@ async function renderDocList(kind) {
         </span>
       </label>
       <label class="search">Search <input id="${ids.search}" name="q" value="${esc(f.q)}" placeholder="${k.prefix}, reference, ${k.partyLabel.toLowerCase()}"></label>
+      <button type="button" class="secondary small" id="${ids.group}" title="Group by month">${grouped ? "Ungroup" : "Group by month"}</button>
       <button type="button" class="secondary small" id="${ids.cols}" title="Extra columns">Columns</button>
       <button type="button" class="secondary small" id="${ids.density}" title="Row height">${docDensity() === "compact" ? "Comfortable" : "Compact"}</button>
       ${columnsMenu}
@@ -828,9 +857,16 @@ async function renderDocList(kind) {
         : `showing ${paged.length} of ${drafts.length} ${drafts.length === 1 ? "draft" : "drafts"} · not in the books`}</span>
     </div>
 
+    <div class="select-bar hidden" id="${ids.bar}">
+      <b id="${ids.bar}-count">0</b> selected <span class="muted small" id="${ids.bar}-total"></span>
+      <span class="spacer"></span>
+      ${k.side === "sale" ? `<button type="button" class="secondary small" data-bulk="print">Download PDF</button>` : ""}
+      <button type="button" class="danger small" data-bulk="delete">Delete</button>
+      <button type="button" class="secondary small" data-bulk="clear">Clear</button>
+    </div>
     ${tab === "draft" && drafts.length ? `<p class="warning">These are not posted, so they are not in the ledger and they block filing the months they are dated in. Fix and post each one, or delete it.</p>` : ""}
     ${sorted.length
-      ? `<div class="table-scroll"><table class="list ${docDensity()}"><tr>${header}</tr>${body}${tab === "posted" ? totals : ""}</table></div>${pager}`
+      ? `<div class="table-scroll"><table class="list ${docDensity()}"><tr>${header}</tr>${body}${tab === "posted" ? totals : ""}</table></div>${grouped ? "" : pager}`
       : `<p class="muted">No ${tab === "posted" ? "posted" : "draft"} ${k.plural} in ${PRESET_LABELS[f.preset]?.toLowerCase() ?? "this period"}${f.party ? ` for ${esc(nameOf(f.party))}` : ""}${f.q ? ` matching “${esc(f.q)}”` : ""}.</p>`}`;
 
   $(`${ids.filter}-preset`).onchange = (event) => {
@@ -877,18 +913,71 @@ async function renderDocList(kind) {
     };
   }
   $(ids.density).onclick = () => { state.density = docDensity() === "compact" ? "comfortable" : "compact"; saveUi(); renderDocList(kind); };
-  $(`${k.container}-pagesize`).onchange = (event) => {
+  $(ids.group).onclick = () => { state.groupByMonth[kind] = !grouped; renderDocList(kind); };
+  // The pager is not rendered while grouped, so this control may not exist.
+  $(`${k.container}-pagesize`)?.addEventListener("change", (event) => {
     state.pageSize = Number(event.target.value);
     state.docPage[kind] = 1;
     saveUi();
     renderDocList(kind);
-  };
+  });
   for (const b of $(`tab-${k.container}`).querySelectorAll("[data-page]")) {
     b.onclick = () => {
       state.docPage[kind] = (state.docPage[kind] ?? 1) + (b.dataset.page === "next" ? 1 : -1);
       renderDocList(kind);
     };
   }
+
+  // Selection: checkboxes in the first column, and an action bar that appears with the first pick.
+  const selectedDocs = () => shown.filter((d) => docSelection(kind).has(d.id));
+  const paintBar = () => {
+    const bar = $(ids.bar);
+    if (!bar) return;
+    const picked = selectedDocs();
+    bar.classList.toggle("hidden", picked.length === 0);
+    $(`${ids.bar}-count`).textContent = picked.length;
+    $(`${ids.bar}-total`).textContent = picked.length ? `${money(sum(picked, amountKey))} ${currency}` : "";
+  };
+  for (const box of $(`tab-${k.container}`).querySelectorAll(".row-check")) {
+    box.onchange = () => {
+      const sel = docSelection(kind);
+      if (box.checked) sel.add(box.dataset.select);
+      else sel.delete(box.dataset.select);
+      paintBar();
+    };
+    box.onclick = (event) => event.stopPropagation();
+  }
+  $(ids.selectAll)?.addEventListener("change", (event) => {
+    const sel = docSelection(kind);
+    for (const d of grouped ? sorted : paged) {
+      if (event.target.checked) sel.add(d.id);
+      else sel.delete(d.id);
+    }
+    renderDocList(kind);
+  });
+  for (const button of $(ids.bar).querySelectorAll("[data-bulk]")) {
+    button.onclick = async () => {
+      const picked = selectedDocs();
+      const which = button.dataset.bulk;
+      if (which === "clear") { docSelection(kind).clear(); renderDocList(kind); return; }
+      if (which === "print") {
+        for (const d of picked) download(`${ledgerUrl()}/${k.path}/${d.id}/pdf`, `${k.prefix}-${d.invoice_no}.pdf`);
+        return;
+      }
+      if (which === "delete") {
+        const posted = picked.some((d) => d.status === "posted");
+        if (!confirm(`Delete ${picked.length} ${picked.length === 1 ? k.noun : k.plural}?${posted ? " Posted ones lose their journals too." : ""}`)) return;
+        try {
+          for (const d of picked) await write("DELETE", `${ledgerUrl()}/${k.path}/${d.id}`, undefined, d.version);
+          docSelection(kind).clear();
+          await refreshLedger();
+        } catch (error) {
+          showError(error);
+        }
+      }
+    };
+  }
+  paintBar();
 
   const partyInput = $(ids.party);
   const partyList = $(ids.list);
@@ -962,7 +1051,7 @@ async function renderDocList(kind) {
   }
 
   for (const b of $(ids.tabs).querySelectorAll("button")) {
-    b.onclick = () => { state.docTab[kind] = b.dataset.docTab; state.docPage[kind] = 1; renderDocList(kind); };
+    b.onclick = () => { state.docTab[kind] = b.dataset.docTab; state.docPage[kind] = 1; docSelection(kind).clear(); renderDocList(kind); };
   }
   for (const th of $(`tab-${k.container}`).querySelectorAll("th.sortable")) {
     th.onclick = () => {

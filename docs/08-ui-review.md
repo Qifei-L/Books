@@ -51,7 +51,8 @@ row that ends with the count, and a minimum of chrome.
 - No hash routing, so a filter or a page cannot be linked or restored after a refresh.
 - Status stops at Draft / Posted / Error. Open / Paid / Partially paid need `allocated_total` and
   `open_balance` on `SalesInvoiceDto`, computed from `allocations`.
-- No row selection or batch actions; no grouping by month; no column reordering.
+- Grouping by month and a selection with an action bar exist; what is missing is the account of what a
+  batch action is allowed to do, and the Open/Paid status that needs `open_balance`.
 
 ## Running it
 

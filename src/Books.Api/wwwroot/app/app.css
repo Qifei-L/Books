@@ -189,6 +189,12 @@ th.sorted { color: var(--ink); }
 .tabs-meta { margin-left: auto; align-self: center; font-size: 12px; color: var(--muted); padding-bottom: 4px; }
 .tabs .count { font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; margin-left: 5px; }
 .tabs button.active .count { color: var(--ink); }
+/* A month group and its subtotal, and the action bar that appears with a selection. */
+tr.group-head td { background: #eef2f8; font-weight: 600; font-size: 13px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+tr.subtotal td { background: #fafbfc; font-weight: 600; border-bottom: 1px solid var(--line); }
+.select-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin: 0 0 10px; background: #eef2fd; border: 1px solid #d7e0f6; border-radius: 6px; font-size: 13px; }
+.select-bar .spacer { flex: 1; }
+tr td input[type="checkbox"] { margin: 0; cursor: pointer; }
 .pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 10px; }
 .pager select { padding: 2px 6px; }
 label.inline-label { flex-direction: row; align-items: center; gap: 6px; margin: 0; }
