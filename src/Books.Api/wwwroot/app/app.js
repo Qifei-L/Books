@@ -206,15 +206,18 @@ async function chooseLedger(ledger) {
   state.simpleSearchIndex = {};
   state.simplePage = {};
   await loadAccounts();
+  await loadDimensions();
   await showTab(state.tab ?? "sales-invoices", true);
 }
 
 // Drilldown: a report's account opens its GL detail for the same period; a GL line opens its journal.
-async function openGl(accountId, from, to) {
+async function openGl(accountId, from, to, classId = "", locationId = "") {
   const f = $("gl-form");
   f.account.value = accountId;
   f.from.value = from;
   f.to.value = to;
+  f.class.value = classId;
+  f.location.value = locationId;
   await showTab("gl");
   f.requestSubmit();
 }
@@ -509,6 +512,18 @@ async function loadAccounts() {
   $("gl-form").account.innerHTML = accounts.map((a) => `<option value="${a.id}">${esc(a.code)} ${esc(a.name)}</option>`).join("");
 }
 
+async function loadDimensions() {
+  const [classes, locations] = await Promise.all([api(`${ledgerUrl()}/classes`), api(`${ledgerUrl()}/locations`)]);
+  state.classes = classes.filter((c) => c.active);
+  state.locations = locations.filter((l) => l.active);
+  for (const select of document.querySelectorAll("form select[name=class]")) {
+    select.innerHTML = '<option value="">All</option>' + state.classes.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  }
+  for (const select of document.querySelectorAll("form select[name=location]")) {
+    select.innerHTML = '<option value="">All</option>' + state.locations.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join("");
+  }
+}
+
 const TYPES = { assets: "Assets", liabilities: "Liabilities", equity: "Equity", income: "Income", cost_and_expense: "Cost & Expense" };
 
 // The chart of accounts is also where a bank or cash account is set up: a bank account is an Assets
@@ -680,13 +695,14 @@ function showJournal(j) {
 }
 
 const blank = (v) => (v === "0.00" || v === "0" ? "" : v);
+const filterQuery = (f) => (f.class?.value ? `&classId=${f.class.value}` : "") + (f.location?.value ? `&locationId=${f.location.value}` : "");
 
 
 $("tb-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const f = event.target;
-    const tb = await api(`${ledgerUrl()}/reports/trial-balance?from=${f.from.value}&to=${f.to.value}`);
+    const tb = await api(`${ledgerUrl()}/reports/trial-balance?from=${f.from.value}&to=${f.to.value}${filterQuery(f)}`);
     const t = tb.totals;
     $("tb-out").innerHTML = `${tb.warnings.map((w) => `<div class="warning">${esc(w.message)}</div>`).join("")}
       <p>${tb.balanced ? `<span class="ok">Balanced</span>` : `<span class="error">Not balanced</span>`} · ${tb.currency}</p>
@@ -697,7 +713,7 @@ $("tb-form").addEventListener("submit", async (event) => {
       <tr class="total"><td></td><td>Total</td><td class="num">${t.opening_debit}</td><td class="num">${t.opening_credit}</td><td class="num">${t.period_debit}</td>
         <td class="num">${t.period_credit}</td><td class="num">${t.closing_debit}</td><td class="num">${t.closing_credit}</td></tr></table>
       <p class="muted small">Click an account for its GL detail.</p>`;
-    for (const tr of $("tb-out").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, f.from.value, f.to.value);
+    for (const tr of $("tb-out").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, f.from.value, f.to.value, f.class.value, f.location.value);
   } catch (error) {
     showError(error);
   }
@@ -708,7 +724,7 @@ $("gl-form").addEventListener("submit", async (event) => {
   try {
     const f = event.target;
     const [gl, classes, locations, parties] = await Promise.all([
-      api(`${ledgerUrl()}/reports/gl-detail?accountId=${f.account.value}&from=${f.from.value}&to=${f.to.value}`),
+      api(`${ledgerUrl()}/reports/gl-detail?accountId=${f.account.value}&from=${f.from.value}&to=${f.to.value}${filterQuery(f)}`),
       api(`${ledgerUrl()}/classes`), api(`${ledgerUrl()}/locations`), api(`${ledgerUrl()}/parties`),
     ]);
     const nameOf = (rows, id) => rows.find((r) => r.id === id)?.name ?? "";
@@ -1092,10 +1108,10 @@ $("pl-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const f = event.target;
-    const pl = await api(`${ledgerUrl()}/reports/profit-and-loss?from=${f.from.value}&to=${f.to.value}`);
+    const pl = await api(`${ledgerUrl()}/reports/profit-and-loss?from=${f.from.value}&to=${f.to.value}${filterQuery(f)}`);
     $("pl-out").innerHTML = `<table><tr><th>Account</th><th class="num">${pl.currency}</th></tr>${statementTable(pl.sections)}
       <tr class="total"><td>Net profit</td><td class="num">${pl.net_profit}</td></tr></table><p class="muted small">Click an account for its GL detail.</p>`;
-    for (const tr of $("pl-out").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, f.from.value, f.to.value);
+    for (const tr of $("pl-out").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, f.from.value, f.to.value, f.class.value, f.location.value);
   } catch (error) {
     showError(error);
   }
@@ -1104,12 +1120,12 @@ $("pl-form").addEventListener("submit", async (event) => {
 $("bs-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    const bs = await api(`${ledgerUrl()}/reports/balance-sheet?asOf=${event.target.asOf.value}`);
+    const bs = await api(`${ledgerUrl()}/reports/balance-sheet?asOf=${event.target.asOf.value}${filterQuery(event.target)}`);
     $("bs-out").innerHTML = `<p>${bs.balanced ? `<span class="ok">Balanced</span>` : `<span class="error">Not balanced</span>`}
       · assets ${bs.total_assets} = liabilities and equity ${bs.total_liabilities_and_equity}</p>
       <table><tr><th>Account</th><th class="num">${bs.currency}</th></tr>${statementTable(bs.sections)}</table><p class="muted small">Click an account for its GL detail.</p>`;
     const asOf = event.target.asOf.value;
-    for (const tr of $("bs-out").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, `${asOf.slice(0, 4)}-01-01`, asOf);
+    for (const tr of $("bs-out").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, `${asOf.slice(0, 4)}-01-01`, asOf, event.target.class.value, event.target.location.value);
   } catch (error) {
     showError(error);
   }
@@ -1133,7 +1149,10 @@ for (const button of document.querySelectorAll("[data-export]")) {
     try {
       const form = button.closest("form");
       const query = new URLSearchParams();
-      for (const [key, value] of new FormData(form)) query.set(key === "account" ? "accountId" : key, value);
+      for (const [key, value] of new FormData(form)) {
+        if (value === "") continue;
+        query.set(key === "account" ? "accountId" : key === "class" ? "classId" : key === "location" ? "locationId" : key, value);
+      }
       const response = await fetch(`${ledgerUrl()}/reports/${button.dataset.export}.xlsx?${query}`, { headers: { Authorization: `Bearer ${state.token}` } });
       if (!response.ok) throw new Error(`Export failed (HTTP ${response.status}).`);
       const name = /filename="?([^";]+)/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? `${button.dataset.export}.xlsx`;

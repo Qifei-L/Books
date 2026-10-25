@@ -76,23 +76,27 @@ public sealed class BooksJournalTools(PrincipalAccessor principals, JournalServi
 
     [McpServerTool(Name = "get_trial_balance", ReadOnly = true, Idempotent = true)]
     [Description("Trial Balance for a date range: opening, period and closing debit/credit per account, totals and whether it balances.")]
-    public Task<CallToolResult> GetTrialBalance(Guid org_id, Guid ledger_id, DateOnly from, DateOnly to, CancellationToken ct) =>
-        BooksReadTools.RunAsync(async () => await reports.TrialBalanceAsync(await principals.GetAsync(ct), org_id, ledger_id, from, to, ct));
+    public Task<CallToolResult> GetTrialBalance(Guid org_id, Guid ledger_id, DateOnly from, DateOnly to, CancellationToken ct,
+        Guid? class_id = null, Guid? location_id = null) =>
+        BooksReadTools.RunAsync(async () => await reports.TrialBalanceAsync(await principals.GetAsync(ct), org_id, ledger_id, from, to, ct, class_id, location_id));
 
     [McpServerTool(Name = "get_profit_and_loss", ReadOnly = true, Idempotent = true)]
     [Description("Profit and Loss for a date range: Income and Cost & Expense with group subtotals, and net profit. The range may span fiscal years.")]
-    public Task<CallToolResult> GetProfitAndLoss(Guid org_id, Guid ledger_id, DateOnly from, DateOnly to, CancellationToken ct) =>
-        BooksReadTools.RunAsync(async () => await statements.ProfitAndLossAsync(await principals.GetAsync(ct), org_id, ledger_id, from, to, ct));
+    public Task<CallToolResult> GetProfitAndLoss(Guid org_id, Guid ledger_id, DateOnly from, DateOnly to, CancellationToken ct,
+        Guid? class_id = null, Guid? location_id = null) =>
+        BooksReadTools.RunAsync(async () => await statements.ProfitAndLossAsync(await principals.GetAsync(ct), org_id, ledger_id, from, to, ct, class_id, location_id));
 
     [McpServerTool(Name = "get_balance_sheet", ReadOnly = true, Idempotent = true)]
     [Description("Balance Sheet as of a date: Assets, Liabilities and Equity with group subtotals. Prior years' and current year profit are calculated lines.")]
-    public Task<CallToolResult> GetBalanceSheet(Guid org_id, Guid ledger_id, DateOnly as_of, CancellationToken ct) =>
-        BooksReadTools.RunAsync(async () => await statements.BalanceSheetAsync(await principals.GetAsync(ct), org_id, ledger_id, as_of, ct));
+    public Task<CallToolResult> GetBalanceSheet(Guid org_id, Guid ledger_id, DateOnly as_of, CancellationToken ct,
+        Guid? class_id = null, Guid? location_id = null) =>
+        BooksReadTools.RunAsync(async () => await statements.BalanceSheetAsync(await principals.GetAsync(ct), org_id, ledger_id, as_of, ct, class_id, location_id));
 
     [McpServerTool(Name = "get_gl_detail", ReadOnly = true, Idempotent = true)]
     [Description("GL Detail for one account: opening balance, each posting with running balance, period totals.")]
-    public Task<CallToolResult> GetGlDetail(Guid org_id, Guid ledger_id, Guid account_id, DateOnly from, DateOnly to, CancellationToken ct) =>
-        BooksReadTools.RunAsync(async () => await reports.GlDetailAsync(await principals.GetAsync(ct), org_id, ledger_id, account_id, from, to, ct));
+    public Task<CallToolResult> GetGlDetail(Guid org_id, Guid ledger_id, Guid account_id, DateOnly from, DateOnly to, CancellationToken ct,
+        Guid? class_id = null, Guid? location_id = null) =>
+        BooksReadTools.RunAsync(async () => await reports.GlDetailAsync(await principals.GetAsync(ct), org_id, ledger_id, account_id, from, to, ct, class_id, location_id));
 
     /// <summary>The fingerprint covers the tool and its arguments, so the same key with different content is rejected.</summary>
     private WriteMeta Meta(string tool, Guid key, long? expectedVersion, object arguments)

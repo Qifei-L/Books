@@ -83,8 +83,9 @@ Branch `feat/journal-dimensions` adds the first slice of class/location dimensio
 | Journal form | Party, class, location, tax code and tax direction; gross tax split | Withholding on manual journals (use payment/payroll) |
 | Sales / purchase forms | Class and location pickers on each line | Payment, stock adjustment, assembly, fixed-asset and pay-run lines |
 | Classes | Ledger-scoped master data, API and Classes page | Shared classes across an organization (M14) |
-| GL Detail | Class, location and party names per line | TB/BS/P&L filters by class/location |
-| MCP | list_classes, list_locations, dimensions on save_journal | class/location on sales, purchase and stock-adjustment draft line records |
+| GL Detail | Class, location and party names per line; class/location filters | — |
+| TB / BS / P&L | Class/location filters in the API, app and Excel | — |
+| MCP | list_classes, list_locations, dimensions on save_journal; filters on the four reports | class/location on sales, purchase and stock-adjustment draft line records |
 | Aging | Manual AR/AP lines count; aging still equals the control balance | Manual AR/AP permission is not restricted to administrators yet |
 
 Rules: class and location are reporting dimensions only; they never change the account or the subledger. A manual journal may post AR/AP with a party, but it still cannot control inventory, fixed assets or payroll.

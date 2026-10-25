@@ -277,6 +277,7 @@ line. Sales and purchase line grids also show Class and Location. GL Detail adds
 links each line to its journal. The tax code on a manual line is entered gross; the server shows the net line and posts
 the tax line separately. Withholding on manual journals remains out of scope.
 
-Still open for the UI: filters by class/location on TB, BS and P&L; class/location pickers on payments, stock
-adjustments, assemblies, fixed assets and pay runs; and a permission gate for manual AR/AP postings.
+TB, BS, P&L and GL Detail now carry class/location filters in the app and in Excel. Still open for the UI:
+class/location pickers on payments, stock adjustments, assemblies, fixed assets and pay runs; full-page record
+surfaces; and a permission gate for manual AR/AP postings.
 

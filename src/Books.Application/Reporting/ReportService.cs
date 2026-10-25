@@ -42,7 +42,8 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
     private sealed record Posting(DateOnly AccountingDate, Guid JournalId, long JournalNo, Guid LineId, Guid? PartyId, Guid? ClassId, Guid? LocationId,
         string? SourceKind, Guid? SourceId, string? Reference, string? Description, decimal Amount);
 
-    public Task<TrialBalance> TrialBalanceAsync(Principal principal, Guid orgId, Guid ledgerId, DateOnly from, DateOnly to, CancellationToken ct) =>
+    public Task<TrialBalance> TrialBalanceAsync(Principal principal, Guid orgId, Guid ledgerId, DateOnly from, DateOnly to, CancellationToken ct,
+        Guid? classId = null, Guid? locationId = null) =>
         reads.SnapshotAsync(principal, orgId, async scope =>
         {
             var ledger = await LedgerForReportAsync(scope, ledgerId, from, to, ct);
@@ -60,6 +61,8 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
                 JOIN journal_lines l ON l.revision_id = r.id
                 JOIN accounts a ON a.id = l.account_id
                 WHERE j.ledger_id = {ledgerId} AND r.accounting_date <= {to}
+                    AND (CAST({classId} AS uuid) IS NULL OR l.class_id = CAST({classId} AS uuid))
+                    AND (CAST({locationId} AS uuid) IS NULL OR l.location_id = CAST({locationId} AS uuid))
                 GROUP BY a.id
                 """).ToListAsync(ct);
             var accounts = await db.Accounts.AsNoTracking().Where(a => a.LedgerId == ledgerId).ToDictionaryAsync(a => a.Id, ct);
@@ -86,25 +89,30 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
                 Format(closingSides.D, minor), Format(closingSides.C, minor));
             var balanced = opening == 0 && period.Debit == period.Credit && closingSides.D == closingSides.C;
             var warnings = new List<ReportWarning>();
-            var purposes = await db.AccountPurposes.AsNoTracking().Where(p => p.LedgerId == ledgerId).ToDictionaryAsync(p => p.Purpose, p => p.AccountId, ct);
-            decimal Closing(SystemPurpose purpose) =>
-                purposes.TryGetValue(purpose, out var id) && movements.SingleOrDefault(m => m.AccountId == id) is { } m
-                    ? m.Opening + m.PeriodDebit - m.PeriodCredit
-                    : 0;
-            if (Closing(SystemPurpose.OpeningBalanceClearing) is var clearing && clearing != 0)
+            // Suspense and opening-clearing warnings describe the whole ledger, not one slice.
+            if (classId is null && locationId is null)
             {
-                warnings.Add(new ReportWarning("OPENING_BALANCE_CLEARING_NOT_ZERO",
-                    $"Opening Balance Clearing should be zero after setup; it is {Format(Math.Abs(clearing), minor)} {(clearing > 0 ? "Dr" : "Cr")}."));
-            }
-            if (Closing(SystemPurpose.Suspense) is var suspense && suspense != 0)
-            {
-                warnings.Add(new ReportWarning("SUSPENSE_NOT_ZERO",
-                    $"Suspense holds {Format(Math.Abs(suspense), minor)} {(suspense > 0 ? "Dr" : "Cr")} that still needs to be classified."));
+                var purposes = await db.AccountPurposes.AsNoTracking().Where(p => p.LedgerId == ledgerId).ToDictionaryAsync(p => p.Purpose, p => p.AccountId, ct);
+                decimal Closing(SystemPurpose purpose) =>
+                    purposes.TryGetValue(purpose, out var id) && movements.SingleOrDefault(m => m.AccountId == id) is { } m
+                        ? m.Opening + m.PeriodDebit - m.PeriodCredit
+                        : 0;
+                if (Closing(SystemPurpose.OpeningBalanceClearing) is var clearing && clearing != 0)
+                {
+                    warnings.Add(new ReportWarning("OPENING_BALANCE_CLEARING_NOT_ZERO",
+                        $"Opening Balance Clearing should be zero after setup; it is {Format(Math.Abs(clearing), minor)} {(clearing > 0 ? "Dr" : "Cr")}."));
+                }
+                if (Closing(SystemPurpose.Suspense) is var suspense && suspense != 0)
+                {
+                    warnings.Add(new ReportWarning("SUSPENSE_NOT_ZERO",
+                        $"Suspense holds {Format(Math.Abs(suspense), minor)} {(suspense > 0 ? "Dr" : "Cr")} that still needs to be classified."));
+                }
             }
             return new TrialBalance(from, to, ledger.BaseCurrency, rows, totals, balanced, warnings);
         }, ct);
 
-    public Task<GlDetail> GlDetailAsync(Principal principal, Guid orgId, Guid ledgerId, Guid accountId, DateOnly from, DateOnly to, CancellationToken ct) =>
+    public Task<GlDetail> GlDetailAsync(Principal principal, Guid orgId, Guid ledgerId, Guid accountId, DateOnly from, DateOnly to, CancellationToken ct,
+        Guid? classId = null, Guid? locationId = null) =>
         reads.SnapshotAsync(principal, orgId, async scope =>
         {
             var ledger = await LedgerForReportAsync(scope, ledgerId, from, to, ct);
@@ -119,6 +127,8 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
                 JOIN journal_lines l ON l.revision_id = r.id
                 WHERE j.ledger_id = {ledgerId} AND l.account_id = {accountId}
                     AND r.accounting_date >= {balanceStart} AND r.accounting_date < {from}
+                    AND (CAST({classId} AS uuid) IS NULL OR l.class_id = CAST({classId} AS uuid))
+                    AND (CAST({locationId} AS uuid) IS NULL OR l.location_id = CAST({locationId} AS uuid))
                 """).SingleAsync(ct)).Amount;
             var postings = await db.Database.SqlQuery<Posting>($"""
                 SELECT r.accounting_date AS accounting_date, j.id AS journal_id, j.journal_no AS journal_no,
@@ -130,6 +140,8 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
                 JOIN journal_lines l ON l.revision_id = r.id
                 WHERE j.ledger_id = {ledgerId} AND l.account_id = {accountId}
                     AND r.accounting_date BETWEEN {from} AND {to}
+                    AND (CAST({classId} AS uuid) IS NULL OR l.class_id = CAST({classId} AS uuid))
+                    AND (CAST({locationId} AS uuid) IS NULL OR l.location_id = CAST({locationId} AS uuid))
                 ORDER BY r.accounting_date, j.journal_no, l.line_no
                 """).ToListAsync(ct);
 

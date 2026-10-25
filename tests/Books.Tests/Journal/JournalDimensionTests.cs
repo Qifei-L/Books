@@ -122,6 +122,46 @@ public sealed class JournalDimensionTests(TestHost host)
         Assert.Single(edited.GetProperty("lines").EnumerateArray(), (l) => l.TryGetProperty("tax_line", out var t) && t.GetBoolean());
     }
 
+    [Fact]
+    public async Task Reports_filter_by_class_without_changing_the_unfiltered_totals()
+    {
+        var books = await JournalBooks.CreateAsync(host);
+        var ledger = $"/api/v1/organizations/{books.OrgId}/ledgers/{books.LedgerId}";
+        var retail = (await (await books.Admin.PostAsync($"{ledger}/classes", new { name = "Retail" })).DataAsync(HttpStatusCode.Created)).Id();
+        var wholesale = (await (await books.Admin.PostAsync($"{ledger}/classes", new { name = "Wholesale" })).DataAsync(HttpStatusCode.Created)).Id();
+        await PostAsync(books.Admin, $"{ledger}/journals", new
+        {
+            accounting_date = "2026-10-15", post = true,
+            lines = new object[]
+            {
+                new { account_id = books.Cash, debit = "100.00", class_id = retail },
+                new { account_id = books.Sales, credit = "100.00", class_id = retail },
+            },
+        });
+        await PostAsync(books.Admin, $"{ledger}/journals", new
+        {
+            accounting_date = "2026-10-16", post = true,
+            lines = new object[]
+            {
+                new { account_id = books.Cash, debit = "200.00", class_id = wholesale },
+                new { account_id = books.Sales, credit = "200.00", class_id = wholesale },
+            },
+        });
+
+        var all = await GetAsync(books.Admin, $"{ledger}/reports/trial-balance?from=2026-10-01&to=2026-10-31");
+        var retailTb = await GetAsync(books.Admin, $"{ledger}/reports/trial-balance?from=2026-10-01&to=2026-10-31&classId={retail}");
+        var cash = retailTb.GetProperty("rows").EnumerateArray().Single((r) => r.GetProperty("account_id").GetGuid() == books.Cash);
+        Assert.Equal("100.00", Text(cash, "period_debit"));
+        Assert.Equal("300.00", Text(all.GetProperty("totals"), "period_debit"));
+
+        var pl = await GetAsync(books.Admin, $"{ledger}/reports/profit-and-loss?from=2026-10-01&to=2026-10-31&classId={retail}");
+        Assert.Equal("100.00", Text(pl, "net_profit"));
+        var gl = await GetAsync(books.Admin, $"{ledger}/reports/gl-detail?accountId={books.Cash}&from=2026-10-01&to=2026-10-31&classId={retail}");
+        Assert.Equal("100.00", Text(gl, "period_debit"));
+        var bs = await GetAsync(books.Admin, $"{ledger}/reports/balance-sheet?asOf=2026-10-31&classId={retail}");
+        Assert.Equal("100.00", Text(bs, "total_assets"));
+    }
+
     private static async Task<JsonElement> PostAsync(HttpClient client, string url, object body) =>
         await (await client.PostAsync(url, body)).DataAsync(HttpStatusCode.Created);
 

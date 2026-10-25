@@ -33,12 +33,13 @@ public sealed class StatementService(IBooksDb db, ReadRunner reads)
 
     private sealed record Sum(Guid AccountId, decimal Amount);
 
-    public Task<ProfitAndLoss> ProfitAndLossAsync(Principal principal, Guid orgId, Guid ledgerId, DateOnly from, DateOnly to, CancellationToken ct) =>
+    public Task<ProfitAndLoss> ProfitAndLossAsync(Principal principal, Guid orgId, Guid ledgerId, DateOnly from, DateOnly to, CancellationToken ct,
+        Guid? classId = null, Guid? locationId = null) =>
         reads.SnapshotAsync(principal, orgId, async scope =>
         {
             var ledger = await LedgerAsync(scope, ledgerId, from, to, ct);
             var chart = await Chart.LoadAsync(db, ledgerId, ct);
-            var sums = await SumsAsync(ledgerId, from, to, ct);
+            var sums = await SumsAsync(ledgerId, from, to, classId, locationId, ct);
             var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
             var sections = new[] { AccountType.Income, AccountType.CostAndExpense }
                 .Select(type => chart.Section(type, sums, minor, [])).ToList();
@@ -48,13 +49,15 @@ public sealed class StatementService(IBooksDb db, ReadRunner reads)
             return new ProfitAndLoss(from, to, ledger.BaseCurrency, sections, Format(net, minor));
         }, ct);
 
-    public Task<BalanceSheet> BalanceSheetAsync(Principal principal, Guid orgId, Guid ledgerId, DateOnly asOf, CancellationToken ct) =>
+    public Task<BalanceSheet> BalanceSheetAsync(Principal principal, Guid orgId, Guid ledgerId, DateOnly asOf, CancellationToken ct,
+        Guid? classId = null, Guid? locationId = null) =>
         reads.SnapshotAsync(principal, orgId, async scope =>
         {
             var ledger = await LedgerAsync(scope, ledgerId, DateOnly.MinValue, asOf, ct);
-            var (chart, sums) = await FoldRevaluationAsync(ledgerId, await Chart.LoadAsync(db, ledgerId, ct), await SumsAsync(ledgerId, DateOnly.MinValue, asOf, ct), ct);
+            var (chart, sums) = await FoldRevaluationAsync(ledgerId, await Chart.LoadAsync(db, ledgerId, ct),
+                await SumsAsync(ledgerId, DateOnly.MinValue, asOf, classId, locationId, ct), ct);
             var fyStart = ReportService.FiscalYearStart(asOf, ledger.FyStartMonth);
-            var currentYear = await SumsAsync(ledgerId, fyStart, asOf, ct);
+            var currentYear = await SumsAsync(ledgerId, fyStart, asOf, classId, locationId, ct);
             var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
 
             decimal ProfitIn(IReadOnlyDictionary<Guid, decimal> source) =>
@@ -117,13 +120,15 @@ public sealed class StatementService(IBooksDb db, ReadRunner reads)
     }
 
     /// <summary>Signed sum (debit positive) of effective postings per account, dates inclusive.</summary>
-    private async Task<IReadOnlyDictionary<Guid, decimal>> SumsAsync(Guid ledgerId, DateOnly from, DateOnly to, CancellationToken ct) =>
+    private async Task<IReadOnlyDictionary<Guid, decimal>> SumsAsync(Guid ledgerId, DateOnly from, DateOnly to, Guid? classId, Guid? locationId, CancellationToken ct) =>
         (await db.Database.SqlQuery<Sum>($"""
             SELECT l.account_id AS account_id, SUM(l.amount) AS amount
             FROM journals j
             JOIN journal_revisions r ON r.id = j.effective_revision_id
             JOIN journal_lines l ON l.revision_id = r.id
             WHERE j.ledger_id = {ledgerId} AND r.accounting_date BETWEEN {from} AND {to}
+                AND (CAST({classId} AS uuid) IS NULL OR l.class_id = CAST({classId} AS uuid))
+                AND (CAST({locationId} AS uuid) IS NULL OR l.location_id = CAST({locationId} AS uuid))
             GROUP BY l.account_id
             """).ToListAsync(ct)).ToDictionary(s => s.AccountId, s => s.Amount);
 
