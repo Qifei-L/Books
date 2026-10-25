@@ -188,6 +188,9 @@ async function openDocument(kind, id) {
   }
 }
 
+// Warnings never stop a save (for example stock going below zero); they come back with the saved document.
+const warningsHtml = (d) => (d.warnings ?? []).map((w) => `<div class="warning">${esc(w)}</div>`).join("");
+
 const journalButton = (d) => d.journal_id ? `<p><button class="secondary" onclick="openJournal('${d.journal_id}')">Journal ${d.journal_no ?? ""}</button></p>` : "";
 
 function showPayment(d, party) {
@@ -198,7 +201,7 @@ function showPayment(d, party) {
     ${d.lines.map((l) => `<tr><td>${l.kind === "account" ? esc(accountName(l.account_id)) : `${esc(accountName(l.control_account_id))} · ${l.kind === "invoice" ? "settles an invoice" : "party balance"}`}</td>
       <td>${esc(l.description ?? "")}</td><td class="num">${l.amount}</td><td class="num">${blank(l.tax_amount)}</td><td class="num">${blank(l.withholding_amount)}</td><td class="num">${l.total}</td></tr>`).join("")}
     <tr class="total"><td colspan="5">Total</td><td class="num">${d.total}</td></tr></table>
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}${journalButton(d)}
     ${canEdit() ? `<p><button class="secondary" onclick="editPayment('${d.type}', '${d.id}')">Edit</button></p>` : ""}`;
   $("journal-dialog").showModal();
 }
@@ -364,7 +367,7 @@ function showSale(d, party) {
     <tr class="total"><td colspan="2">Gross ${d.gross_total}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td></tr></table>
     ${t ? `<p>Total including VAT: <b>${Number(t.gross_total).toLocaleString()} ${t.currency}</b> (VAT ${Number(t.tax_total).toLocaleString()} ${t.currency})
       at ${t.rate} ${esc(t.rate_source)} of ${t.rate_date}${t.reason ? ` · ${esc(t.reason)}` : ""}</p>` : ""}
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}${journalButton(d)}
     <p><button class="secondary" onclick="openPdf('${d.type === "credit_note" ? "credit-notes" : "sales-invoices"}/${d.id}/pdf')">Print PDF</button>
       ${canEdit() ? `<button class="secondary" onclick="editDocument('sale', '${d.type}', '${d.id}')">Edit</button>` : ""}</p>`;
   $("journal-dialog").showModal();
@@ -494,7 +497,7 @@ function showPurchase(d, party) {
     <tr class="total"><td colspan="2">Totals · gross ${d.gross_total} · payable ${d.payable_total}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td><td></td><td class="num">${d.withholding_total}</td></tr></table>
     ${d.tax_currency ? `<p class="muted">${d.tax_currency.currency} at ${d.tax_currency.rate} (${esc(d.tax_currency.rate_source)}, ${d.tax_currency.rate_date})${d.tax_currency.reason ? ` · ${esc(d.tax_currency.reason)}` : ""}:
       gross ${d.tax_currency.gross_total} · VAT ${d.tax_currency.tax_total}</p>` : ""}
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}${journalButton(d)}
     ${canEdit() ? `<p><button class="secondary" onclick="editDocument('purchase', '${d.type}', '${d.id}')">Edit</button></p>` : ""}`;
   $("journal-dialog").showModal();
 }

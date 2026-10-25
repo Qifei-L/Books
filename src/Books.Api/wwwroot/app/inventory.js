@@ -17,8 +17,8 @@ async function renderInventory(asOf = state.inventoryAsOf ?? today()) {
       <form class="inline" id="inventory-form"><label>As of <input type="date" name="asOf" value="${asOf}"></label><button type="submit">Run</button></form>
       <p>${report.matches_control ? `<span class="ok">Equals the inventory account ${report.control_balance}</span>` : `<span class="error">Does not equal the inventory account ${report.control_balance}</span>`}</p>
       <table><tr><th>Item</th><th>Unit</th><th class="num">In</th><th class="num">Out</th><th class="num">On hand</th><th class="num">Average cost</th><th class="num">Value</th></tr>
-      ${report.items.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.unit ?? "")}</td><td class="num">${r.quantity_in}</td><td class="num">${r.quantity_out}</td>
-        <td class="num">${r.on_hand}</td><td class="num">${r.average_cost}</td><td class="num">${r.value}</td></tr>`).join("")}
+      ${report.items.map((r) => `<tr class="click" data-movements="${r.item_id}"><td>${esc(r.name)}</td><td>${esc(r.unit ?? "")}</td><td class="num">${r.quantity_in}</td><td class="num">${r.quantity_out}</td>
+        <td class="num ${Number(r.on_hand) < 0 ? "error" : ""}">${r.on_hand}</td><td class="num">${r.average_cost}</td><td class="num">${r.value}</td></tr>`).join("")}
       <tr class="total"><td colspan="6">Total ${report.currency}</td><td class="num">${report.total_value}</td></tr></table>
       <h3 style="margin-top:16px">Stock adjustments and counts</h3>
       <table><tr><th>No.</th><th>Date</th><th>Reference</th><th>Lines</th><th class="num">Value</th><th>Status</th></tr>
@@ -31,6 +31,7 @@ async function renderInventory(asOf = state.inventoryAsOf ?? today()) {
         <td class="num">${i.sales_price ?? ""}</td><td class="num">${i.purchase_price ?? ""}</td>
         <td>${i.track_inventory ? "tracked" : ""}</td><td>${i.default_account_id ? esc(accountName(i.default_account_id)) : ""}</td><td>${esc(taxName(i.default_tax_code_id))}</td></tr>`).join("")}</table>`;
     $("inventory-form").onsubmit = (e) => { e.preventDefault(); renderInventory(e.target.asOf.value); };
+    for (const tr of $("tab-inventory").querySelectorAll("tr[data-movements]")) tr.onclick = () => showMovements(tr.dataset.movements, `${asOf.slice(0, 4)}-01-01`, asOf);
     for (const tr of $("tab-inventory").querySelectorAll("tr[data-adjustment]")) {
       tr.onclick = () => showAdjustment(shown.find((a) => a.id === tr.dataset.adjustment), itemName);
     }
@@ -49,7 +50,7 @@ function showAdjustment(a, itemName) {
       <td>${l.account_id ? esc(accountName(l.account_id)) : "entries"}</td></tr>`).join("")}
     <tr class="total"><td colspan="5">Total</td><td class="num">${a.total_value}</td><td></td></tr></table>
     ${postingHtml(a.posting)}
-    ${a.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(a)}
+    ${a.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(a)}${journalButton(a)}
     ${canEdit() ? `<p><button class="secondary" onclick="editAdjustment('${a.id}')">Edit</button></p>` : ""}`;
   $("journal-dialog").showModal();
 }
@@ -261,6 +262,29 @@ async function itemForm(item, accounts, taxCodes) {
         await refreshLedger();
       });
     };
+  } catch (error) {
+    showError(error);
+  }
+}
+
+const MOVEMENT_KINDS = { purchase_invoice: "Purchase invoice", debit_note: "Debit note", sales_invoice: "Sales invoice", credit_note: "Credit note", stock_adjustment: "Stock adjustment" };
+
+/** An item's movements with the running quantity and value; each line opens its document. */
+async function showMovements(itemId, from, to) {
+  try {
+    const m = await api(`${ledgerUrl()}/reports/inventory/${itemId}/movements?from=${from}&to=${to}`);
+    $("journal-body").innerHTML = `<h3>${esc(m.name)} · movements</h3>
+      <form class="inline" id="movements-form"><label>From <input type="date" name="from" value="${m.from}"></label><label>To <input type="date" name="to" value="${m.to}"></label><button type="submit">Run</button></form>
+      <table><tr><th>Date</th><th>Document</th><th>Reference</th><th class="num">In</th><th class="num">Out</th><th class="num">Value</th><th class="num">On hand</th><th class="num">Balance</th></tr>
+      <tr><td colspan="6" class="muted">Opening</td><td class="num">${m.opening_quantity}</td><td class="num">${m.opening_value}</td></tr>
+      ${m.lines.map((l) => `<tr class="click" data-kind="${l.kind}" data-doc="${l.document_id}"><td>${l.date}</td><td>${MOVEMENT_KINDS[l.kind] ?? l.kind} ${l.number}</td><td>${esc(l.reference ?? "")}</td>
+        <td class="num">${l.quantity_in}</td><td class="num">${l.quantity_out}</td><td class="num">${l.value}</td>
+        <td class="num ${Number(l.balance_quantity) < 0 ? "error" : ""}">${l.balance_quantity}</td><td class="num">${l.balance_value}</td></tr>`).join("")}
+      <tr class="total"><td colspan="6">Closing ${m.currency}</td><td class="num">${m.closing_quantity}</td><td class="num">${m.closing_value}</td></tr></table>`;
+    $("journal-dialog").showModal();
+    $("movements-form").onsubmit = (e) => { e.preventDefault(); showMovements(itemId, e.target.from.value, e.target.to.value); };
+    const docKind = { purchase_invoice: "purchase_invoice", debit_note: "purchase_debit_note", sales_invoice: "sales_invoice", credit_note: "sales_credit_note", stock_adjustment: "stock_adjustment" };
+    for (const tr of $("journal-body").querySelectorAll("tr[data-doc]")) tr.onclick = () => openDocument(docKind[tr.dataset.kind], tr.dataset.doc);
   } catch (error) {
     showError(error);
   }

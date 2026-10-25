@@ -80,6 +80,12 @@ public sealed class BooksBankTools(
     public Task<CallToolResult> Inventory(Guid org_id, Guid ledger_id, DateOnly as_of, CancellationToken ct) =>
         BooksReadTools.RunAsync(async () => await inventory.ReportAsync(await principals.GetAsync(ct), org_id, ledger_id, as_of, ct));
 
+    [McpServerTool(Name = "get_item_movements", ReadOnly = true, Idempotent = true)]
+    [Description("An inventory item's movements between two dates: opening quantity and value, each purchase, sale, note and stock adjustment with the "
+        + "balance after it, and the closing quantity and value.")]
+    public Task<CallToolResult> ItemMovements(Guid org_id, Guid ledger_id, Guid item_id, DateOnly from, DateOnly to, CancellationToken ct) =>
+        BooksReadTools.RunAsync(async () => await inventory.MovementsAsync(await principals.GetAsync(ct), org_id, ledger_id, item_id, from, to, ct));
+
     [McpServerTool(Name = "list_stock_adjustments", ReadOnly = true, Idempotent = true)]
     [Description("Stock adjustments and counts with each line's quantity change, book quantity, counted quantity and value.")]
     public Task<CallToolResult> StockAdjustments(Guid org_id, Guid ledger_id, CancellationToken ct) =>

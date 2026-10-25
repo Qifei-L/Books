@@ -34,7 +34,7 @@ public sealed record SalesInvoiceDto(
     string? Reference, string? Description, IReadOnlyList<SalesLineDto> Lines,
     string NetTotal, string OtherTaxTotal, string TaxTotal, string GrossTotal, TaxCurrencyDto? TaxCurrency,
     string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version,
-    string Currency = "", string? ExchangeRate = null, string? BaseTotal = null);
+    string Currency = "", string? ExchangeRate = null, string? BaseTotal = null, IReadOnlyList<string>? Warnings = null);
 
 /// <summary>
 /// Sales invoices and credit notes. Save posts when valid; otherwise the document is kept as a draft with the
@@ -55,7 +55,7 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var (status, invoice) = await CreateOneAsync(scope, ledger, input, post, creditNote, ct);
-            return WriteResult.Of(status == "not_posted" ? 422 : 201, (await LoadAsync(ledgerId, invoice.Id, ct)).Single(), invoice.Version);
+            return WriteResult.Of(status == "not_posted" ? 422 : 201, await WithWarningsAsync((await LoadAsync(ledgerId, invoice.Id, ct)).Single(), invoice, ct), invoice.Version);
         }, ct);
 
     /// <summary>Saves several invoices and credit notes as drafts in one transaction, all or none (MCP batches).</summary>
@@ -96,7 +96,7 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             await db.SaveChangesAsync(ct);
             var after = (await LoadAsync(ledgerId, invoice.Id, ct)).Single();
             scope.Audit($"sales_invoice.{status}", "sales_invoice", invoice.Id, new { before, after });
-            return WriteResult.Of(status == "not_posted" ? 422 : 200, after, invoice.Version);
+            return WriteResult.Of(status == "not_posted" ? 422 : 200, await WithWarningsAsync(after, invoice, ct), invoice.Version);
         }, ct);
 
     public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid invoiceId, CancellationToken ct) =>
@@ -298,6 +298,12 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             ?? throw BooksProblem.NotFound();
         return invoice.Status == DocumentStatus.Deleted ? throw BooksProblem.Conflict("DOCUMENT_DELETED", "This invoice was deleted.") : invoice;
     }
+
+    /// <summary>A posted invoice taking an inventory item below zero carries a warning (owner decision: allowed, with a warning).</summary>
+    private async Task<SalesInvoiceDto> WithWarningsAsync(SalesInvoiceDto dto, SalesInvoice invoice, CancellationToken ct) =>
+        invoice.Status != DocumentStatus.Posted || invoice.IsCreditNote ? dto
+        : await Inventory.NegativeStockAsync(db, invoice.LedgerId, invoice.Lines.Where(l => l.ItemId is not null).Select(l => l.ItemId!.Value), invoice.Date, ct) is { Count: > 0 } w
+            ? dto with { Warnings = w } : dto;
 
     private async Task<IReadOnlyList<SalesInvoiceDto>> LoadAsync(Guid ledgerId, Guid? id, CancellationToken ct)
     {
