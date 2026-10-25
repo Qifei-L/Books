@@ -257,7 +257,7 @@ function showDepreciationRun(r) {
     <tr class="total"><td colspan="2">Total</td><td class="num">${r.total}</td></tr></table>
     ${r.journal_id ? journalButton(r) : ""}
     ${canEdit() ? `<p><button class="danger" onclick="deleteRun('${r.id}', '${r.period}')">Delete</button></p>` : ""}`;
-  $("journal-dialog").showModal();
+  showDialog();
 }
 
 async function deleteRun(id, period) {

@@ -80,7 +80,7 @@ function showStockTransfer(t, itemName, place) {
     ${(t.lines ?? []).map((l) => `<tr><td>${esc(itemName(l.item_id))}</td><td class="num">${quantityText(l.quantity)}</td><td>${esc(l.description ?? "")}</td></tr>`).join("")}</table>
     <p class="muted small">Quantity only: cost is one average per item across locations, so no journal is posted.</p>
     ${canEdit() ? `<p><button class="danger" onclick="deleteStock('stock-transfers', '${t.id}', '${t.version}')">Delete</button></p>` : ""}`;
-  $("journal-dialog").showModal();
+  showDialog();
 }
 
 function showAssembly(a, itemName) {
@@ -92,7 +92,7 @@ function showAssembly(a, itemName) {
     <tr class="total"><td>Value / unit cost</td><td class="num">${quantityText(a.quantity)}</td><td class="num">${a.value} · ${a.unit_cost}</td></tr></table>
     ${warningsHtml(a)}${journalButton(a)}
     ${canEdit() ? `<p><button class="danger" onclick="deleteStock('assemblies', '${a.id}', '${a.version}')">Delete</button></p>` : ""}`;
-  $("journal-dialog").showModal();
+  showDialog();
 }
 
 async function deleteStock(path, id, version) {

@@ -2,6 +2,59 @@
 const state = { token: sessionStorage.getItem("books.token"), org: null, ledger: null, accounts: [] };
 const $ = (id) => document.getElementById(id);
 
+// A document detail is one dialog, but a drilldown is a trail: a related document opens in the same dialog
+// and Back restores the previous one. The trail is cleared when the dialog closes.
+function showDialog() {
+  const dialog = $("journal-dialog");
+  if (!dialog.open) dialog.showModal();
+}
+
+function paintTrail() {
+  const body = $("journal-body");
+  body.querySelector(".trail-back")?.remove();
+  const previous = state.trail?.at(-1);
+  if (!previous) return;
+  body.insertAdjacentHTML("afterbegin", `<div class="trail-back"><button type="button" class="link" onclick="trailBack()">← Back</button><span>${esc(previous.label)}</span></div>`);
+}
+
+async function drillTo(label, render) {
+  state.trail ??= [];
+  if (state.trailLabel) {
+    const snapshot = $("journal-body").cloneNode(true);
+    snapshot.querySelector(".trail-back")?.remove();
+    state.trail.push({ label: state.trailLabel, html: snapshot.innerHTML });
+  }
+  state.trailLabel = label;
+  showDialog();
+  try {
+    await render();
+  } catch (error) {
+    $("journal-body").innerHTML = `<p class="error">${esc(error.message)}</p>`;
+  }
+  paintTrail();
+  showDialog();
+}
+
+function trailBack() {
+  const previous = state.trail?.pop();
+  if (!previous) return;
+  state.trailLabel = previous.label;
+  $("journal-body").innerHTML = previous.html;
+  paintTrail();
+  showDialog();
+}
+
+function openTaxPeriod(period) {
+  $("journal-dialog").close();
+  state.taxPeriod = period;
+  showTab("tax", true);
+}
+
+$("journal-dialog").addEventListener("close", () => {
+  state.trail = [];
+  state.trailLabel = null;
+});
+
 // What the reader chose — visible columns, their order, row density, rows per page — lives in the
 // browser, not on the server: it is a reading preference, not part of the books.
 const UI_KEY = "books.ui.v1";
@@ -198,12 +251,12 @@ async function openDocument(kind, id) {
     const party = (pid) => parties.find((p) => p.id === pid)?.name ?? "";
     const doc = docs.find((d) => d.id === id);
     if (!doc) return;
-    if (kind.startsWith("sales")) showSale(doc, party);
+    if (kind.startsWith("sales")) await showSale(doc, party);
     else if (kind.startsWith("purchase")) showPurchase(doc, party);
     else if (kind === "payment" || kind === "receipt") showPayment(doc, party);
     else if (kind === "pay_run") {
       $("journal-dialog").close();
-      await showTab("payroll");
+      await showTab("payroll-runs");
       showPayRun(doc);
     }
     else if (kind === "stock_adjustment") {
@@ -222,6 +275,7 @@ const warningsHtml = (d) => (d.warnings ?? []).map((w) => `<div class="warning">
 const journalButton = (d) => d.journal_id ? `<p><button class="secondary" onclick="openJournal('${d.journal_id}')">Journal ${d.journal_no ?? ""}</button></p>` : "";
 
 function showPayment(d, party) {
+  state.trailLabel ??= `${d.type === "receipt" ? "Receipt" : "Payment"} ${d.payment_no}`;
   $("journal-body").innerHTML = `<h3>${d.type === "receipt" ? "Receipt" : "Payment"} ${d.payment_no} <span class="pill ${d.status}">${d.status}</span></h3>
     <p class="muted">${esc(accountName(d.bank_account_id))} · ${d.date} · ${esc(party(d.party_id))} · ${esc(d.reference ?? "")} · ${esc(d.description ?? "")}
       ${d.exchange_rate ? ` · ${d.currency} at ${d.exchange_rate}` : ""}</p>
@@ -231,12 +285,13 @@ function showPayment(d, party) {
     <tr class="total"><td colspan="5">Total</td><td class="num">${d.total} ${d.currency ?? ""}</td></tr></table>
     ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}${journalButton(d)}
     ${canEdit() ? `<p><button class="secondary" onclick="editPayment('${d.type}', '${d.id}')">Edit</button></p>` : ""}`;
-  $("journal-dialog").showModal();
+  showDialog();
 }
 
 // Transfers have no party and no line grid; the detail is the two accounts, what was sent and received,
 // the fee and the journal. Editing is a form of its own (setup.js).
 function showTransfer(d) {
+  state.trailLabel ??= `Bank transfer ${d.transfer_no}`;
   const from = `${accountName(d.from_account_id)} (${bankCurrency(d.from_account_id)})`;
   const to = `${accountName(d.to_account_id)} (${bankCurrency(d.to_account_id)})`;
   $("journal-body").innerHTML = `<h3>Bank transfer ${d.transfer_no} <span class="pill ${d.status}">${d.status}</span></h3>
@@ -247,7 +302,7 @@ function showTransfer(d) {
       <td class="num">${Number(d.fee_amount) ? money(d.fee_amount, bankCurrency(d.from_account_id)) : "—"}</td></tr></table>
     ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${journalButton(d)}
     ${canEdit() ? `<p><button class="secondary" onclick="editTransfer('${d.id}')">Edit</button></p>` : ""}`;
-  $("journal-dialog").showModal();
+  showDialog();
 }
 
 async function editTransfer(id) {
@@ -259,6 +314,7 @@ async function editTransfer(id) {
 async function showStatement(kind, partyId, asOf) {
   try {
     const s = await api(`${ledgerUrl()}/reports/${kind}-statement?${kind}Id=${partyId}&from=${asOf.slice(0, 4)}-01-01&to=${asOf}`);
+    state.trailLabel ??= `${s.supplier ?? s.customer} statement`;
     $("journal-body").innerHTML = `<h3>${esc(s.supplier ?? s.customer)} · statement</h3>
       <p class="muted">${s.from} – ${s.to} · ${s.currency}</p>
       <table><tr><th>Date</th><th>Type</th><th>No.</th><th>Reference</th><th>Due</th><th class="num">Amount</th><th class="num">Balance</th></tr>
@@ -266,7 +322,7 @@ async function showStatement(kind, partyId, asOf) {
       ${s.items.map((i) => `<tr><td>${i.date}</td><td>${i.type.replaceAll("_", " ")}</td><td>${i.number}</td><td>${esc(i.reference ?? "")}</td><td>${i.due_date}</td>
         <td class="num">${i.amount}</td><td class="num">${i.balance}</td></tr>`).join("")}
       <tr class="total"><td colspan="6">Closing balance</td><td class="num">${s.closing_balance}</td></tr></table>`;
-    $("journal-dialog").showModal();
+    showDialog();
   } catch (error) {
     showError(error);
   }
@@ -609,15 +665,16 @@ const accountName = (id) => {
 };
 
 function showJournal(j) {
+  state.trailLabel ??= `Journal ${j.journal_no}`;
   $("journal-body").innerHTML = `<h3>Journal ${j.journal_no} <span class="pill ${j.status}">${j.status}</span></h3>
     ${j.source_kind ? `<p>From ${SOURCES[j.source_kind] ?? esc(j.source_kind)} · change it through the document, not the journal.
-      <button class="secondary" onclick="openDocument('${j.source_kind}', '${j.source_id}')">Open ${SOURCES[j.source_kind] ?? "document"}</button></p>` : ""}
+      <button class="secondary" onclick="drillTo('${SOURCES[j.source_kind] ?? "Document"}', () => openDocument('${j.source_kind}', '${j.source_id}'))">Open ${SOURCES[j.source_kind] ?? "document"}</button></p>` : ""}
     <p class="muted">${j.accounting_date} · ${esc(j.reference ?? "")} · ${esc(j.description ?? "")} · revision ${j.revision_no}, version ${j.version}</p>
     <table><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr>
     ${j.lines.map((l) => `<tr><td>${esc(accountName(l.account_id))}</td><td class="num">${l.debit === "0.00" ? "" : l.debit}</td><td class="num">${l.credit === "0.00" ? "" : l.credit}</td></tr>`).join("")}</table>
     ${j.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}
     ${canEdit() && !j.source_kind && j.status !== "deleted" ? `<p><button class="secondary" onclick="editJournal('${j.id}')">Edit</button></p>` : ""}`;
-  $("journal-dialog").showModal();
+  showDialog();
 }
 
 const blank = (v) => (v === "0.00" || v === "0" ? "" : v);
@@ -723,9 +780,48 @@ async function renderSalesSettings() {
     <p class="muted small">The lines' tax codes decide: any VAT above 0% prints a tax invoice, only 0% or non-VAT prints a zero or non-VAT invoice, and no codes print a commercial invoice. State Charge relabels the VAT line, a draft prints marked DRAFT, and the KHR total comes from the invoice's own rate snapshot rather than today's rate.</p>`;
 }
 
-function showSale(d, party) {
+// A sales invoice (or credit note) is also the entry point of a small trail: the customer, its journal, the
+// receipts and payments that settle it, the credit notes that correct it, and the tax return for its month.
+async function showSale(d, party) {
+  const title = d.type === "credit_note" ? "Credit note" : "Sales invoice";
+  state.trailLabel ??= `${title} ${d.invoice_no}`;
+  const month = d.date.slice(0, 7);
+  let payments = [], receipts = [], credits = [], relatedError = null;
+  try {
+    [payments, receipts, credits] = await Promise.all([
+      api(`${ledgerUrl()}/payments`), api(`${ledgerUrl()}/receipts`), api(`${ledgerUrl()}/credit-notes`),
+    ]);
+  } catch (error) {
+    relatedError = error.message;
+  }
+  const settled = [];
+  for (const doc of [...payments, ...receipts]) {
+    if (doc.status === "deleted") continue;
+    for (const line of doc.lines ?? []) if (line.invoice_id === d.id) settled.push({ doc, line });
+  }
+  settled.sort((a, b) => a.doc.date.localeCompare(b.doc.date));
+  const creditNotes = d.type === "credit_note" ? [] : credits.filter((c) => c.original_invoice_id === d.id && c.status !== "deleted");
   const t = d.tax_currency;
-  $("journal-body").innerHTML = `<h3>${d.type === "credit_note" ? "Credit note" : "Sales invoice"} ${d.invoice_no} <span class="pill ${d.status}">${d.status}</span></h3>
+  const related = `
+    <h4>Related</h4>
+    <div class="trail-links">
+      <button type="button" class="secondary small" onclick="drillTo('Customer statement', () => showStatement('customer', '${d.customer_id}', today()))">Customer statement</button>
+      ${d.journal_id ? `<button type="button" class="secondary small" onclick="drillTo('Journal ${d.journal_no ?? ""}', () => openJournal('${d.journal_id}'))">Journal ${d.journal_no ?? ""}</button>` : ""}
+      ${d.original_invoice_id ? `<button type="button" class="secondary small" onclick="drillTo('Original invoice', () => openDocument('sales_invoice', '${d.original_invoice_id}'))">Original invoice</button>` : ""}
+      <button type="button" class="secondary small" onclick="openTaxPeriod('${month}')">Tax return ${month}</button>
+    </div>
+    ${relatedError ? `<p class="muted small">Related documents could not be loaded: ${esc(relatedError)}</p>` : ""}
+    ${d.type === "credit_note" ? "" : settled.length
+      ? `<h4>Received against this invoice</h4><table><tr><th>Document</th><th>Date</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr>
+        ${settled.map(({ doc, line }) => `<tr class="click" onclick="drillTo('${doc.type === "receipt" ? "Receipt" : "Payment"} ${doc.payment_no ?? ""}', () => openDocument('${doc.type}', '${doc.id}'))">
+          <td>${doc.type === "receipt" ? "Receipt" : "Payment"} ${doc.payment_no ?? ""}</td><td>${doc.date}</td><td>${esc(doc.reference ?? "")}</td>
+          <td class="num">${money(Number(line.total ?? line.amount), doc.currency)}</td><td><span class="pill ${doc.status}">${doc.status}</span></td></tr>`).join("")}</table>`
+      : `<p class="muted small">No receipt or payment references this invoice yet.</p>`}
+    ${creditNotes.length ? `<h4>Credit notes</h4><table><tr><th>Number</th><th>Date</th><th class="num">Gross</th><th>Status</th></tr>
+      ${creditNotes.map((c) => `<tr class="click" onclick="drillTo('Credit note ${c.invoice_no}', () => openDocument('sales_credit_note', '${c.id}'))">
+        <td>Credit note ${c.invoice_no}</td><td>${c.date}</td><td class="num">${money(Number(c.gross_total), c.currency)}</td><td><span class="pill ${c.status}">${c.status}</span></td></tr>`).join("")}</table>` : ""}`;
+
+  $("journal-body").innerHTML = `<h3>${title} ${d.invoice_no} <span class="pill ${d.status}">${d.status}</span></h3>
     <p class="muted">${esc(party(d.customer_id))} · ${d.date} · due ${d.due_date} · ${esc(d.reference ?? "")}</p>
     <table><tr><th>Account</th><th>Description</th><th class="num">Net</th><th class="num">VAT</th></tr>
     ${d.lines.map((l) => `<tr><td>${esc(accountName(l.account_id))}</td><td>${esc(l.description)}</td><td class="num">${l.net_amount}</td>
@@ -733,10 +829,11 @@ function showSale(d, party) {
     <tr class="total"><td colspan="2">Gross ${d.gross_total}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td></tr></table>
     ${t ? `<p>Total including VAT: <b>${Number(t.gross_total).toLocaleString()} ${t.currency}</b> (VAT ${Number(t.tax_total).toLocaleString()} ${t.currency})
       at ${t.rate} ${esc(t.rate_source)} of ${t.rate_date}${t.reason ? ` · ${esc(t.reason)}` : ""}</p>` : ""}
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}${journalButton(d)}
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}
+    ${related}
     <p><button class="secondary" onclick="openPdf('${d.type === "credit_note" ? "credit-notes" : "sales-invoices"}/${d.id}/pdf')">Print PDF</button>
       ${canEdit() ? `<button class="secondary" onclick="editDocument('sale', '${d.type}', '${d.id}')">Edit</button>` : ""}</p>`;
-  $("journal-dialog").showModal();
+  showDialog();
 }
 
 // The PDF needs the bearer token, so it is fetched and opened as a blob.
@@ -944,7 +1041,7 @@ async function renderTax(period) {
         <table><tr><th>Document</th><th>Date</th><th>Party</th><th>Line</th><th class="num">Amount</th><th class="num">Rate</th><th class="num">KHR</th></tr>
         ${box.lines.map((l) => `<tr class="click" onclick="openDocument('${l.document_type}', '${l.document_id}')"><td>${l.document_type.replaceAll("_", " ")} ${l.document_no}</td><td>${l.date}</td><td>${esc(l.party)}</td><td>${esc(l.description ?? "")}</td>
           <td class="num">${l.amount}</td><td class="num">${l.tax_currency_rate ?? ""}</td><td class="num">${l.tax_currency_amount ? Number(l.tax_currency_amount).toLocaleString() : ""}</td></tr>`).join("")}</table>`;
-      $("journal-dialog").showModal();
+      showDialog();
     };
   }
   for (const tr of $("tab-tax").querySelectorAll("tr[data-tax]")) tr.onclick = () => taxCodeForm(taxCodes.find((t) => t.id === tr.dataset.tax));
@@ -962,7 +1059,7 @@ function showPurchase(d, party) {
       gross ${d.tax_currency.gross_total} · VAT ${d.tax_currency.tax_total}</p>` : ""}
     ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}${journalButton(d)}
     ${canEdit() ? `<p><button class="secondary" onclick="editDocument('purchase', '${d.type}', '${d.id}')">Edit</button></p>` : ""}`;
-  $("journal-dialog").showModal();
+  showDialog();
 }
 
 // Statements: nested groups with a subtotal at every level.

@@ -43,7 +43,7 @@ function showAdjustment(a, itemName) {
     ${postingHtml(a.posting)}
     ${a.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(a)}${journalButton(a)}
     ${canEdit() ? `<p><button class="secondary" onclick="editAdjustment('${a.id}')">Edit</button></p>` : ""}`;
-  $("journal-dialog").showModal();
+  showDialog();
 }
 
 /** The journal an adjustment posts, and a sentence on where the value went. */
@@ -278,7 +278,7 @@ async function showMovements(itemId, from, to) {
         <td class="num">${l.quantity_in}</td><td class="num">${l.quantity_out}</td><td class="num">${l.value}</td>
         <td class="num ${Number(l.balance_quantity) < 0 ? "error" : ""}">${l.balance_quantity}</td><td class="num">${l.balance_value}</td></tr>`).join("")}
       <tr class="total"><td colspan="6">Closing ${m.currency}</td><td class="num">${m.closing_quantity}</td><td class="num">${m.closing_value}</td></tr></table>`;
-    $("journal-dialog").showModal();
+    showDialog();
     $("movements-form").onsubmit = (e) => { e.preventDefault(); showMovements(itemId, e.target.from.value, e.target.to.value); };
     const docKind = { purchase_invoice: "purchase_invoice", debit_note: "purchase_debit_note", sales_invoice: "sales_invoice", credit_note: "sales_credit_note", stock_adjustment: "stock_adjustment" };
     for (const tr of $("journal-body").querySelectorAll("tr[data-doc]")) tr.onclick = () => openDocument(docKind[tr.dataset.kind], tr.dataset.doc);

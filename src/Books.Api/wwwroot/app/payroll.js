@@ -98,7 +98,7 @@ function showEmployee(e) {
     ${e.runs.map((r) => `<tr><td>${r.period}</td><td>${r.date}</td><td>${r.currency}</td>
       <td class="num">${money(Number(r.gross), r.currency)}</td><td class="num">${money(Number(r.tax), r.currency)}</td>
       <td class="num">${money(Number(r.nssfEmployee) + Number(r.nssfEmployer), r.currency)}</td><td class="num">${money(Number(r.net), r.currency)}</td></tr>`).join("")}</table>`;
-  $("journal-dialog").showModal();
+  showDialog();
 }
 
 function showPayRun(r) {
