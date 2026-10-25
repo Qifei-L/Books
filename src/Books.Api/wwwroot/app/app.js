@@ -385,6 +385,7 @@ const NAV = [
   { group: "Settings", items: [
     { id: "settings-ledger", label: "Ledger and periods" },
     { id: "settings-branding", label: "Branding & output" },
+    { id: "settings-templates", label: "Report templates" },
     { id: "settings-org", label: "Organization" },
   ] },
 ];
@@ -438,6 +439,7 @@ const PAGES = {
   tax: { title: "Tax return", sub: "The month's return on the GDT forms, the tax codes behind it, and filing", render: () => renderTax(state.taxPeriod ?? "2026-10") },
   "settings-ledger": { title: "Ledger and periods", sub: "Currency, fiscal year, close date and year-end revaluation", render: () => renderSettingsLedger() },
   "settings-branding": { title: "Branding and output", sub: "Organization identity, report language, paper and print defaults", render: () => renderReportSettings() },
+  "settings-templates": { title: "Report templates", sub: "Versioned section order and switches for client packs and tax workpapers", render: () => renderReportTemplates() },
   "settings-org": { title: "Organization", sub: "The organization, its companies and the exchange rates they share", render: () => renderSettingsOrg() },
 };
 

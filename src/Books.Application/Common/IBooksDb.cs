@@ -2,6 +2,7 @@ using Books.Domain.Access;
 using Books.Domain.Documents;
 using Books.Domain.Journals;
 using Books.Domain.Ledgers;
+using Books.Domain.Reporting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -38,6 +39,7 @@ public interface IBooksDb
     DbSet<AccountClass> Classes { get; }
     DbSet<OrganizationBranding> OrganizationBranding { get; }
     DbSet<LedgerReportSettings> LedgerReportSettings { get; }
+    DbSet<ReportTemplate> ReportTemplates { get; }
     DbSet<Location> Locations { get; }
     DbSet<StockTransfer> StockTransfers { get; }
     DbSet<StockTransferLine> StockTransferLines { get; }

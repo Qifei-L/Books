@@ -65,6 +65,9 @@ public sealed class TestHost : IAsyncLifetime
             builder.UseSetting("Auth:Audience", Audience);
             builder.UseSetting("Auth:McpAudience", McpAudience);
             builder.UseSetting("Logging:LogLevel:Default", "Warning");
+            // CI and sandboxed runs have no write access to the Windows event log; the provider must not
+            // turn a test's HTTP error into a logging failure that hides the real exception.
+            builder.UseSetting("Logging:EventLog:LogLevel:Default", "None");
         });
         // Start the server now: lazy start from parallel tests is not thread-safe and could build two hosts with different keys.
         _ = _factory.Server;

@@ -98,7 +98,8 @@ are admin-only; per-ledger language, comparative, paper, orientation, watermark,
 editable through Settings → Branding & output. Defaults are English, prior-period comparison, A4 portrait, no watermark
 and a seven-day share window.
 
-Done: branding/output settings, the Stimulsoft client pack PDF (cover, P&L, BS, TB, AR/AP aging) and the tax workpaper PDF
-(trial watermark until a licence key is configured). Still open: template versioning, report runs/share links and official
+Done: branding/output settings, the Stimulsoft client pack PDF (cover, P&L, BS, TB, AR/AP aging), the tax workpaper PDF
+(trial watermark until a licence key is configured) and versioned report templates (code defaults, ledger overrides,
+draft → published, section order and switches). Still open: report runs/share links, Excel report packs and official
 GDT form facsimiles.
 

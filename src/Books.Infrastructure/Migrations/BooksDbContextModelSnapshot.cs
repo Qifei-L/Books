@@ -4111,6 +4111,92 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Reporting.ReportTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Definition")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("definition");
+
+                    b.Property<DateOnly?>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid?>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<Guid?>("PublishedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_by");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_report_templates");
+
+                    b.HasIndex("LedgerId")
+                        .HasDatabaseName("ix_report_templates_ledger_id");
+
+                    b.HasIndex("OrgId", "LedgerId", "Kind", "Status")
+                        .HasDatabaseName("ix_report_templates_org_id_ledger_id_kind_status");
+
+                    b.HasIndex("OrgId", "LedgerId", "Kind", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("ix_report_templates_org_id_ledger_id_kind_version");
+
+                    b.ToTable("report_templates", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_report_templates_kind", "kind IN ('client_pack', 'financial_statements', 'trial_balance', 'gl_detail', 'aging', 'tax_return', 'tax_workpaper')");
+
+                            t.HasCheckConstraint("ck_report_templates_status", "status IN ('draft', 'published')");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Access.Invitation", b =>
                 {
                     b.HasOne("Books.Domain.Access.User", null)
@@ -5356,6 +5442,22 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_tax_codes_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Reporting.ReportTemplate", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_report_templates_ledgers_ledger_id");
+
+                    b.HasOne("Books.Domain.Access.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_report_templates_organizations_org_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.Assembly", b =>

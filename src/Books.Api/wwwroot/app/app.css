@@ -280,6 +280,12 @@ label.inline-label { flex-direction: row; align-items: center; gap: 6px; margin:
 .facts dt { color: var(--muted); font-size: 13px; }
 .facts dd { margin: 0; font-variant-numeric: tabular-nums; }
 
+/* Report template preview and editor. */
+.template-sections { margin: 8px 0 14px 20px; line-height: 1.9; }
+.template-order { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; margin: 6px 0 4px; }
+.actions-cell { text-align: right; white-space: nowrap; }
+.actions-cell button + button { margin-left: 4px; }
+
 @media (max-width: 1100px) {
   :root { --side: 196px; }
   .page { padding: 16px 18px 64px; }

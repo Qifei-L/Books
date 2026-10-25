@@ -48,7 +48,8 @@ public static class ReportEndpoints
         reports.MapGet("/client-pack.pdf", async (Guid orgId, Guid ledgerId, DateOnly from, DateOnly to,
             PrincipalAccessor principals, StatementService statements, ReportService reportsService, PayablesReportService payables,
             ReceivablesReportService receivables, Books.Application.Reporting.ReportDeliverySettingsService settings,
-            Books.Application.Ledgers.CompanyService companies, CancellationToken ct, Guid? classId = null, Guid? locationId = null) =>
+            Books.Application.Reporting.ReportTemplateService templates, Books.Application.Ledgers.CompanyService companies,
+            CancellationToken ct, Guid? classId = null, Guid? locationId = null) =>
         {
             var principal = await principals.GetAsync(ct);
             var pl = await statements.ProfitAndLossAsync(principal, orgId, ledgerId, from, to, ct, classId, locationId);
@@ -59,7 +60,9 @@ public static class ReportEndpoints
             var company = (await companies.GetLedgerAsync(principal, orgId, ledgerId, ct)).CompanyName;
             var branding = await settings.GetBrandingAsync(principal, orgId, ct);
             var output = await settings.GetLedgerSettingsAsync(principal, orgId, ledgerId, ct);
-            var pdf = Books.Api.Reporting.StimulsoftReportRenderer.RenderClientPack(pl, bs, tb, ar, ap, branding, output, company);
+            var template = await templates.ResolveAsync(orgId, ledgerId, Books.Domain.Reporting.ReportTemplateKind.ClientPack, to, ct);
+            var pdf = Books.Api.Reporting.StimulsoftReportRenderer.RenderClientPack(pl, bs, tb, ar, ap, branding, output, company,
+                template.EnabledSections);
             return Results.File(pdf, "application/pdf", $"client-pack-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}.pdf");
         });
 

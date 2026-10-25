@@ -38,13 +38,14 @@ public static class TaxReturnEndpoints
 
         ledger.MapGet("/tax-returns/{period}.pdf", async (Guid orgId, Guid ledgerId, string period, string? khrRate, string? khrReason, int? definitionVersion,
             PrincipalAccessor principals, TaxReturnService service, Books.Application.Reporting.ReportDeliverySettingsService settings,
-            Books.Application.Ledgers.CompanyService companies, CancellationToken ct) =>
+            Books.Application.Reporting.ReportTemplateService templates, Books.Application.Ledgers.CompanyService companies, CancellationToken ct) =>
         {
             var principal = await principals.GetAsync(ct);
             var r = await service.ReturnAsync(principal, orgId, ledgerId, period, Override(khrRate, khrReason), ct, definitionVersion);
             var company = (await companies.GetLedgerAsync(principal, orgId, ledgerId, ct)).CompanyName;
             var branding = await settings.GetBrandingAsync(principal, orgId, ct);
-            var pdf = Books.Api.Reporting.StimulsoftReportRenderer.RenderTaxWorkpaper(r, branding, company);
+            var template = await templates.ResolveAsync(orgId, ledgerId, Books.Domain.Reporting.ReportTemplateKind.TaxWorkpaper, r.To, ct);
+            var pdf = Books.Api.Reporting.StimulsoftReportRenderer.RenderTaxWorkpaper(r, branding, company, template.EnabledSections);
             return Results.File(pdf, "application/pdf", $"tax-workpaper-{r.Period}.pdf");
         });
 

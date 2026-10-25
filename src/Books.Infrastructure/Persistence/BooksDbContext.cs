@@ -3,6 +3,7 @@ using Books.Domain.Access;
 using Books.Domain.Documents;
 using Books.Domain.Journals;
 using Books.Domain.Ledgers;
+using Books.Domain.Reporting;
 using Microsoft.EntityFrameworkCore;
 
 namespace Books.Infrastructure.Persistence;
@@ -37,6 +38,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<AccountClass> Classes => Set<AccountClass>();
     public DbSet<OrganizationBranding> OrganizationBranding => Set<OrganizationBranding>();
     public DbSet<LedgerReportSettings> LedgerReportSettings => Set<LedgerReportSettings>();
+    public DbSet<ReportTemplate> ReportTemplates => Set<ReportTemplate>();
     public DbSet<Location> Locations => Set<Location>();
     public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
     public DbSet<StockTransferLine> StockTransferLines => Set<StockTransferLine>();
@@ -92,5 +94,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
         configurationBuilder.Properties<Books.Domain.Documents.StatementLineStatus>().HaveConversion<LowerCaseEnumConverter<Books.Domain.Documents.StatementLineStatus>>().HaveMaxLength(20);
         configurationBuilder.Properties<Usage>().HaveConversion<LowerCaseEnumConverter<Usage>>().HaveMaxLength(40);
         configurationBuilder.Properties<MembershipStatus>().HaveConversion<LowerCaseEnumConverter<MembershipStatus>>().HaveMaxLength(20);
+        configurationBuilder.Properties<ReportTemplateKind>().HaveConversion<LowerCaseEnumConverter<ReportTemplateKind>>().HaveMaxLength(40);
+        configurationBuilder.Properties<ReportTemplateStatus>().HaveConversion<LowerCaseEnumConverter<ReportTemplateStatus>>().HaveMaxLength(20);
     }
 }
