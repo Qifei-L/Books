@@ -779,7 +779,7 @@ async function renderDocList(kind) {
   const pager = `<div class="pager">
     <span class="muted small">${sorted.length ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, sorted.length)} of ${sorted.length}` : ""}</span>
     <label class="inline-label">Rows <select id="${k.container}-pagesize">
-      ${[25, 50, 100, 1000].map((n) => `<option value="${n}" ${pageSize === n ? "selected" : ""}>${n === 1000 ? "All" : n}</option>`).join("")}
+      ${[25, 50, 100, 1000].map((n) => `<option value="${n}" ${pageSize === n ? "selected" : ""}>${n}</option>`).join("")}
     </select></label>
     ${pageCount > 1 ? `<button type="button" class="secondary small" data-page="prev" ${page === 1 ? "disabled" : ""}>‹</button>
       <span class="muted small">${page} / ${pageCount}</span>
