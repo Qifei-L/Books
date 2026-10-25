@@ -245,9 +245,8 @@ const transactionBankCell = (d) => {
   const from = bankOf(d.from_account_id);
   if (!from) return "";
   const to = bankLabel(d.to_account_id);
-  const toCurrency = bankCurrency(d.to_account_id);
   return `<div class="cell-main"><span class="cell-clip" title="${esc(`${from.code} ${from.name}`)}">${esc(from.code)} ${esc(from.name)}</span></div>
-    <div class="cell-sub">→ ${esc(to)}${toCurrency ? ` · ${esc(toCurrency)}` : ""}</div>`;
+    <div class="cell-sub">→ ${esc(to)}</div>`;
 };
 const transactionAmountCell = (d, c) => (d.doc_kind === "transfer" ? transferAmountCell(d, c) : money(d.amount, c.currencyOf(d)));
 
