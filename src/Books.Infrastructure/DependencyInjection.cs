@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<AccountService>();
         services.AddScoped<AccountGroupService>();
         services.AddScoped<ClassService>();
+        services.AddScoped<ReportDeliverySettingsService>();
         services.AddScoped<JournalService>();
         services.AddScoped<LedgerSettingsService>();
         services.AddScoped<ReportService>();

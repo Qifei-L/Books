@@ -80,6 +80,7 @@ api.MapMembershipEndpoints();
 api.MapInvitationEndpoints();
 api.MapAccountEndpoints();
 api.MapClassEndpoints();
+api.MapReportDeliveryEndpoints();
 api.MapPartyEndpoints();
 api.MapTaxCodeEndpoints();
 api.MapBankEndpoints();

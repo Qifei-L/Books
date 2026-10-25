@@ -411,6 +411,80 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Access.OrganizationBranding", b =>
+                {
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("address");
+
+                    b.Property<string>("BrandColor")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("brand_color");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("Footer")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("footer");
+
+                    b.Property<string>("LegalName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("legal_name");
+
+                    b.Property<string>("LegalNameKm")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("legal_name_km");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("phone");
+
+                    b.Property<string>("PreparedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("prepared_by");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reviewed_by");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("VatTin")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("vat_tin");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("OrgId")
+                        .HasName("pk_organization_branding");
+
+                    b.ToTable("organization_branding", (string)null);
+                });
+
             modelBuilder.Entity("Books.Domain.Access.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3735,6 +3809,89 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.LedgerReportSettings", b =>
+                {
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Comparative")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("comparative");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("language");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Orientation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("orientation");
+
+                    b.Property<string>("PackSections")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("pack_sections");
+
+                    b.Property<string>("PaperSize")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("paper_size");
+
+                    b.Property<int>("ShareDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("share_days");
+
+                    b.Property<bool>("ShowAccountCodes")
+                        .HasColumnType("boolean")
+                        .HasColumnName("show_account_codes");
+
+                    b.Property<bool>("ShowZeroBalances")
+                        .HasColumnType("boolean")
+                        .HasColumnName("show_zero_balances");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.Property<string>("Watermark")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("watermark");
+
+                    b.HasKey("LedgerId")
+                        .HasName("pk_ledger_report_settings");
+
+                    b.ToTable("ledger_report_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ledger_report_settings_language", "language IN ('en', 'km', 'bilingual')");
+
+                            t.HasCheckConstraint("ck_ledger_report_settings_orientation", "orientation IN ('portrait', 'landscape')");
+
+                            t.HasCheckConstraint("ck_ledger_report_settings_watermark", "watermark IN ('none', 'draft', 'final')");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.Location", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4041,6 +4198,16 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_organizations_users_created_by");
+                });
+
+            modelBuilder.Entity("Books.Domain.Access.OrganizationBranding", b =>
+                {
+                    b.HasOne("Books.Domain.Access.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_organization_branding_organizations_org_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Access.UserIdentity", b =>
@@ -5139,6 +5306,16 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_ledgers_companies");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.LedgerReportSettings", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ledger_report_settings_ledgers_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Ledgers.Location", b =>

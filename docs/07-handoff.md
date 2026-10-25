@@ -90,3 +90,14 @@ Branch `feat/journal-dimensions` adds the first slice of class/location dimensio
 
 Rules: class and location are reporting dimensions only; they never change the account or the subledger. A manual journal may post AR/AP with a party, but it still cannot control inventory, fixed assets or payroll.
 
+
+## Report delivery (2026-10-25)
+
+Branding and output settings are implemented: organization legal names, VATTIN, address, color, footer and signatories
+are admin-only; per-ledger language, comparative, paper, orientation, watermark, pack sections and share days are
+editable through Settings → Branding & output. Defaults are English, prior-period comparison, A4 portrait, no watermark
+and a seven-day share window.
+
+Still open: Stimulsoft PDF/Excel report packs, tax workpapers, report templates/versioning, report runs and share links.
+Tax workpapers come before official GDT form facsimiles.
+

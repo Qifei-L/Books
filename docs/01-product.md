@@ -61,6 +61,7 @@ Replace our Manager.io bookkeeping with a system that:
 | M15.1 Journal dimensions | Manual journals post AR/AP with a party; class and location on journal, sales and purchase lines; class master data, API and page; manual VAT/other tax entered gross and split into net + tax; GL Detail shows class, location and party | Done |
 | M16 Report dimensions | TB, BS, P&L and GL Detail filter by class and location; the same filters reach the app and Excel; unfiltered totals unchanged | Done |
 | M17 Attachments (implements M13) | Files attached to invoices, bills, payments and journals; upload, download, delete, audit and MCP | Planned (next, after the full-page record surface) |
+| M18 Report delivery | Organization branding and per-ledger output settings; Stimulsoft PDF/Excel report packs; tax workpapers before official GDT forms; English default | In progress (settings done; Stimulsoft workpaper next) |
 | Later | Remaining document dimensions; M14 organization-shared data; annual income tax return; CamInvoice | Planned |
 
 MCP tools ship with each milestone, not at the end.

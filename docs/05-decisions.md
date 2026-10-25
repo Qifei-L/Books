@@ -92,6 +92,8 @@
 | 2026-10-25 | Manual journals may post AR/AP only for organization administrators until ledger roles are implemented. The API enforces it; the journal form hides control accounts for other editors. Documents are unaffected. |
 | 2026-10-25 | State Charge is a tax kind (state_charge) using the other-tax line, account and print path, with its own return category. It prints as its own line; the old StateCharge flag still means "label VAT as state charge" for VAT paid on behalf of the state. |
 | 2026-10-25 | A manual VAT tax line carries its tax code and sale/purchase direction. The tax return uses the direction for line boxes and drops the posting-usage box for that line, so manual VAT is not counted twice. |
+| 2026-10-25 | Report delivery: organization branding (legal names, VATTIN, address, color, footer, signatories) is admin-only; language, comparative, paper, orientation, watermark, pack sections and share days are per-ledger output defaults. Default output language is English. |
+| 2026-10-25 | Stimulsoft Reports.Web is the chosen report engine. Tax workpapers come before official GDT form facsimiles; official T7 01/WT 03/TOS 01 layouts need samples before they are claimed. |
 
 
 ## Proposed defaults (accept or change)
