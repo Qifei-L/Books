@@ -120,7 +120,7 @@ async function renderDocList(kind) {
   }
   const { docs, counterparts, parties } = state.docData[kind];
   const nameOf = (id) => parties.find((p) => p.id === id)?.name ?? "";
-  const partyName = (d) => nameOf(d[k.partyKey]);
+  const partyName = (d) => (k.partyText ? k.partyText(d) : nameOf(d[k.partyKey]));
   const counterpartNo = (id) => counterparts.find((c) => c.id === id)?.invoice_no ?? "";
   const khr = (d) => (d.tax_currency ? `${money(d.tax_currency.gross_total, "KHR")} ៛` : "");
   const sum = (list, key) => list.reduce((s, d) => s + Number(d[key] ?? 0), 0).toFixed(2);
@@ -304,7 +304,9 @@ async function renderDocList(kind) {
   const credited = new Set(shown.map((d) => d.original_invoice_id).filter(Boolean)).size;
   const facts = tab === "draft"
     ? ""
-    : k.extra === "overdue"
+    : k.extra === "none"
+      ? ""
+      : k.extra === "overdue"
       ? (Number(overdue) > 0 ? `Overdue ${money(overdue)} ${currency}` : "")
       : credited > 0
         ? `${credited} ${k.side === "sale" ? "invoice" : "bill"}${credited === 1 ? "" : "s"} ${k.side === "sale" ? "credited" : "debited"}`
