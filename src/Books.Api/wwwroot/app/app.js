@@ -1,6 +1,36 @@
 // Preview of Books, for local testing only. Plain JavaScript, no build step; data entry is in forms.js.
 const state = { token: sessionStorage.getItem("books.token"), org: null, ledger: null, accounts: [] };
 const $ = (id) => document.getElementById(id);
+
+// What the reader chose — visible columns, their order, row density, rows per page — lives in the
+// browser, not on the server: it is a reading preference, not part of the books.
+const UI_KEY = "books.ui.v1";
+
+function loadUi() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(UI_KEY) ?? "null");
+    if (!saved) return;
+    state.docCols = Object.fromEntries(Object.entries(saved.cols ?? {}).map(([kind, keys]) => [kind, new Set(keys)]));
+    state.docOrder = saved.order ?? {};
+    if (saved.density) state.density = saved.density;
+    if (saved.pageSize) state.pageSize = saved.pageSize;
+  } catch {
+    // A broken or unreadable value must not stop the app; the defaults take over.
+  }
+}
+
+function saveUi() {
+  try {
+    localStorage.setItem(UI_KEY, JSON.stringify({
+      cols: Object.fromEntries(Object.entries(state.docCols ?? {}).map(([kind, keys]) => [kind, [...keys]])),
+      order: state.docOrder ?? {},
+      density: state.density,
+      pageSize: state.pageSize,
+    }));
+  } catch {
+    // Private mode or a full quota: the choice simply does not persist.
+  }
+}
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 async function api(path, options = {}) {
@@ -344,6 +374,7 @@ async function showTab(id, force = false) {
   }
 }
 
+loadUi();
 buildNav();
 
 // Every page names accounts, so groups, accounts and purposes load once per company.
@@ -736,7 +767,8 @@ async function renderDocList(kind) {
   const columnsMenu = `<div class="popover hidden" id="${ids.colsMenu}">
     <p class="muted small" style="margin:0 0 6px">Show a column, or move it left and right</p>
     ${order.map(columnRow).join("")}
-    <p class="muted small" style="margin:6px 0 0">${amountLabel} always shows; the arrows set the order.</p></div>`;
+    <p class="muted small" style="margin:6px 0 0">${amountLabel} always shows; the arrows set the order.</p>
+    <button type="button" class="link" id="${ids.colsMenu}-reset" style="font-size:12px;padding:2px 0">Reset to defaults</button></div>`;
 
   setActions("");
 
@@ -793,22 +825,31 @@ async function renderDocList(kind) {
     box.onchange = () => {
       if (box.checked) chosen.add(box.dataset.col);
       else chosen.delete(box.dataset.col);
+      saveUi();
       renderDocList(kind);
     };
   }
+  $(`${ids.colsMenu}-reset`).onclick = () => {
+    state.docCols[kind] = new Set(DOC_COLUMN_DEFAULTS);
+    delete state.docOrder[kind];
+    saveUi();
+    renderDocList(kind);
+  };
   for (const button of $(ids.colsMenu).querySelectorAll("button[data-move]")) {
     button.onclick = () => {
       const i = order.indexOf(button.dataset.key);
       const j = button.dataset.move === "up" ? i - 1 : i + 1;
       if (j < 0 || j >= order.length) return;
       [order[i], order[j]] = [order[j], order[i]];
+      saveUi();
       renderDocList(kind);
     };
   }
-  $(ids.density).onclick = () => { state.density = docDensity() === "compact" ? "comfortable" : "compact"; renderDocList(kind); };
+  $(ids.density).onclick = () => { state.density = docDensity() === "compact" ? "comfortable" : "compact"; saveUi(); renderDocList(kind); };
   $(`${k.container}-pagesize`).onchange = (event) => {
     state.pageSize = Number(event.target.value);
     state.docPage[kind] = 1;
+    saveUi();
     renderDocList(kind);
   };
   for (const b of $(`tab-${k.container}`).querySelectorAll("[data-page]")) {

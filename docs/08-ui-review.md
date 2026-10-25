@@ -22,7 +22,8 @@ at a few dozen parties and cannot show a tax ID), then search, which filters as 
 
 The row's identity is the party, with the date and (unless it has a column of its own) the reference under it;
 the system number stays out of the list. Columns and rows per page are chosen in the toolbar — 25, 50, 100 or
-all — and the totals row always sums every filtered document, not the visible page.
+all — and the totals row always sums every filtered document, not the visible page. Visible columns, their
+order, density and rows per page are kept in localStorage (`books.ui.v1`): a reading preference, not data.
 
 The table borrows from QuickBooks: the number, date and reference are one two-line cell; one amount column
 headed with its currency; a single status badge; days late inline on the due date; a row menu on hover
