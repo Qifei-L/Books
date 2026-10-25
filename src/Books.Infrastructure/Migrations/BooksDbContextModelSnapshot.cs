@@ -486,6 +486,148 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("identities", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.Assembly", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<long>("AssemblyNo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("assembly_no");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("InventoryAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inventory_account_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<Guid?>("JournalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("journal_id");
+
+                    b.Property<Guid?>("LabourAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("labour_account_id");
+
+                    b.Property<decimal>("LabourAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("labour_amount");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("quantity");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reference");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_assemblies");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_assemblies_created_by");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_assemblies_item_id");
+
+                    b.HasIndex("LedgerId", "AssemblyNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_assemblies_ledger_id_assembly_no");
+
+                    b.HasIndex("LedgerId", "JournalId")
+                        .HasDatabaseName("ix_assemblies_ledger_id_journal_id");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_assemblies_org_id_ledger_id");
+
+                    b.ToTable("assemblies", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_assemblies_status", "status IN ('draft', 'posted', 'deleted') AND (status <> 'posted' OR journal_id IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.AssemblyLine", b =>
+                {
+                    b.Property<Guid>("AssemblyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assembly_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_no");
+
+                    b.Property<Guid>("ComponentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("component_id");
+
+                    b.Property<Guid>("InventoryAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inventory_account_id");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("quantity");
+
+                    b.Property<decimal>("Value")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("value");
+
+                    b.HasKey("AssemblyId", "LineNo")
+                        .HasName("pk_assembly_lines");
+
+                    b.HasIndex("ComponentId")
+                        .HasDatabaseName("ix_assembly_lines_component_id");
+
+                    b.ToTable("assembly_lines", (string)null);
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.BankClearing", b =>
                 {
                     b.Property<Guid>("AccountId")
@@ -3375,6 +3517,33 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("item_categories", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.ItemComponent", b =>
+                {
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<Guid>("ComponentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("component_id");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("quantity");
+
+                    b.HasKey("ItemId", "ComponentId")
+                        .HasName("pk_item_components");
+
+                    b.HasIndex("ComponentId")
+                        .HasDatabaseName("ix_item_components_component_id");
+
+                    b.ToTable("item_components", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_item_components_quantity", "quantity > 0 AND component_id <> item_id");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.ItemUnit", b =>
                 {
                     b.Property<Guid>("ItemId")
@@ -3792,6 +3961,55 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_identities_users_user_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.Assembly", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_assemblies_users_created_by");
+
+                    b.HasOne("Books.Domain.Ledgers.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_assemblies_items_item_id");
+
+                    b.HasOne("Books.Domain.Journals.Journal", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "JournalId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_assemblies_journals_ledger_id_journal_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_assemblies_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.AssemblyLine", b =>
+                {
+                    b.HasOne("Books.Domain.Documents.Assembly", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("AssemblyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_assembly_lines_assemblies_assembly_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ComponentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_assembly_lines_items_component_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.BankClearing", b =>
@@ -4763,6 +4981,23 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_item_categories_ledgers_org_id_ledger_id");
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.ItemComponent", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ComponentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_components_items_component_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Item", null)
+                        .WithMany("Components")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_components_items_item_id");
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.ItemUnit", b =>
                 {
                     b.HasOne("Books.Domain.Ledgers.Item", null)
@@ -4831,6 +5066,11 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_tax_codes_ledgers_org_id_ledger_id");
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.Assembly", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.BankStatement", b =>
                 {
                     b.Navigation("Lines");
@@ -4880,6 +5120,8 @@ namespace Books.Infrastructure.Migrations
 
             modelBuilder.Entity("Books.Domain.Ledgers.Item", b =>
                 {
+                    b.Navigation("Components");
+
                     b.Navigation("Units");
                 });
 #pragma warning restore 612, 618

@@ -10,7 +10,11 @@ public static class ItemEndpoints
     public sealed record ItemRequest(string Name, string? Description, string? Unit, Guid? CategoryId, Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool? Active,
         bool? TrackInventory = null, Guid? InventoryAccountId = null, Guid? IncomeAccountId = null, Guid? CostOfSalesAccountId = null,
         string? Code = null, string? SalesPrice = null, string? SalesDescription = null, Guid? SalesTaxCodeId = null,
-        string? PurchasePrice = null, string? PurchaseDescription = null, Guid? PurchaseTaxCodeId = null, IReadOnlyList<UnitRequest>? Units = null);
+        string? PurchasePrice = null, string? PurchaseDescription = null, Guid? PurchaseTaxCodeId = null, IReadOnlyList<UnitRequest>? Units = null,
+        IReadOnlyList<ComponentRequest>? Components = null);
+
+    /// <param name="Quantity">Base units of the component in one base unit of the item.</param>
+    public sealed record ComponentRequest(Guid ItemId, string Quantity);
 
     /// <param name="Factor">Base units in one of this unit, for example "24" for a box of 24.</param>
     public sealed record UnitRequest(string Name, string Factor);
@@ -45,5 +49,6 @@ public static class ItemEndpoints
             body.InventoryAccountId, body.IncomeAccountId, body.CostOfSalesAccountId, body.Code,
             Price(body.SalesPrice, "sales_price"), body.SalesDescription, body.SalesTaxCodeId,
             Price(body.PurchasePrice, "purchase_price"), body.PurchaseDescription, body.PurchaseTaxCodeId,
-            body.Units?.Select(u => (u.Name, Price(u.Factor, "units.factor") ?? 0)).ToList());
+            body.Units?.Select(u => (u.Name, Price(u.Factor, "units.factor") ?? 0)).ToList(),
+            body.Components?.Select(c => (c.ItemId, Price(c.Quantity, "components.quantity") ?? 0)).ToList());
 }
