@@ -1,18 +1,15 @@
-// Inventory tab: the stock report, items, and stock adjustments and counts (write-offs, damage, stock found).
+// Inventory: stock on hand, items and locations. The three inventory documents have their own list pages.
 
-async function renderInventory(asOf = state.inventoryAsOf ?? today()) {
+async function renderInventoryStock(asOf = state.inventoryAsOf ?? today()) {
   state.inventoryAsOf = asOf;
   try {
-    const [report, items, adjustments, accounts, taxCodes] = await Promise.all([
-      api(`${ledgerUrl()}/reports/inventory?asOf=${asOf}`), api(`${ledgerUrl()}/items`), api(`${ledgerUrl()}/stock-adjustments`),
+    const [report, items, accounts, taxCodes] = await Promise.all([
+      api(`${ledgerUrl()}/reports/inventory?asOf=${asOf}`), api(`${ledgerUrl()}/items`),
       api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/tax-codes`),
     ]);
-    const itemName = (id) => items.find((i) => i.id === id)?.name ?? "";
     const taxName = (id) => taxCodes.find((t) => t.id === id)?.name ?? "";
-    const shown = adjustments.filter((a) => a.status !== "deleted");
-    $("tab-inventory").innerHTML = `
-      ${canEdit() ? `<p><button onclick="adjustmentForm()">Adjust stock</button> <button class="secondary" onclick="adjustmentForm(null, true)">Stock count</button>
-        <button class="secondary" onclick="itemForm()">New item</button></p>` : ""}
+    $("tab-inventory-stock").innerHTML = `
+      ${canEdit() ? `<p><button onclick="itemForm()">New item</button></p>` : ""}
       <h3>Stock on hand</h3>
       <form class="inline" id="inventory-form"><label>As of <input type="date" name="asOf" value="${asOf}"></label><button type="submit">Run</button></form>
       <p>${report.matches_control ? `<span class="ok">Equals the inventory account ${report.control_balance}</span>` : `<span class="error">Does not equal the inventory account ${report.control_balance}</span>`}</p>
@@ -20,26 +17,18 @@ async function renderInventory(asOf = state.inventoryAsOf ?? today()) {
       ${report.items.map((r) => `<tr class="click" data-movements="${r.item_id}"><td>${esc(r.name)}</td><td>${esc(r.unit ?? "")}</td><td class="num">${r.quantity_in}</td><td class="num">${r.quantity_out}</td>
         <td class="num ${Number(r.on_hand) < 0 ? "error" : ""}">${r.on_hand}</td><td class="num">${r.average_cost}</td><td class="num">${r.value}</td></tr>`).join("")}
       <tr class="total"><td colspan="6">Total ${report.currency}</td><td class="num">${report.total_value}</td></tr></table>
-      <h3 style="margin-top:16px">Stock adjustments and counts</h3>
-      <table><tr><th>No.</th><th>Date</th><th>Reference</th><th>Lines</th><th class="num">Value</th><th>Status</th></tr>
-      ${shown.map((a) => `<tr class="click" data-adjustment="${a.id}"><td>SA ${a.adjustment_no}</td><td>${a.date}</td><td>${esc(a.reference ?? "")}</td>
-        <td>${a.lines.map((l) => `${esc(itemName(l.item_id))} ${Number(l.quantity) > 0 ? "+" : ""}${l.quantity}`).join("; ")}</td><td class="num">${a.total_value}</td>
-        <td>${a.status === "posted" ? `<span class="pill posted">posted</span> No. ${a.journal_no}` : `<span class="pill draft">${a.status}</span> ${a.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>
       <h3 style="margin-top:16px">Items</h3>
       <table><tr><th>Code</th><th>Item</th><th>Unit</th><th class="num">Sales price</th><th class="num">Purchase price</th><th>Inventory</th><th>Suggests account</th><th>Suggests tax</th></tr>
       ${items.map((i) => `<tr ${canEdit() ? `class="click" data-item="${i.id}"` : ""}><td>${esc(i.code ?? "")}</td><td>${esc(i.name)}${i.active ? "" : ` <span class="pill">inactive</span>`}</td><td>${esc(i.unit ?? "")}</td>
         <td class="num">${i.sales_price ?? ""}</td><td class="num">${i.purchase_price ?? ""}</td>
         <td>${i.track_inventory ? "tracked" : ""}</td><td>${i.default_account_id ? esc(accountName(i.default_account_id)) : ""}</td><td>${esc(taxName(i.default_tax_code_id))}</td></tr>`).join("")}</table>`;
-    $("inventory-form").onsubmit = (e) => { e.preventDefault(); renderInventory(e.target.asOf.value); };
-    $("tab-inventory").insertAdjacentHTML("beforeend", `<div id="tab-inventory-extra"></div>`);
+    $("inventory-form").onsubmit = (e) => { e.preventDefault(); renderInventoryStock(e.target.asOf.value); };
+    $("tab-inventory-stock").insertAdjacentHTML("beforeend", `<div id="tab-inventory-stock-extra"></div>`);
     await renderStock(asOf);
-    for (const tr of $("tab-inventory").querySelectorAll("tr[data-movements]")) tr.onclick = () => showMovements(tr.dataset.movements, `${asOf.slice(0, 4)}-01-01`, asOf);
-    for (const tr of $("tab-inventory").querySelectorAll("tr[data-adjustment]")) {
-      tr.onclick = () => showAdjustment(shown.find((a) => a.id === tr.dataset.adjustment), itemName);
-    }
-    for (const tr of $("tab-inventory").querySelectorAll("tr[data-item]")) tr.onclick = () => itemForm(items.find((i) => i.id === tr.dataset.item), accounts, taxCodes);
+    for (const tr of $("tab-inventory-stock").querySelectorAll("tr[data-movements]")) tr.onclick = () => showMovements(tr.dataset.movements, `${asOf.slice(0, 4)}-01-01`, asOf);
+    for (const tr of $("tab-inventory-stock").querySelectorAll("tr[data-item]")) tr.onclick = () => itemForm(items.find((i) => i.id === tr.dataset.item), accounts, taxCodes);
   } catch (error) {
-    $("tab-inventory").innerHTML = `<p class="muted">${esc(error.message)}</p>`;
+    $("tab-inventory-stock").innerHTML = `<p class="muted">${esc(error.message)}</p>`;
   }
 }
 
@@ -54,7 +43,7 @@ function showAdjustment(a, itemName) {
     ${postingHtml(a.posting)}
     ${a.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(a)}${journalButton(a)}
     ${canEdit() ? `<p><button class="secondary" onclick="editAdjustment('${a.id}')">Edit</button></p>` : ""}`;
-  $("journal-dialog").showModal();
+  showDialog();
 }
 
 /** The journal an adjustment posts, and a sentence on where the value went. */
@@ -289,7 +278,7 @@ async function showMovements(itemId, from, to) {
         <td class="num">${l.quantity_in}</td><td class="num">${l.quantity_out}</td><td class="num">${l.value}</td>
         <td class="num ${Number(l.balance_quantity) < 0 ? "error" : ""}">${l.balance_quantity}</td><td class="num">${l.balance_value}</td></tr>`).join("")}
       <tr class="total"><td colspan="6">Closing ${m.currency}</td><td class="num">${m.closing_quantity}</td><td class="num">${m.closing_value}</td></tr></table>`;
-    $("journal-dialog").showModal();
+    showDialog();
     $("movements-form").onsubmit = (e) => { e.preventDefault(); showMovements(itemId, e.target.from.value, e.target.to.value); };
     const docKind = { purchase_invoice: "purchase_invoice", debit_note: "purchase_debit_note", sales_invoice: "sales_invoice", credit_note: "sales_credit_note", stock_adjustment: "stock_adjustment" };
     for (const tr of $("journal-body").querySelectorAll("tr[data-doc]")) tr.onclick = () => openDocument(docKind[tr.dataset.kind], tr.dataset.doc);

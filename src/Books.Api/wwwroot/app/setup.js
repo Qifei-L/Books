@@ -1,58 +1,52 @@
-// Settings and fixed assets: customers and suppliers, tax codes, bank accounts, transfers, invoice settings,
-// exchange rates, and the fixed asset register with depreciation. Administrator-only changes are offered to administrators.
+// Settings pages, the fixed asset register and the tax code form. Administrator-only changes are offered
+// to administrators only.
 
 const isAdmin = () => state.role === "admin";
 
-async function renderSetup() {
-  const [parties, taxCodes, banks, transfers, invoiceSettings, rates, revaluations] = await Promise.all([
-    api(`${ledgerUrl()}/parties`), api(`${ledgerUrl()}/tax-codes`), api(`${ledgerUrl()}/bank-accounts`), api(`${ledgerUrl()}/transfers`),
-    api(`${ledgerUrl()}/invoice-settings`), api(`/api/v1/organizations/${state.org}/exchange-rates?from=${today().slice(0, 4)}-01-01&to=${today()}`),
-    api(`${ledgerUrl()}/fx-revaluations`),
-  ]);
-  const roles = (p) => [p.is_customer ? "customer" : null, p.is_supplier ? "supplier" : null].filter(Boolean).join(", ");
-  const s = invoiceSettings;
-  const shownTransfers = transfers.filter((t) => t.status !== "deleted");
-  $("tab-setup").innerHTML = `
-    <h3>Customers and suppliers ${canEdit() ? `<button class="secondary small" onclick="partyForm()">New</button>` : ""}</h3>
-    <table><tr><th>Name</th><th>Role</th><th>Tax ID</th><th>Contact</th><th class="num">Terms (days)</th></tr>
-    ${parties.map((p) => `<tr ${canEdit() ? `class="click" onclick="editParty('${p.id}')"` : ""}><td>${esc(p.name)}${p.active ? "" : ` <span class="pill">inactive</span>`}</td><td>${roles(p)}</td><td>${esc(p.tax_id)}</td><td>${esc(p.contact_name)}</td><td class="num">${p.payment_terms_days ?? ""}</td></tr>`).join("")}</table>
-
-    <h3 style="margin-top:16px">Bank accounts ${canEdit() ? `<button class="secondary small" onclick="bankForm()">New</button>` : ""}</h3>
-    <table><tr><th>Account</th><th>Bank</th><th>Number</th><th>Currency</th></tr>
-    ${banks.map((b) => `<tr ${canEdit() ? `class="click" data-bank="${b.account_id}"` : ""}><td>${esc(b.code)} ${esc(b.name)}</td><td>${esc(b.bank_name)}</td><td>${esc(b.account_number)}</td><td>${b.currency}</td></tr>`).join("")}</table>
-
-    <h3 style="margin-top:16px">Bank transfers ${canEdit() ? `<button class="secondary small" onclick="transferForm()">New</button>` : ""}</h3>
-    <table><tr><th>No.</th><th>Date</th><th>From</th><th>To</th><th class="num">Amount</th><th class="num">Fee</th><th>Journal</th></tr>
-    ${shownTransfers.map((t) => `<tr ${canEdit() ? `class="click" data-transfer="${t.id}"` : ""}><td>${t.transfer_no}</td><td>${t.date}</td><td>${esc(accountName(t.from_account_id))}</td><td>${esc(accountName(t.to_account_id))}</td>
-      <td class="num">${t.amount}${t.to_amount ? ` → ${t.to_amount}` : ""}</td><td class="num">${t.fee_amount}</td>
-      <td>${t.status === "posted" ? `posted, journal No. ${t.journal_no}` : `<span class="pill draft">${t.status}</span> ${t.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>
-
-    <h3 style="margin-top:16px">Tax codes ${isAdmin() ? `<button class="secondary small" onclick="taxCodeForm()">New</button>` : ""}</h3>
-    <table><tr><th>Name</th><th>Kind</th><th class="num">Rate %</th><th>Account</th><th>Return category</th><th>Effective</th></tr>
-    ${taxCodes.map((t) => `<tr ${isAdmin() ? `class="click" data-tax="${t.id}"` : ""}><td>${esc(t.name)}${t.active ? "" : ` <span class="pill">inactive</span>`}</td><td>${t.kind.replaceAll("_", " ")}</td><td class="num">${t.rate}</td>
-      <td>${t.account_id ? esc(accountName(t.account_id)) : ""}</td><td>${esc(t.return_category ?? "")}</td>
-      <td>${t.effective_from ? `from ${t.effective_from}` : ""}${t.effective_to ? ` to ${t.effective_to}` : ""}</td></tr>`).join("")}</table>
-
-    <h3 style="margin-top:16px">Invoice printing ${isAdmin() ? `<button class="secondary small" onclick="invoiceSettingsForm()">Edit</button>` : ""}</h3>
-    <p>${esc(s.name_khmer ?? "")} ${esc(s.name_english ?? "(company name)")} · VATTIN ${esc(s.tax_id ?? "not set")} · numbers ${esc(s.invoice_prefix)}00001 and ${esc(s.credit_note_prefix)}00001</p>
-
-    <h3 style="margin-top:16px">Exchange rates this year ${isAdmin() ? `<button class="secondary small" onclick="rateForm()">Set a rate</button>` : ""}</h3>
-    <p class="muted small">Shared by every company in the organization.</p>
-    <table><tr><th>Date</th><th>From</th><th>To</th><th class="num">Rate</th><th>Source</th></tr>
-    ${rates.slice(-12).reverse().map((r) => `<tr><td>${r.date}</td><td>${r.from_currency}</td><td>${r.to_currency}</td><td class="num">${r.rate}</td><td>${esc(r.source)}</td></tr>`).join("")}</table>
-
-    <h3 style="margin-top:16px">Year-end exchange revaluation ${canEdit() ? `<button class="secondary small" onclick="revaluationForm()">Revalue…</button>` : ""}</h3>
+// Ledger facts and the year-end work: nothing here is a document.
+async function renderSettingsLedger() {
+  const revaluations = await api(`${ledgerUrl()}/fx-revaluations`);
+  const months = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const l = state.ledger;
+  $("tab-settings-ledger").innerHTML = `
+    <dl class="facts">
+      <dt>Base currency</dt><dd>${esc(l.base_currency)}${l.first_posted_at ? ` <span class="muted small">fixed since the first posting on ${l.first_posted_at.slice(0, 10)}</span>` : ""}</dd>
+      <dt>Fiscal year starts</dt><dd>${months[l.fy_start_month]} (periods are calendar months)</dd>
+      <dt>Closed through</dt><dd>${l.closed_through ? `${l.closed_through} <span class="muted small">inclusive; drafts dated in this period block filing</span>` : `not closed`}</dd>
+      <dt>Tax pack</dt><dd>${esc(l.tax_pack ?? "none applied")}</dd>
+    </dl>
+    <h3>Year-end exchange revaluation ${canEdit() ? `<button class="secondary small" onclick="revaluationForm()">Revalue…</button>` : ""}</h3>
     <p class="muted small">Restates bank accounts and open invoices in another currency at the closing rate; the unrealized difference reverses the next day. Revalue before closing the year.</p>
-    <table><tr><th>No.</th><th>Date</th><th>Rates</th><th class="num">Unrealized</th><th>Status</th><th></th></tr>
-    ${revaluations.filter((r) => r.status !== "deleted").map((r) => `<tr><td>FXR ${r.revaluation_no}</td><td>${r.date}</td>
-      <td>${Object.entries(r.rates).map(([c, v]) => `${c} ${v}`).join(", ")}</td><td class="num">${r.total}</td><td><span class="pill ${r.status}">${r.status}</span></td>
-      <td><button class="secondary small" onclick="openJournal('${r.journal_id}')">Journal</button>
-        ${canEdit() ? `<button class="secondary small" onclick="deleteRevaluation('${r.id}', '${r.version}', '${r.date}')">Delete</button>` : ""}</td></tr>`).join("")}</table>`;
-  for (const tr of $("tab-setup").querySelectorAll("tr[data-bank]")) tr.onclick = () => bankForm(banks.find((b) => b.account_id === tr.dataset.bank));
-  for (const tr of $("tab-setup").querySelectorAll("tr[data-transfer]")) tr.onclick = () => transferForm(shownTransfers.find((t) => t.id === tr.dataset.transfer));
-  for (const tr of $("tab-setup").querySelectorAll("tr[data-tax]")) tr.onclick = () => taxCodeForm(taxCodes.find((t) => t.id === tr.dataset.tax));
+    ${revaluations.filter((r) => r.status !== "deleted").length ? `<table><tr><th>No.</th><th>Date</th><th>Rates</th><th class="num">Unrealized</th><th>Status</th><th></th></tr>
+      ${revaluations.filter((r) => r.status !== "deleted").map((r) => `<tr><td>FXR ${r.revaluation_no}</td><td>${r.date}</td>
+        <td>${Object.entries(r.rates).map(([c, v]) => `${c} ${v}`).join(", ")}</td><td class="num">${r.total}</td><td><span class="pill ${r.status}">${r.status}</span></td>
+        <td><button class="secondary small" onclick="openJournal('${r.journal_id}')">Journal</button>
+          ${canEdit() ? `<button class="secondary small" onclick="deleteRevaluation('${r.id}', '${r.version}', '${r.date}')">Delete</button>` : ""}</td></tr>`).join("")}</table>`
+      : `<p class="muted small">No revaluation posted for this company.</p>`}`;
 }
 
+
+async function renderSettingsOrg() {
+  const [org, companies, rates] = await Promise.all([
+    api(`/api/v1/organizations/${state.org}`),
+    api(`/api/v1/organizations/${state.org}/companies`),
+    api(`/api/v1/organizations/${state.org}/exchange-rates?from=${today().slice(0, 4)}-01-01&to=${today()}`),
+  ]);
+  $("tab-settings-org").innerHTML = `
+    <dl class="facts">
+      <dt>Organization</dt><dd>${esc(org.name)}</dd>
+      <dt>Your role</dt><dd>${esc(state.role ?? "")}</dd>
+    </dl>
+    <h3>Companies</h3>
+    <p class="muted small">One ledger per company. The company is chosen in the bar above.</p>
+    <table><tr><th>Company</th><th>Created</th></tr>
+    ${companies.map((c) => `<tr><td>${esc(c.name)}${c.id === state.ledger.company_id ? ` <span class="pill posted">current</span>` : ""}</td><td>${String(c.created_at ?? "").slice(0, 10)}</td></tr>`).join("")}</table>
+    <h3 style="margin-top:16px">Exchange rates this year ${isAdmin() ? `<button class="secondary small" onclick="rateForm()">Set a rate</button>` : ""}</h3>
+    <p class="muted small">Shared by every company in the organization. Entered by hand; the Cambodia pack reads the rate of a document's date.</p>
+    ${rates.length ? `<table><tr><th>Date</th><th>From</th><th>To</th><th class="num">Rate</th><th>Source</th></tr>
+      ${rates.slice(-12).reverse().map((r) => `<tr><td>${r.date}</td><td>${r.from_currency}</td><td>${r.to_currency}</td><td class="num">${r.rate}</td><td>${esc(r.source)}</td></tr>`).join("")}</table>`
+      : `<p class="muted small">No rates entered this year.</p>`}`;
+}
 /** A small form of labelled fields; save(values) runs on submit and the tab refreshes afterwards. */
 function simpleForm(title, fields, save, extra = "") {
   const form = openForm(title, `<div class="grid">${fields}</div>${extra}
@@ -69,25 +63,6 @@ function simpleForm(title, fields, save, extra = "") {
 }
 
 const orNull = (v) => (v.trim() === "" ? null : v.trim());
-
-async function bankForm(b) {
-  const accounts = await api(`${ledgerUrl()}/accounts`);
-  const candidates = accounts.filter((a) => a.type === "assets" && a.postable && !a.is_control && !a.is_bank && a.usages.length === 0);
-  simpleForm(b ? `Edit ${b.code} ${b.name}` : "New bank account", `
-    ${b ? "" : `<label class="wide">Account <select name="account_id">${options(candidates, null, (a) => `${a.code} ${a.name}`, "Choose an asset account")}</select></label>
-      <label>Currency <select name="currency">${[...new Set([state.ledger.base_currency, "USD", "KHR"])].map((c) => `<option>${c}</option>`).join("")}</select></label>`}
-    <label>Bank <input name="bank_name" value="${esc(b?.bank_name ?? "")}" required></label>
-    <label>Account number <input name="account_number" value="${esc(b?.account_number ?? "")}"></label>`,
-  async (f) => {
-    if (!orNull(f.bank_name.value)) throw new Error("Bank is required.");
-    const url = `${ledgerUrl()}/bank-accounts`;
-    if (b) await write("PUT", `${url}/${b.account_id}`, { bank_name: f.bank_name.value.trim(), account_number: orNull(f.account_number.value) }, b.version);
-    else {
-      if (!f.account_id.value) throw new Error("Choose the account; create it in the chart first if it does not exist.");
-      await write("POST", url, { account_id: f.account_id.value, bank_name: f.bank_name.value.trim(), account_number: orNull(f.account_number.value), currency: f.currency.value });
-    }
-  }, `<p class="muted small">A bank account is an asset account in the chart, marked as a bank so payments, receipts and statements can use it. Its currency is fixed once set; an account already posted to in ${state.ledger.base_currency} cannot become a foreign-currency account.</p>`);
-}
 
 async function transferForm(t) {
   try {
@@ -210,9 +185,9 @@ function rateForm() {
 async function renderAssets(asOf = state.assetsAsOf ?? today()) {
   state.assetsAsOf = asOf;
   try {
-    const [register, runs] = await Promise.all([api(`${ledgerUrl()}/fixed-assets?asOf=${asOf}`), api(`${ledgerUrl()}/depreciation-runs`)]);
-    $("tab-assets").innerHTML = `
-      ${canEdit() ? `<p><button onclick="assetForm()">New asset</button> <button class="secondary" onclick="depreciationForm()">Post depreciation</button></p>` : ""}
+    const register = await api(`${ledgerUrl()}/fixed-assets?asOf=${asOf}`);
+    $("tab-assets-register").innerHTML = `
+      ${canEdit() ? `<p><button onclick="assetForm()">New asset</button></p>` : ""}
       <form class="inline" id="assets-form"><label>As of <input type="date" name="asOf" value="${asOf}"></label><button type="submit">Run</button></form>
       <p>${register.matches_control ? `<span class="ok">Equals the asset accounts</span>` : `<span class="error">Does not equal the asset accounts (cost ${register.asset_accounts_balance}, accumulated ${register.accumulated_accounts_balance})</span>`}</p>
       <table><tr><th>Code</th><th>Asset</th><th>Acquired</th><th class="num">Cost</th><th class="num">Months</th><th class="num">Monthly</th><th class="num">Accumulated</th><th class="num">Net book value</th><th>Status</th></tr>
@@ -220,15 +195,11 @@ async function renderAssets(asOf = state.assetsAsOf ?? today()) {
         <td class="num">${a.useful_life_months}</td><td class="num">${a.monthly}</td><td class="num">${a.accumulated}</td><td class="num">${a.net_book_value}</td>
         <td>${a.disposed_on ? `disposed ${a.disposed_on}` : ""}</td></tr>`).join("")}
       <tr class="total"><td colspan="3">Total ${register.currency}</td><td class="num">${register.cost}</td><td></td><td></td><td class="num">${register.accumulated}</td><td class="num">${register.net_book_value}</td><td></td></tr></table>
-      <h3 style="margin-top:16px">Depreciation runs</h3>
-      <table><tr><th>Period</th><th class="num">Total</th><th>Status</th><th></th></tr>
-      ${runs.filter((r) => r.status !== "deleted").map((r) => `<tr><td>${r.period}</td><td class="num">${r.total}</td><td><span class="pill ${r.status}">${r.status}</span></td>
-        <td>${r.journal_id ? `<button class="secondary small" onclick="openJournal('${r.journal_id}')">Journal</button>` : ""}
-        ${canEdit() ? `<button class="secondary small" onclick="deleteRun('${r.id}', '${r.period}')">Delete</button>` : ""}</td></tr>`).join("")}</table>`;
+      <p class="muted small">Straight line by month, starting the month after acquisition. Depreciation runs are under Fixed assets → Depreciation runs.</p>`;
     $("assets-form").onsubmit = (e) => { e.preventDefault(); renderAssets(e.target.asOf.value); };
-    for (const tr of $("tab-assets").querySelectorAll("tr[data-asset]")) tr.onclick = () => assetForm(register.assets.find((a) => a.id === tr.dataset.asset));
+    for (const tr of $("tab-assets-register").querySelectorAll("tr[data-asset]")) tr.onclick = () => assetForm(register.assets.find((a) => a.id === tr.dataset.asset));
   } catch (error) {
-    $("tab-assets").innerHTML = `<p class="muted">${esc(error.message)}</p>`;
+    $("tab-assets-register").innerHTML = `<p class="muted">${esc(error.message)}</p>`;
   }
 }
 
@@ -278,10 +249,22 @@ function depreciationForm() {
     `<p class="muted small">Posts one journal for the month's depreciation of every asset, dated the month end.</p>`);
 }
 
+function showDepreciationRun(r) {
+  $("journal-body").innerHTML = `<h3>Depreciation ${r.period} <span class="pill ${r.status}">${r.status}</span></h3>
+    <p class="muted">${r.lines.length} ${r.lines.length === 1 ? "asset" : "assets"} · total ${r.total}</p>
+    <table><tr><th>Asset</th><th>Code</th><th class="num">Amount</th></tr>
+    ${r.lines.map((l) => `<tr><td>${esc(l.name)}</td><td>${esc(l.code)}</td><td class="num">${l.amount}</td></tr>`).join("")}
+    <tr class="total"><td colspan="2">Total</td><td class="num">${r.total}</td></tr></table>
+    ${r.journal_id ? journalButton(r) : ""}
+    ${canEdit() ? `<p><button class="danger" onclick="deleteRun('${r.id}', '${r.period}')">Delete</button></p>` : ""}`;
+  showDialog();
+}
+
 async function deleteRun(id, period) {
   if (!confirm(`Delete the depreciation run for ${period}? Its journal is removed too.`)) return;
   try {
     await write("DELETE", `${ledgerUrl()}/depreciation-runs/${id}`);
+    if ($("journal-dialog").open) $("journal-dialog").close();
     await refreshLedger();
   } catch (error) {
     showError(error);

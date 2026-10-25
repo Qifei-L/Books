@@ -1,27 +1,104 @@
-// Payroll tab (read only): pay runs imported from the payroll system, their totals, and the employees, a page at a
-// time with search, since a pay run may have thousands. Entry is through the API and MCP (AI drafts, people post).
+// Payroll (read only): the pay run list is a document list in list.js; this file holds the inspector under it,
+// with the employees a page at a time and search, since a pay run may have thousands. Entry is through the API
+// and MCP (AI drafts, people post).
 
 const PAGE = 100;
+const EMPLOYEE_PAGE = 500;
 
-async function renderPayroll() {
-  try {
-    const runs = (await api(`${ledgerUrl()}/pay-runs`)).filter((r) => r.status !== "deleted");
-    const nssf = (t) => (Number(t.nssf_employee) + Number(t.nssf_employer)).toFixed(2);
-    $("tab-payroll").innerHTML = `
-      <p class="muted small">Payroll results imported from the payroll system: one summary journal per pay run; the employee lines feed form TOS 01 on the tax return.</p>
-      <table><tr><th>No.</th><th>Period</th><th>Date</th><th>Reference</th><th class="num">Employees</th><th>Currency</th>
-        <th class="num">Gross</th><th class="num">Tax on salary</th><th class="num">NSSF</th><th class="num">Net pay</th><th>Status</th></tr>
-      ${runs.map((r) => `<tr class="click" data-run="${r.id}"><td>PR ${r.pay_run_no}</td><td>${r.period}</td><td>${r.date}</td><td>${esc(r.reference ?? "")}</td>
-        <td class="num">${r.totals.employees.toLocaleString()}</td><td>${r.currency}${r.rate ? ` <span class="muted small">at ${r.rate}</span>` : ""}</td>
-        <td class="num">${money(Number(r.totals.gross), r.currency)}</td><td class="num">${money(Number(r.totals.salary_tax) + Number(r.totals.fringe_benefit_tax), r.currency)}</td>
-        <td class="num">${money(Number(nssf(r.totals)), r.currency)}</td><td class="num">${money(Number(r.totals.net), r.currency)}</td>
-        <td>${r.status === "posted" ? `<span class="pill posted">posted</span> No. ${r.journal_no}` : `<span class="pill draft">${r.status}</span> ${r.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")
-        || `<tr><td colspan="11" class="muted">No pay runs yet.</td></tr>`}</table>
-      <div id="payroll-run"></div>`;
-    for (const tr of $("tab-payroll").querySelectorAll("tr[data-run]")) tr.onclick = () => showPayRun(runs.find((r) => r.id === tr.dataset.run));
-  } catch (error) {
-    $("tab-payroll").innerHTML = `<p class="muted">${esc(error.message)}</p>`;
+async function allPayRunLines(run) {
+  const lines = [];
+  let offset = 0;
+  while (true) {
+    const page = await api(`${ledgerUrl()}/pay-runs/${run.id}/lines?offset=${offset}&limit=${EMPLOYEE_PAGE}`);
+    lines.push(...page.lines);
+    offset += page.lines.length;
+    if (!page.lines.length || offset >= page.total) return lines;
   }
+}
+
+// Employees are not a separate master record: they are the people in the imported pay runs. One row per
+// employee code, with the latest name/resident status and the latest pay figures; the detail is the history.
+async function loadEmployees() {
+  const runs = (await api(`${ledgerUrl()}/pay-runs`)).filter((r) => r.status !== "deleted");
+  const groups = await Promise.all(runs.map(async (run) => ({ run, lines: await allPayRunLines(run) })));
+  const employees = new Map();
+  for (const { run, lines } of groups) {
+    for (const line of lines) {
+      const key = line.employee_code || line.name;
+      let employee = employees.get(key);
+      if (!employee) {
+        employee = { code: line.employee_code, name: line.name, resident: line.resident, runs: [] };
+        employees.set(key, employee);
+      }
+      employee.runs.push({
+        name: line.name, resident: line.resident, period: run.period, date: run.date, currency: run.currency,
+        gross: line.gross, tax: line.salary_tax, nssfEmployee: line.nssf_employee, nssfEmployer: line.nssf_employer, net: line.net,
+      });
+    }
+  }
+  return [...employees.values()].map((e) => {
+    e.runs.sort((a, b) => b.date.localeCompare(a.date));
+    e.last = e.runs[0];
+    e.name = e.last.name || e.name;
+    e.resident = e.last.resident;
+    return e;
+  }).sort((a, b) => a.name.localeCompare(b.name) || String(a.code).localeCompare(String(b.code)));
+}
+
+async function renderEmployees() {
+  const box = $("tab-payroll-employees");
+  try {
+    box.innerHTML = `<p class="muted small">Loading employees from the imported pay runs…</p>`;
+    const employees = await loadEmployees();
+    if (!employees.length) {
+      box.innerHTML = `<p class="muted">No employees yet. A pay run imported from the payroll system supplies them; there is no separate employee record to enter here.</p>`;
+      return;
+    }
+    const row = (e, i) => {
+      const search = `${e.name} ${e.code}`.toLowerCase();
+      return `<tr class="click" data-employee="${i}" data-search="${esc(search)}">
+        <td><div class="cell-main"><span class="cell-clip" title="${esc(e.name)}">${esc(e.name)}</span></div><div class="cell-sub">${esc(e.code ?? "")}</div></td>
+        <td>${e.resident ? "yes" : "no"}</td>
+        <td class="num">${e.runs.length}</td>
+        <td>${e.last.period}</td>
+        <td class="num">${money(Number(e.last.gross), e.last.currency)}</td>
+        <td class="num">${money(Number(e.last.net), e.last.currency)}</td>
+        <td>${e.last.currency}</td></tr>`;
+    };
+    box.innerHTML = `
+      <p class="muted small">Employees are the people in the imported pay runs; a separate employee master record is not kept here. Search by code or name, or open a row for the pay history.</p>
+      <form class="filter-bar" id="employee-filter" autocomplete="off">
+        <label class="search">Search <input id="employee-search" placeholder="code or name"></label>
+      </form>
+      <div class="list-meta"><span id="employee-count">${employees.length} ${employees.length === 1 ? "employee" : "employees"}</span><span class="muted small">Click a row for the pay history</span></div>
+      <div class="table-scroll"><table class="list employees"><tr><th>Employee</th><th>Resident</th><th class="num">Pay runs</th><th>Last period</th><th class="num">Last gross</th><th class="num">Last net</th><th>Currency</th></tr>
+        ${employees.map(row).join("")}</table></div>`;
+    const search = $("employee-search");
+    search.form.onsubmit = (event) => event.preventDefault();
+    search.oninput = () => {
+      const needle = search.value.trim().toLowerCase();
+      let shown = 0;
+      for (const tr of box.querySelectorAll("tr[data-employee]")) {
+        const match = !needle || tr.dataset.search.includes(needle);
+        tr.hidden = !match;
+        if (match) shown++;
+      }
+      $("employee-count").textContent = needle ? `${shown} of ${employees.length} employees` : `${employees.length} ${employees.length === 1 ? "employee" : "employees"}`;
+    };
+    for (const tr of box.querySelectorAll("tr[data-employee]")) tr.onclick = () => showEmployee(employees[Number(tr.dataset.employee)]);
+  } catch (error) {
+    box.innerHTML = `<p class="error">${esc(error.message)}</p>`;
+  }
+}
+
+function showEmployee(e) {
+  $("journal-body").innerHTML = `<h3>${esc(e.name)} <span class="muted small">${esc(e.code ?? "")}</span></h3>
+    <p class="muted">${e.resident ? "Resident" : "Non-resident"} · ${e.runs.length} ${e.runs.length === 1 ? "pay run" : "pay runs"}</p>
+    <table><tr><th>Period</th><th>Date</th><th>Currency</th><th class="num">Gross</th><th class="num">Tax on salary</th><th class="num">NSSF</th><th class="num">Net</th></tr>
+    ${e.runs.map((r) => `<tr><td>${r.period}</td><td>${r.date}</td><td>${r.currency}</td>
+      <td class="num">${money(Number(r.gross), r.currency)}</td><td class="num">${money(Number(r.tax), r.currency)}</td>
+      <td class="num">${money(Number(r.nssfEmployee) + Number(r.nssfEmployer), r.currency)}</td><td class="num">${money(Number(r.net), r.currency)}</td></tr>`).join("")}</table>`;
+  showDialog();
 }
 
 function showPayRun(r) {

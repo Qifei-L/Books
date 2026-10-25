@@ -1,35 +1,19 @@
-// Inventory tab, continued: locations (warehouses), stock by location, transfers between them, and assemblies made
-// from a bill of materials. One average cost per item across locations, so transfers move quantity only.
-
+// Inventory master data and the stock-by-location report: locations, and where the stock is. The three
+// inventory documents (adjustments, transfers, assemblies) have their own list pages.
 async function renderStock(asOf) {
-  const box = $("tab-inventory-extra");
+  const box = $("tab-inventory-stock-extra");
   try {
-    const [locations, stock, transfers, assemblies, items] = await Promise.all([
-      api(`${ledgerUrl()}/locations`), api(`${ledgerUrl()}/reports/inventory/locations?asOf=${asOf}`), api(`${ledgerUrl()}/stock-transfers`),
-      api(`${ledgerUrl()}/assemblies`), api(`${ledgerUrl()}/items`),
+    const [locations, stock] = await Promise.all([
+      api(`${ledgerUrl()}/locations`), api(`${ledgerUrl()}/reports/inventory/locations?asOf=${asOf}`),
     ]);
-    const itemName = (id) => items.find((i) => i.id === id)?.name ?? "";
-    const place = (id) => locations.find((l) => l.id === id)?.name ?? "";
     box.innerHTML = `
       <h3 style="margin-top:16px">Locations ${canEdit() ? `<button class="secondary small" onclick="locationForm()">New</button>` : ""}</h3>
       ${locations.length ? `<table><tr><th>Name</th><th>Code</th><th>Default</th><th>Active</th></tr>
         ${locations.map((l) => `<tr ${canEdit() ? `class="click" data-location="${l.id}"` : ""}><td>${esc(l.name)}</td><td>${esc(l.code ?? "")}</td><td>${l.is_default ? "default" : ""}</td><td>${l.active ? "" : "inactive"}</td></tr>`).join("")}</table>
         <h3 style="margin-top:16px">Stock by location</h3>
         <table><tr><th>Item</th><th>Location</th><th class="num">Quantity</th></tr>
-        ${stock.rows.map((r) => `<tr><td>${esc(r.item)}</td><td>${esc(r.location ?? "(none)")}</td><td class="num ${Number(r.quantity) < 0 ? "error" : ""}">${r.quantity} ${esc(r.unit ?? "")}</td></tr>`).join("")}</table>
-        <h3 style="margin-top:16px">Transfers ${canEdit() ? `<button class="secondary small" onclick="transferStockForm()">New</button>` : ""}</h3>
-        <table><tr><th>No.</th><th>Date</th><th>From</th><th>To</th><th>Items</th><th></th></tr>
-        ${transfers.filter((t) => t.status !== "deleted").map((t) => `<tr><td>ST ${t.transfer_no}</td><td>${t.date}</td><td>${esc(place(t.from_location_id))}</td><td>${esc(place(t.to_location_id))}</td>
-          <td>${t.lines.map((l) => `${esc(itemName(l.item_id))} ${l.quantity}`).join("; ")}</td>
-          <td>${canEdit() ? `<button class="secondary small" onclick="deleteStock('stock-transfers', '${t.id}', '${t.version}')">Delete</button>` : ""}</td></tr>`).join("")}</table>`
-        : `<p class="muted small">No locations: all stock is in one place. Add locations to keep stock per warehouse or shop; the first becomes the default.</p>`}
-      <h3 style="margin-top:16px">Assemblies ${canEdit() ? `<button class="secondary small" onclick="assemblyForm()">Make</button>` : ""}</h3>
-      <p class="muted small">Makes an item from its bill of materials: components leave at their average cost, the item comes in at their total plus labour.</p>
-      <table><tr><th>No.</th><th>Date</th><th>Item</th><th class="num">Quantity</th><th>Components</th><th class="num">Labour</th><th class="num">Value</th><th class="num">Unit cost</th><th></th></tr>
-      ${assemblies.filter((a) => a.status !== "deleted").map((a) => `<tr><td>AS ${a.assembly_no}</td><td>${a.date}</td><td>${esc(itemName(a.item_id))}</td><td class="num">${a.quantity}</td>
-        <td>${a.components.map((c) => `${esc(itemName(c.component_id))} ${c.quantity}`).join("; ")}</td><td class="num">${a.labour}</td><td class="num">${a.value}</td><td class="num">${a.unit_cost}</td>
-        <td><button class="secondary small" onclick="openJournal('${a.journal_id}')">Journal</button>
-          ${canEdit() ? `<button class="secondary small" onclick="deleteStock('assemblies', '${a.id}', '${a.version}')">Delete</button>` : ""}</td></tr>`).join("")}</table>`;
+        ${stock.rows.map((r) => `<tr><td>${esc(r.item)}</td><td>${esc(r.location ?? "(none)")}</td><td class="num ${Number(r.quantity) < 0 ? "error" : ""}">${r.quantity} ${esc(r.unit ?? "")}</td></tr>`).join("")}</table>`
+        : `<p class="muted small">No locations: all stock is in one place. Add locations to keep stock per warehouse or shop; the first becomes the default.</p>`}`;
     for (const tr of box.querySelectorAll("tr[data-location]")) tr.onclick = () => locationForm(locations.find((l) => l.id === tr.dataset.location));
   } catch (error) {
     box.innerHTML = `<p class="error">${esc(error.message)}</p>`;
@@ -89,10 +73,33 @@ async function assemblyForm() {
   }, `<p class="muted small">Set an item's bill of materials through the API or AI (components: item and quantity per unit).</p>`);
 }
 
+function showStockTransfer(t, itemName, place) {
+  $("journal-body").innerHTML = `<h3>Stock transfer ${t.transfer_no} <span class="pill ${t.status}">${t.status}</span></h3>
+    <p class="muted">${t.date} · ${esc(place(t.from_location_id))} → ${esc(place(t.to_location_id))} · ${esc(t.reference ?? "")} · ${esc(t.description ?? "")}</p>
+    <table><tr><th>Item</th><th class="num">Quantity</th><th>Note</th></tr>
+    ${(t.lines ?? []).map((l) => `<tr><td>${esc(itemName(l.item_id))}</td><td class="num">${quantityText(l.quantity)}</td><td>${esc(l.description ?? "")}</td></tr>`).join("")}</table>
+    <p class="muted small">Quantity only: cost is one average per item across locations, so no journal is posted.</p>
+    ${canEdit() ? `<p><button class="danger" onclick="deleteStock('stock-transfers', '${t.id}', '${t.version}')">Delete</button></p>` : ""}`;
+  showDialog();
+}
+
+function showAssembly(a, itemName) {
+  $("journal-body").innerHTML = `<h3>Assembly ${a.assembly_no} <span class="pill ${a.status}">${a.status}</span></h3>
+    <p class="muted">${a.date} · made ${quantityText(a.quantity)} × ${esc(itemName(a.item_id))} · ${esc(a.reference ?? "")} · ${esc(a.description ?? "")}</p>
+    <table><tr><th>Component</th><th class="num">Quantity</th><th class="num">Value</th></tr>
+    ${(a.components ?? []).map((c) => `<tr><td>${esc(itemName(c.component_id))}</td><td class="num">${quantityText(c.quantity)}</td><td class="num">${c.value}</td></tr>`).join("")}
+    <tr class="subtotal"><td>Labour</td><td></td><td class="num">${a.labour}</td></tr>
+    <tr class="total"><td>Value / unit cost</td><td class="num">${quantityText(a.quantity)}</td><td class="num">${a.value} · ${a.unit_cost}</td></tr></table>
+    ${warningsHtml(a)}${journalButton(a)}
+    ${canEdit() ? `<p><button class="danger" onclick="deleteStock('assemblies', '${a.id}', '${a.version}')">Delete</button></p>` : ""}`;
+  showDialog();
+}
+
 async function deleteStock(path, id, version) {
   if (!confirm("Delete it? Any journal it posted is removed too.")) return;
   try {
     await write("DELETE", `${ledgerUrl()}/${path}/${id}`, undefined, version);
+    if ($("journal-dialog").open) $("journal-dialog").close();
     await refreshLedger();
   } catch (error) {
     showError(error);

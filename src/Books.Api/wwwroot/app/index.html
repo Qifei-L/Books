@@ -3,24 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Books (preview)</title>
+  <title>Books</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <header>
-    <strong>Books</strong>
-    <span class="tag">preview · development only</span>
-    <span id="switcher" class="switcher hidden">
+  <header class="appbar">
+    <div class="brand"><strong>Books</strong><span class="tag">preview</span></div>
+    <div id="switcher" class="context hidden">
       <select id="org-pick" title="Organization"></select>
       <select id="ledger-pick" title="Company"></select>
-      <span id="ledger-meta" class="muted small"></span>
+      <span id="ledger-meta" class="meta"></span>
+    </div>
+    <div class="appbar-end">
       <button id="demo" class="secondary small" title="Creates a demo organization with a year of sample data through the normal API rules">New demo</button>
-    </span>
-    <span id="who" class="who"></span>
+      <span id="who" class="who"></span>
+    </div>
   </header>
 
   <main>
-    <section id="signin" class="card hidden">
+    <section id="signin" class="card signin hidden">
       <h2>Sign in (local test issuer)</h2>
       <p class="muted">Development only. A token is issued by the in-memory local issuer; no real identity provider is involved.</p>
       <form id="signin-form">
@@ -32,77 +33,79 @@
 
     <section id="home" class="hidden">
       <p id="no-ledger" class="card muted hidden">No company you can see yet. Use <b>New demo</b> to create one with sample data.</p>
-      <div id="ledger" class="layout hidden">
-        <!-- Modules grouped by what people do, Manager.io style. -->
-        <nav class="tabs side">
-          <div class="nav-group">Business</div>
-          <button data-tab="sales" class="active">Sales</button>
-          <button data-tab="purchases">Purchases</button>
-          <button data-tab="bank">Cash and bank</button>
-          <button data-tab="payroll">Payroll</button>
-          <div class="nav-group">Assets</div>
-          <button data-tab="inventory">Inventory</button>
-          <button data-tab="assets">Fixed assets</button>
-          <div class="nav-group">Accounting</div>
-          <button data-tab="journals">Journals</button>
-          <button data-tab="chart">Chart of accounts</button>
-          <div class="nav-group">Reports</div>
-          <button data-tab="pl">Profit and loss</button>
-          <button data-tab="bs">Balance sheet</button>
-          <button data-tab="tb">Trial balance</button>
-          <button data-tab="gl">GL detail</button>
-          <div class="nav-group">Tax</div>
-          <button data-tab="tax">Tax return</button>
-          <div class="nav-group">Setup</div>
-          <button data-tab="setup">Settings</button>
-        </nav>
-        <div class="content card">
-        <div id="tab-chart" class="tab hidden"></div>
-        <div id="tab-journals" class="tab hidden"></div>
-        <div id="tab-tb" class="tab hidden">
-          <form class="inline" id="tb-form">
-            <label>From <input type="date" name="from" value="2026-01-01"></label>
-            <label>To <input type="date" name="to" value="2026-10-31"></label>
-            <button type="submit">Run</button>
-            <button type="button" class="secondary" data-export="trial-balance">Excel</button>
-          </form>
-          <div id="tb-out"></div>
-        </div>
-        <div id="tab-gl" class="tab hidden">
-          <form class="inline" id="gl-form">
-            <label>Account <select name="account"></select></label>
-            <label>From <input type="date" name="from" value="2026-01-01"></label>
-            <label>To <input type="date" name="to" value="2026-10-31"></label>
-            <button type="submit">Run</button>
-            <button type="button" class="secondary" data-export="gl-detail">Excel</button>
-          </form>
-          <div id="gl-out"></div>
-        </div>
-        <div id="tab-pl" class="tab hidden">
-          <form class="inline" id="pl-form">
-            <label>From <input type="date" name="from" value="2026-01-01"></label>
-            <label>To <input type="date" name="to" value="2026-10-31"></label>
-            <button type="submit">Run</button>
-            <button type="button" class="secondary" data-export="profit-and-loss">Excel</button>
-          </form>
-          <div id="pl-out"></div>
-        </div>
-        <div id="tab-setup" class="tab hidden"></div>
-        <div id="tab-sales" class="tab"></div>
-        <div id="tab-payroll" class="tab hidden"></div>
-        <div id="tab-purchases" class="tab hidden"></div>
-        <div id="tab-bank" class="tab hidden"></div>
-        <div id="tab-inventory" class="tab hidden"></div>
-        <div id="tab-assets" class="tab hidden"></div>
-        <div id="tab-tax" class="tab hidden"></div>
-        <div id="tab-bs" class="tab hidden">
-          <form class="inline" id="bs-form">
-            <label>As of <input type="date" name="asOf" value="2026-10-31"></label>
-            <button type="submit">Run</button>
-            <button type="button" class="secondary" data-export="balance-sheet">Excel</button>
-          </form>
-          <div id="bs-out"></div>
-        </div>
+      <div id="ledger" class="workspace hidden">
+        <!-- Modules grouped by what people do; a module opens into its own pages (see NAV in app.js). -->
+        <nav class="sidenav" id="sidenav"></nav>
+
+        <div class="page">
+          <header class="page-head">
+            <div class="page-heading">
+              <h1 id="page-title">Sales</h1>
+              <p id="page-sub" class="page-sub"></p>
+            </div>
+            <div id="page-actions" class="page-actions"></div>
+          </header>
+          <div class="page-body">
+            <div id="tab-chart" class="tab hidden"></div>
+            <div id="tab-journals" class="tab hidden"></div>
+            <div id="tab-tb" class="tab hidden">
+              <form class="inline filter-bar" id="tb-form">
+                <label>From <input type="date" name="from" value="2026-01-01"></label>
+                <label>To <input type="date" name="to" value="2026-10-31"></label>
+                <button type="submit">Run</button>
+                <button type="button" class="secondary" data-export="trial-balance">Excel</button>
+              </form>
+              <div id="tb-out"></div>
+            </div>
+            <div id="tab-gl" class="tab hidden">
+              <form class="inline filter-bar" id="gl-form">
+                <label>Account <select name="account"></select></label>
+                <label>From <input type="date" name="from" value="2026-01-01"></label>
+                <label>To <input type="date" name="to" value="2026-10-31"></label>
+                <button type="submit">Run</button>
+                <button type="button" class="secondary" data-export="gl-detail">Excel</button>
+              </form>
+              <div id="gl-out"></div>
+            </div>
+            <div id="tab-pl" class="tab hidden">
+              <form class="inline filter-bar" id="pl-form">
+                <label>From <input type="date" name="from" value="2026-01-01"></label>
+                <label>To <input type="date" name="to" value="2026-10-31"></label>
+                <button type="submit">Run</button>
+                <button type="button" class="secondary" data-export="profit-and-loss">Excel</button>
+              </form>
+              <div id="pl-out"></div>
+            </div>
+            <div id="tab-parties" class="tab hidden"></div>
+            <div id="tab-settings-ledger" class="tab hidden"></div>
+            <div id="tab-settings-org" class="tab hidden"></div>
+            <div id="tab-sales-invoices" class="tab hidden"></div>
+            <div id="tab-sales-credit-notes" class="tab hidden"></div>
+            <div id="tab-sales-reports" class="tab hidden"></div>
+            <div id="tab-sales-settings" class="tab hidden"></div>
+            <div id="tab-payroll-runs" class="tab hidden"></div>
+            <div id="tab-payroll-employees" class="tab hidden"></div>
+            <div id="tab-purchases-invoices" class="tab hidden"></div>
+            <div id="tab-purchases-debit-notes" class="tab hidden"></div>
+            <div id="tab-purchases-reports" class="tab hidden"></div>
+            <div id="tab-bank-transactions" class="tab hidden"></div>
+            <div id="tab-bank-statements" class="tab hidden"></div>
+            <div id="tab-inventory-stock" class="tab hidden"></div>
+            <div id="tab-inventory-adjustments" class="tab hidden"></div>
+            <div id="tab-inventory-transfers" class="tab hidden"></div>
+            <div id="tab-inventory-assemblies" class="tab hidden"></div>
+            <div id="tab-assets-register" class="tab hidden"></div>
+            <div id="tab-assets-runs" class="tab hidden"></div>
+            <div id="tab-tax" class="tab hidden"></div>
+            <div id="tab-bs" class="tab hidden">
+              <form class="inline filter-bar" id="bs-form">
+                <label>As of <input type="date" name="asOf" value="2026-10-31"></label>
+                <button type="submit">Run</button>
+                <button type="button" class="secondary" data-export="balance-sheet">Excel</button>
+              </form>
+              <div id="bs-out"></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -117,6 +120,7 @@
     <p id="error" class="error hidden"></p>
   </main>
 
+  <script src="list.js"></script>
   <script src="app.js"></script>
   <script src="forms.js"></script>
   <script src="inventory.js"></script>

@@ -49,15 +49,23 @@ const options = (rows, selected, label, empty) =>
   (empty === undefined ? "" : `<option value="">${esc(empty)}</option>`)
   + rows.map((r) => `<option value="${r.id}" ${r.id === selected ? "selected" : ""}>${esc(label(r))}</option>`).join("");
 
+// Re-read the open page after a save. Other pages load again when they are opened, so a single
+// document no longer pulls every list in the company.
 async function refreshLedger() {
-  await Promise.all([renderSales(), renderPurchases(), renderBank(), renderInventory(), renderAssets(), renderSetup(), renderJournals()]);
+  state.rendered = {};
+  state.docData = {};
+  state.docSearchIndex = {};
+  state.simpleData = {};
+  state.simpleSearchIndex = {};
+  state.simplePage = {};
+  await showTab(state.tab ?? "sales-invoices", true);
 }
 
-// ---- Customers and suppliers ----
+// ---- Business parties (customers and suppliers) ----
 
 function partyForm(p) {
   const v = (field) => esc(p?.[field] ?? "");
-  const form = openForm(p ? `Edit ${p.name}` : "New customer or supplier", `
+  const form = openForm(p ? `Edit ${p.name}` : "New business party", `
     <div class="grid">
       <label class="wide">Name <input name="name" value="${v("name")}" required></label>
       <label>VATTIN <input name="tax_id" value="${v("tax_id")}"></label>
@@ -101,11 +109,6 @@ function partyForm(p) {
   }));
 }
 
-async function editParty(id) {
-  const p = (await api(`${ledgerUrl()}/parties`)).find((x) => x.id === id);
-  if (p) partyForm(p);
-}
-
 // ---- Line grid shared by documents, payments and journals ----
 
 /**
@@ -137,7 +140,14 @@ const value = (tr, name) => {
   return el.value.trim() === "" ? null : el.value.trim();
 };
 const num = (v) => Number(v ?? 0) || 0;
-const money = (x, currency) => x.toLocaleString(undefined, { minimumFractionDigits: currency === "KHR" ? 0 : 2, maximumFractionDigits: currency === "KHR" ? 0 : 2 });
+// Amounts read the same everywhere: thousands separated, and as many decimals as the currency has.
+// The API sends amounts as strings ("2100.00"), so parse before formatting.
+const money = (x, currency = state.ledger?.base_currency) => {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return String(x ?? "");
+  const minor = currency === "KHR" ? 0 : 2;
+  return n.toLocaleString("en-US", { minimumFractionDigits: minor, maximumFractionDigits: minor });
+};
 const rateOf = (id, codes) => num(codes.find((t) => t.id === id)?.rate) / 100;
 const partyNames = async () => {
   const parties = await api(`${ledgerUrl()}/parties`);
@@ -352,7 +362,7 @@ async function paymentForm(type, doc) {
         <label data-rate>Exchange rate <input name="exchange_rate" inputmode="decimal" value="${doc?.exchange_rate ?? ""}" placeholder="rate of the date"></label>
         <label class="wide">Description <input name="doc_description" value="${esc(doc?.description ?? "")}"></label>
       </div>
-      <p class="muted small">Leave the account empty (or choose Accounts payable / receivable) to settle with the party; name an invoice to settle that one, otherwise the oldest open items are settled first.</p>
+      <p class="muted small">The category is what the money was for: leave it empty (or choose Accounts payable / receivable) to settle with the party, or choose an account for a direct payment or fee. Name an invoice to settle that one, otherwise the oldest open items are settled first.</p>
       <table class="lines"></table>
       <p><button type="button" class="secondary" data-add>Add line</button></p>
       <p id="form-totals" class="totals"></p>
@@ -365,7 +375,7 @@ async function paymentForm(type, doc) {
       </p>`);
     const invoiceOptions = (selected) => options(invoices.filter((i) => i.party === form.elements.party_id.value), selected, (i) => `${i.label} · ${i.date} · ${i.gross_total}`, "Oldest first");
     const columns = [
-      { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(lineAccounts, l?.kind === "account" ? l.account_id : l?.account_id, (a) => `${a.code} ${a.name}`, "Settle with party")}</select>` },
+      { name: "account_id", head: "Category", cell: (l) => `<select name="account_id">${options(lineAccounts, l?.kind === "account" ? l.account_id : l?.account_id, (a) => `${a.code} ${a.name}`, "Settle with party")}</select>` },
       { name: "invoice_id", head: "Invoice", cell: (l) => `<select name="invoice_id">${invoiceOptions(l?.invoice_id)}</select>` },
       { name: "description", head: "Description", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },
       { name: "amount", head: "Amount", num: true, cell: (l) => `<input name="amount" class="num" inputmode="decimal" value="${l?.amount ?? ""}">` },
