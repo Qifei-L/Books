@@ -132,15 +132,15 @@ public static class DemoData
             new JournalDraft(DateOnly.Parse("2026-10-30"), [new DraftLine(rent, 1_200m), new DraftLine(bank, -1_200m)], "RENT-11", "November rent (draft)"), false, ct);
         await transfers.CreateAsync(principal, Meta(), orgId, ledgerId,
             new BankTransferInput(DateOnly.Parse("2026-10-20"), bank, acleda, 3_000m, 2m, bankCharges, "TT-2026-014", "Move funds to ACLEDA"), true, ct);
-        // Purchases (M5): rent with withholding, electricity with and without a valid tax invoice, a debit note,
+        // Purchases (M5): rent with withholding, electricity with creditable and non-creditable VAT, a debit note,
         // and an invoice dated in the closed period, which stays a draft with the reason.
         var purchases = services.GetRequiredService<PurchaseInvoiceService>();
-        PurchaseLineInput Line(Guid account, string description, decimal amount, string? tax, bool valid = true, string? wht = null) =>
-            new(account, description, null, null, null, amount, tax is null ? null : taxes[tax], null, null, valid, wht is null ? null : taxes[wht]);
+        PurchaseLineInput Line(Guid account, string description, decimal amount, string? tax, string? wht = null) =>
+            new(account, description, null, null, null, amount, tax is null ? null : taxes[tax], null, null, wht is null ? null : taxes[wht]);
         await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(landlord, null, DateOnly.Parse("2026-10-01"), null, "PPP-2026-10", "October office rent",
             [Line(rent, "Office rent October", 1_200m, "VAT 10% (purchases)", wht: "WHT 10% rent")]), true, ct);
         await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(edc, null, DateOnly.Parse("2026-10-12"), null, "EDC-884512", "Electricity September",
-            [Line(utilities, "Office electricity", 310m, "VAT 10% (purchases)"), Line(utilities, "Warehouse electricity (no VAT invoice)", 95m, "VAT 10% (purchases)", valid: false)]), true, ct);
+            [Line(utilities, "Office electricity", 310m, "VAT 10% (purchases)"), Line(utilities, "Warehouse electricity (no VAT invoice)", 95m, "VAT 10% (purchases, non-creditable)")]), true, ct);
         await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(edc, null, DateOnly.Parse("2026-10-20"), null, "EDC-CR-12", "Meter reading correction",
             [Line(utilities, "Overcharge refund", 20m, "VAT 10% (purchases)")]), true, ct, debitNote: true);
         // Sales (M6): invoices with VAT 10% and a zero-rated export service, a credit note, and a draft left for review.
@@ -160,7 +160,7 @@ public static class DemoData
         var water = Data(await items.CreateAsync(principal, Meta(), orgId, ledgerId,
             new ItemInput("Bottled water", "24 × 500 ml", "case", goods, sales, vat10, TrackInventory: true), ct)).GetProperty("id").GetGuid();
         await purchases.CreateAsync(principal, Meta(), orgId, ledgerId, new PurchaseInvoiceInput(wholesaler, null, DateOnly.Parse("2026-10-03"), null, "KB-55120", "Bottled water",
-            [new PurchaseLineInput(chart["1400"], "Bottled water", water, 100m, 4m, null, taxes["VAT 10% (purchases)"], null, null, true, null)]), true, ct);
+            [new PurchaseLineInput(chart["1400"], "Bottled water", water, 100m, 4m, null, taxes["VAT 10% (purchases)"], null, null, null)]), true, ct);
         await salesInvoices.CreateAsync(principal, Meta(), orgId, ledgerId, new SalesInvoiceInput(customers[2], null, DateOnly.Parse("2026-10-08"), null,
             "INV-2026-1008", "Bottled water", [new SalesLineInput(sales, "Bottled water", water, 30m, 7m, null, taxes["VAT 10% (sales)"], null, null)]), true, ct);
         await services.GetRequiredService<StockAdjustmentService>().CreateAsync(principal, Meta(), orgId, ledgerId, new StockAdjustmentInput(DateOnly.Parse("2026-10-24"),

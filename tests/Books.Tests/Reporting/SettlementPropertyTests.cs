@@ -40,7 +40,7 @@ public sealed class SettlementPropertyTests(TestHost host)
                 case 0 or 1 or 2:
                     var invoice = await (await s.Books.Admin.PostAsync(s.Url, new
                     {
-                        supplier_id = supplier, date, lines = new[] { new { account_id = s.Rent, amount = Amount(50_000), tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true } },
+                        supplier_id = supplier, date, lines = new[] { new { account_id = s.Rent, amount = Amount(50_000), tax_code_id = s.Taxes["VAT 10% (purchases)"] } },
                     })).DataAsync(HttpStatusCode.Created);
                     invoices.Add((invoice.Id(), supplier));
                     break;

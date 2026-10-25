@@ -67,13 +67,13 @@ public sealed class PayablesReportTests(TestHost host)
         await (await s.Books.Admin.PostAsync(s.Url, new
         {
             supplier_id = s.Supplier, date = "2026-07-01",
-            lines = new[] { new { account_id = s.Rent, amount = "500.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true } },
+            lines = new[] { new { account_id = s.Rent, amount = "500.00", tax_code_id = s.Taxes["VAT 10% (purchases)"] } },
         })).DataAsync(HttpStatusCode.Created);
         await (await s.Books.Admin.PostAsync(s.Url, PurchaseInvoiceTests.Body(s))).DataAsync(HttpStatusCode.Created);
         await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/debit-notes", new
         {
             supplier_id = s.Supplier, date = "2026-10-20",
-            lines = new[] { new { account_id = s.Rent, amount = "100.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true } },
+            lines = new[] { new { account_id = s.Rent, amount = "100.00", tax_code_id = s.Taxes["VAT 10% (purchases)"] } },
         })).DataAsync(HttpStatusCode.Created);
         return s;
     }

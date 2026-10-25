@@ -53,7 +53,7 @@ Single source of truth · Consistency by design · Traceability · Secure by def
 31. A document and its journal are saved in one transaction. Either both change or neither does. **[T]**
 32. Journals generated from documents are changed only by editing the document. *(default)*
 33. Payments and receipts allocate to invoices; open balance = total − allocations. No stored balance fields.
-34. Taxes are chosen by people through tax codes. Tax is calculated per line, rounded per line, and summed. Line tax may be adjusted within a small tolerance to match a supplier invoice, with audit.
+34. Taxes are chosen by people through tax codes. Tax is calculated per line, rounded per line, and summed. Line tax may be adjusted within a small tolerance to match a supplier invoice, with audit. Input VAT is creditable or non-creditable by the chosen tax code (a separate non-creditable code), never by a per-line flag.
 35. Bank reconciliation only marks lines as cleared. It never changes accounting amounts.
 36. Changing the amount, date or bank account of a cleared item unclears it and flags the reconciliation.
 

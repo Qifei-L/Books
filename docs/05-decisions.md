@@ -84,6 +84,7 @@
 | 2026-10-24 | Year-end revaluation (M12.2b): the balance sheet shows receivables and payables as one line each (the revaluation accounts are added into them); credits left over from settling a foreign-currency invoice (overpayments) stay in that currency and are revalued too. |
 | 2026-10-24 | Year-end revaluation (M12.2b): the revaluation reverses on the next day, so settling later realizes the full difference from the invoice's rate and nothing counts twice; closing past a fiscal year-end with balances in another currency not revalued warns but still closes. |
 | 2026-10-24 | Inventory locations: stock recorded before any location existed belongs to the default location (warehouse). A location is only a stock place for now; branch- or location-level company books are planned later. |
+| 2026-10-25 | Input VAT deductibility is a tax code, not a line flag. `vat_input` is creditable; `vat_input_non_deductible` posts to the non-deductible VAT account. `valid_tax_invoice` and the per-code non-deductible account are removed; the migration clones existing non-deductible input VAT codes and repoints lines saved with `valid_tax_invoice = false`. |
 
 ## Proposed defaults (accept or change)
 

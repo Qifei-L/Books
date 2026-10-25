@@ -146,9 +146,9 @@ public sealed class PurchaseInvoice
     }
 
     /// <summary>
-    /// Posting adapter. Dr each line's account with its net amount. VAT: Dr the code's input VAT account when a valid
-    /// tax invoice was received, otherwise Dr the code's non-deductible account (owner decision); summed by account.
-    /// Cr withholding tax payable, summed by account. Cr Accounts Payable for gross less withholding, naming the supplier.
+    /// Posting adapter. Dr each line's account with its net amount. VAT: Dr each tax code's account, summed by
+    /// account (a non-creditable code has the non-deductible expense account). Cr withholding tax payable, summed by
+    /// account. Cr Accounts Payable for gross less withholding, naming the supplier.
     /// </summary>
     /// <remarks>
     /// In another currency each amount converts at the document's rate, line by line; the payable takes the rounding,
@@ -162,7 +162,7 @@ public sealed class PurchaseInvoice
         var text = Description ?? (IsDebitNote ? $"Debit note {InvoiceNo}" : $"Purchase invoice {InvoiceNo}");
         var lines = _lines.Select(l => new DraftLine(l.AccountId, sign * C(l.NetAmount), l.Description ?? text, l.LineId, ItemId: l.ItemId, Quantity: l.Quantity)).ToList();
         foreach (var vat in _lines.Where(l => l.TaxAmount != 0 && l.TaxCodeId is not null)
-                     .GroupBy(l => VatAccount(taxCodes[l.TaxCodeId!.Value], l.ValidTaxInvoice)))
+                     .GroupBy(l => taxCodes[l.TaxCodeId!.Value].AccountId!.Value))
         {
             lines.Add(new DraftLine(vat.Key, sign * vat.Sum(l => C(l.TaxAmount)), text));
         }
@@ -175,9 +175,6 @@ public sealed class PurchaseInvoice
         lines.Add(new DraftLine(PayableAccountId, payable, text, PartyId: SupplierId));
         return new JournalDraft(Date, lines, Reference, text);
     }
-
-    private static Guid VatAccount(TaxCode code, bool validTaxInvoice) =>
-        validTaxInvoice || code.NonDeductibleAccountId is null ? code.AccountId!.Value : code.NonDeductibleAccountId.Value;
 }
 
 /// <summary>
@@ -190,7 +187,7 @@ public sealed class PurchaseInvoiceLine
 
     public PurchaseInvoiceLine(
         Guid accountId, string? description, Guid? itemId, decimal? quantity, decimal? unitPrice, decimal netAmount,
-        Guid? taxCodeId, LineTax? tax, bool validTaxInvoice, Guid? withholdingCodeId, decimal withholdingAmount, Guid? lineId = null)
+        Guid? taxCodeId, LineTax? tax, Guid? withholdingCodeId, decimal withholdingAmount, Guid? lineId = null)
     {
         LineId = lineId ?? Guid.CreateVersion7();
         AccountId = accountId;
@@ -203,7 +200,6 @@ public sealed class PurchaseInvoiceLine
         TaxCalculated = tax?.Calculated ?? 0;
         TaxAmount = tax?.Amount ?? 0;
         TaxReason = tax?.Reason;
-        ValidTaxInvoice = validTaxInvoice;
         WithholdingCodeId = withholdingCodeId;
         WithholdingAmount = withholdingAmount;
     }
@@ -241,7 +237,6 @@ public sealed class PurchaseInvoiceLine
     public decimal TaxCalculated { get; private set; }
     public decimal TaxAmount { get; private set; }
     public string? TaxReason { get; private set; }
-    public bool ValidTaxInvoice { get; private set; }
     public Guid? WithholdingCodeId { get; private set; }
     public decimal WithholdingAmount { get; private set; }
 

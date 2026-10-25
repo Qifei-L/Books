@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Books.Domain.Documents;
+using Books.Domain.Ledgers;
 using Books.Tests.Infrastructure;
 
 namespace Books.Tests.Documents;
@@ -79,6 +81,25 @@ public sealed class ReturnDefinitionTests(TestHost host)
         await inFiledMonth.AssertProblemAsync(HttpStatusCode.Conflict, "MONTH_FILED");
         await before.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
         Assert.Equal(HttpStatusCode.Created, after.StatusCode);
+    }
+
+    [Fact]
+    public void A_published_definition_that_used_valid_tax_invoice_still_splits_non_creditable_vat()
+    {
+        var spec = new ReturnDefinitionSpec("Legacy form", [],
+        [
+            new BoxSpec("creditable", "VAT", "Creditable", Lines: new LineRule("purchase", ["vat_input"], true, Amount: "tax")),
+            new BoxSpec("non_creditable", "VAT", "Non-creditable", Lines: new LineRule("purchase", ["vat_input"], false, Amount: "tax")),
+        ]);
+        var definition = TaxReturns.Compile("cambodia-2026", 7, new DateOnly(2026, 10, 1), spec);
+
+        TaxLine Line(TaxKind kind) => new("purchase_invoice", Guid.NewGuid(), 1, new DateOnly(2026, 10, 1), Guid.Empty, null, 1, null,
+            Guid.Empty, null, kind, 100, 10, 10, null, null, 0, null);
+
+        Assert.Equal(10m, definition.Boxes.Single(b => b.Key == "creditable").Line!(Line(TaxKind.VatInput)));
+        Assert.Null(definition.Boxes.Single(b => b.Key == "creditable").Line!(Line(TaxKind.VatInputNonDeductible)));
+        Assert.Equal(10m, definition.Boxes.Single(b => b.Key == "non_creditable").Line!(Line(TaxKind.VatInputNonDeductible)));
+        Assert.Null(definition.Boxes.Single(b => b.Key == "non_creditable").Line!(Line(TaxKind.VatInput)));
     }
 
     private static string Url(SalesInvoiceTests.Setup s) => $"{s.LedgerUrl}/tax-return-definitions";

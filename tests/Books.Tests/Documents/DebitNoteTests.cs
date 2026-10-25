@@ -21,7 +21,7 @@ public sealed class DebitNoteTests(TestHost host)
             date = "2026-10-20",
             reference = "CN-77",
             original_invoice_id = invoice.Id(),
-            lines = new[] { new { account_id = s.Rent, amount = "100.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true } },
+            lines = new[] { new { account_id = s.Rent, amount = "100.00", tax_code_id = s.Taxes["VAT 10% (purchases)"] } },
         })).DataAsync(HttpStatusCode.Created);
 
         Assert.Equal(("debit_note", 1L, "110.00"), (note.GetProperty("type").GetString(), note.GetProperty("invoice_no").GetInt64(), note.GetProperty("payable_total").GetString()));

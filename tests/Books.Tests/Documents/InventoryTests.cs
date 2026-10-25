@@ -64,7 +64,7 @@ public sealed class InventoryTests(TestHost host)
         await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/purchase-invoices", new
         {
             supplier_id = supplier, date,
-            lines = new[] { new { account_id = s.Services, item_id = item, quantity, amount, tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true } },
+            lines = new[] { new { account_id = s.Services, item_id = item, quantity, amount, tax_code_id = s.Taxes["VAT 10% (purchases)"] } },
         })).DataAsync(HttpStatusCode.Created);
 
     private static string Get(JsonElement e, string property) => e.GetProperty(property).GetString()!;

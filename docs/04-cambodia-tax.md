@@ -22,7 +22,7 @@ Research summary from 2026-10-23. **This is not tax advice.** Confirm each item 
 1. **Base currency is likely USD, with KHR used for tax.** Each sales and purchase invoice stores `khr_rate` and `khr_rate_date` (the NBC daily rate) and a KHR total. This rate is tax evidence, separate from the journal's transaction rate.
 2. **Tax reporting needs a rate table.** An `exchange_rates(date, from, to, rate, source)` table holds NBC rates. Monthly figures use the month-end rate, and the tax report shows both USD and KHR.
 3. **Withholding tax belongs to Purchases.** A purchase invoice line can carry a WHT code. WHT payable is recognized at accrual, and the payment to the supplier is net of WHT.
-4. **Input VAT needs an invoice flag.** A purchase line's VAT counts only when `has_valid_tax_invoice` is true. Without it, the VAT goes to a pending input VAT account until the invoice arrives.
+4. **Input VAT deductibility is a tax code.** A creditable code (`vat_input`) posts VAT to input VAT; a separate non-creditable code (`vat_input_non_deductible`) posts it to the non-deductible VAT expense account. There is no per-line `has_valid_tax_invoice` flag: choosing the code is the decision, and it is visible in the line, the ledger and the return.
 5. **Tax codes have effective dates**, for example fuel at 4% from March 2026.
 6. **Monthly tax summary**: output VAT, input VAT, net VAT, WHT by type (resident services/rent/interest/royalty, non-resident), and the prepayment base (turnover excluding VAT). Each box shows its USD and KHR amounts and drills down to source lines.
 7. **CamInvoice is not in v1.** Invoices keep a stable ID, number, KHR total and party tax ID, so integration can be added later.

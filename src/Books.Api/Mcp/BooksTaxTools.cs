@@ -42,8 +42,8 @@ public sealed class BooksTaxTools(PrincipalAccessor principals, TaxReturnService
 
     [McpServerTool(Name = "save_tax_return_definition_draft", Idempotent = true)]
     [Description("Drafts a return definition version for a person to review and publish, for example after the tax office changes the form. "
-        + "Start from list_tax_return_definitions. Line boxes pick lines by side (sale or purchase), tax_kinds (vat_output, vat_input, vat_zero_rated, "
-        + "non_vat, none), valid_tax_invoice and withholding_category, and take amount net, tax or withholding; formula boxes add or subtract earlier "
+        + "Start from list_tax_return_definitions. Line boxes pick lines by side (sale or purchase), tax_kinds (vat_output, vat_input, vat_input_non_deductible, "
+        + "vat_zero_rated, non_vat, none) and withholding_category, and take amount net, tax or withholding; formula boxes add or subtract earlier "
         + "boxes (sign 1 or -1) with an optional percent. Keep existing keys for unchanged boxes. Omit number to create a draft; give number and "
         + "expected_version to change one. Preview it with get_tax_return and definition_version.")]
     public Task<CallToolResult> SaveDraft(

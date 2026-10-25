@@ -50,7 +50,7 @@ public sealed class PaymentTests(TestHost host)
             lines = new object[]
             {
                 new { description = "Advance for November", amount = "100.00" },
-                new { account_id = s.Rent, amount = "1000.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true, withholding_code_id = s.Taxes["WHT 10% rent"] },
+                new { account_id = s.Rent, amount = "1000.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], withholding_code_id = s.Taxes["WHT 10% rent"] },
             },
         })).DataAsync(HttpStatusCode.Created);
 

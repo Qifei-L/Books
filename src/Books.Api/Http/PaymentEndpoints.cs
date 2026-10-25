@@ -12,7 +12,7 @@ public static class PaymentEndpoints
     /// <param name="Amount">Decimal string; net of VAT on account lines; may be negative.</param>
     public sealed record LineRequest(
         Guid? InvoiceId, Guid? AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string? Amount,
-        Guid? TaxCodeId, string? TaxAmount, string? TaxReason, bool? ValidTaxInvoice, Guid? WithholdingCodeId, string? SettledAmount = null);
+        Guid? TaxCodeId, string? TaxAmount, string? TaxReason, Guid? WithholdingCodeId, string? SettledAmount = null);
 
     public sealed record PaymentRequest(
         Guid BankAccountId, Guid? PartyId, DateOnly Date, string? Reference, string? Description, IReadOnlyList<LineRequest> Lines,
@@ -44,7 +44,7 @@ public static class PaymentEndpoints
         (body.Lines ?? throw BooksProblem.Invalid("lines is required.")).Select((l, i) => new PaymentLineInput(
             l.InvoiceId, l.AccountId, l.Description, l.ItemId, PurchaseEndpoints.Number(l.Quantity, i, "quantity", signed: true),
             PurchaseEndpoints.Number(l.UnitPrice, i, "unit_price"), PurchaseEndpoints.Number(l.Amount, i, "amount", signed: true),
-            l.TaxCodeId, PurchaseEndpoints.Number(l.TaxAmount, i, "tax_amount", signed: true), l.TaxReason, l.ValidTaxInvoice ?? true, l.WithholdingCodeId,
+            l.TaxCodeId, PurchaseEndpoints.Number(l.TaxAmount, i, "tax_amount", signed: true), l.TaxReason, l.WithholdingCodeId,
             PurchaseEndpoints.Number(l.SettledAmount, i, "settled_amount"))).ToList(),
         body.ControlAccountId, PurchaseEndpoints.Rate(body.ExchangeRate));
 }

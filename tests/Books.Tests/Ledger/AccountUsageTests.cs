@@ -17,12 +17,12 @@ public sealed class AccountUsageTests(TestHost host)
         var vatIn = await Account(books, "1300", "VAT receivable", "assets");
         var nonDeductible = await Account(books, "5400", "Non-deductible VAT", "cost_and_expense");
 
-        var noNonDeductible = await books.Admin.PostAsync(Url(books, "tax-codes"), new { name = "VAT in", kind = "vat_input", rate = "10", account_id = vatIn });
-        await (await books.Admin.PostAsync(Url(books, "tax-codes"), new { name = "VAT in", kind = "vat_input", rate = "10", account_id = vatIn, non_deductible_account_id = nonDeductible }))
+        await (await books.Admin.PostAsync(Url(books, "tax-codes"), new { name = "VAT in", kind = "vat_input", rate = "10", account_id = vatIn }))
+            .DataAsync(HttpStatusCode.Created);
+        await (await books.Admin.PostAsync(Url(books, "tax-codes"), new { name = "VAT in non-creditable", kind = "vat_input_non_deductible", rate = "10", account_id = nonDeductible }))
             .DataAsync(HttpStatusCode.Created);
         await (await books.Admin.PostAsync(Url(books, "bank-accounts"), new { account_id = books.Cash, bank_name = "ABA" })).DataAsync(HttpStatusCode.Created);
 
-        await noNonDeductible.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
         var usages = await UsagesAsync(books);
         Assert.Equal(["input_vat"], usages[vatIn]);
         Assert.Equal(["non_deductible_vat"], usages[nonDeductible]);

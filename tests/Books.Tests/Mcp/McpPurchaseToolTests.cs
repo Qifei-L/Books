@@ -28,7 +28,7 @@ public sealed class McpPurchaseToolTests(TestHost host)
         await (await s.Books.Admin.WriteAsync(HttpMethod.Put, $"{s.Url}/{draft.Id()}", new
         {
             supplier_id = s.Supplier, date = "2026-10-15", post = true,
-            lines = new[] { new { account_id = s.Rent, amount = "200.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true } },
+            lines = new[] { new { account_id = s.Rent, amount = "200.00", tax_code_id = s.Taxes["VAT 10% (purchases)"] } },
         }, ifMatch: 1)).DataAsync();
         var viaMcp = await McpReadToolTests.CallAsync(mcp, "get_ap_aging", Args(s, ("as_of", "2026-10-31")));
         var viaApi = await (await s.Books.Admin.GetAsync($"{s.LedgerUrl}/reports/ap-aging?asOf=2026-10-31", Ct)).DataAsync();
@@ -49,7 +49,7 @@ public sealed class McpPurchaseToolTests(TestHost host)
         var s = await new PurchaseInvoiceTests(host).SetUpAsync(subject);
         await using var mcp = await new McpReadToolTests(host).ConnectAsync(subject);
         var unknownAccount = Invoice(s, "10.00");
-        unknownAccount["lines"] = new object[] { new Dictionary<string, object?> { ["account_id"] = Guid.NewGuid(), ["amount"] = "10.00", ["valid_tax_invoice"] = true } };
+        unknownAccount["lines"] = new object[] { new Dictionary<string, object?> { ["account_id"] = Guid.NewGuid(), ["amount"] = "10.00",  } };
         var unknownSupplier = Invoice(s, "20.00");
         unknownSupplier["supplier_id"] = Guid.NewGuid();
         var closedPeriod = Invoice(s, "30.00"); // a business problem: would only stay a draft, not an error
@@ -83,7 +83,7 @@ public sealed class McpPurchaseToolTests(TestHost host)
         ["reference"] = "PPP-77",
         ["lines"] = new object[]
         {
-            new Dictionary<string, object?> { ["account_id"] = s.Rent, ["amount"] = amount, ["tax_code_id"] = s.Taxes["VAT 10% (purchases)"], ["valid_tax_invoice"] = true },
+            new Dictionary<string, object?> { ["account_id"] = s.Rent, ["amount"] = amount, ["tax_code_id"] = s.Taxes["VAT 10% (purchases)"],  },
         },
     };
 

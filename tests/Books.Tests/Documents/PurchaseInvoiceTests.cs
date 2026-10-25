@@ -29,7 +29,7 @@ public sealed class PurchaseInvoiceTests(TestHost host)
             .ToDictionary(l => l.GetProperty("account_id").GetGuid(), l => (Dr: Get(l, "debit"), Cr: Get(l, "credit"), Party: l.GetProperty("party_id")));
         Assert.Equal("1000.00", lines[s.Rent].Dr);
         Assert.Equal("100.00", lines[s.Account("1300")].Dr);          // deductible VAT (valid tax invoice)
-        Assert.Equal("5.00", lines[s.Account("5900")].Dr);            // non-deductible VAT (no valid tax invoice)
+        Assert.Equal("5.00", lines[s.Account("5900")].Dr);            // non-creditable VAT code
         Assert.Equal("100.00", lines[s.Account("2200")].Cr);          // withholding 10% of rent, VAT excluded
         Assert.Equal("1055.00", lines[s.Account("2000")].Cr);         // payable: gross less withholding
         Assert.Equal(s.Supplier, lines[s.Account("2000")].Party.GetGuid());
@@ -127,7 +127,7 @@ public sealed class PurchaseInvoiceTests(TestHost host)
         return new Setup(books, supplier, rent, supplies, codes, taxes);
     }
 
-    /// <summary>Rent 1000 with VAT 10% (valid invoice) and WHT 10%; supplies 50 with VAT 10% but no valid tax invoice.</summary>
+    /// <summary>Rent 1000 with creditable VAT 10% and WHT 10%; supplies 50 with non-creditable VAT 10%.</summary>
     internal static object Body(Setup s, string date = "2026-10-15", (string Amount, string Reason)? rentTax = null, Guid? rentTaxCode = null, Guid? supplier = null) => new
     {
         supplier_id = supplier ?? s.Supplier,
@@ -136,8 +136,8 @@ public sealed class PurchaseInvoiceTests(TestHost host)
         lines = new object[]
         {
             new { account_id = s.Rent, description = "October rent", amount = "1000.00", tax_code_id = rentTaxCode ?? s.Taxes["VAT 10% (purchases)"],
-                tax_amount = rentTax?.Amount, tax_reason = rentTax?.Reason, valid_tax_invoice = true, withholding_code_id = s.Taxes["WHT 10% rent"] },
-            new { account_id = s.Supplies, description = "Paper", quantity = "10", unit_price = "5.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = false },
+                tax_amount = rentTax?.Amount, tax_reason = rentTax?.Reason, withholding_code_id = s.Taxes["WHT 10% rent"] },
+            new { account_id = s.Supplies, description = "Paper", quantity = "10", unit_price = "5.00", tax_code_id = s.Taxes["VAT 10% (purchases, non-creditable)"] },
         },
     };
 

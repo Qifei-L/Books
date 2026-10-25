@@ -15,7 +15,7 @@ namespace Books.Application.Documents;
 /// <param name="TaxOverride">A VAT amount entered by a person instead of the calculated one.</param>
 public sealed record PurchaseLineInput(
     Guid AccountId, string? Description, Guid? ItemId, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
-    Guid? TaxCodeId, decimal? TaxOverride, string? TaxReason, bool ValidTaxInvoice, Guid? WithholdingCodeId, string? Unit = null, Guid? LocationId = null);
+    Guid? TaxCodeId, decimal? TaxOverride, string? TaxReason, Guid? WithholdingCodeId, string? Unit = null, Guid? LocationId = null);
 
 /// <param name="PayableAccountId">Omit to use the ledger's only Payable account.</param>
 /// <param name="DueDate">Omit for invoice date + the supplier's payment terms.</param>
@@ -26,7 +26,7 @@ public sealed record PurchaseInvoiceInput(
 
 public sealed record PurchaseLineDto(
     Guid LineId, Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string NetAmount,
-    Guid? TaxCodeId, string TaxCalculated, string TaxAmount, bool TaxAdjusted, string? TaxReason, bool ValidTaxInvoice,
+    Guid? TaxCodeId, string TaxCalculated, string TaxAmount, bool TaxAdjusted, string? TaxReason,
     Guid? WithholdingCodeId, string WithholdingAmount, string? Unit = null, Guid? LocationId = null);
 
 public sealed record PurchaseInvoiceDto(
@@ -218,11 +218,11 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
             if (line.TaxCodeId is { } taxId)
             {
                 var code = codes.GetValueOrDefault(taxId) ?? throw BooksProblem.Invalid($"Line {i}: tax_code_id must be a tax code of this ledger.");
-                if (code.Kind is not (TaxKind.VatInput or TaxKind.VatZeroRated or TaxKind.NonVat))
+                if (code.Kind is not (TaxKind.VatInput or TaxKind.VatInputNonDeductible or TaxKind.VatZeroRated or TaxKind.NonVat))
                 {
-                    throw BooksProblem.Invalid($"Line {i}: purchase lines take input VAT, zero-rated or non-VAT codes.");
+                    throw BooksProblem.Invalid($"Line {i}: purchase lines take input VAT (creditable or non-creditable), zero-rated or non-VAT codes.");
                 }
-                if (code.Kind != TaxKind.VatInput && line.TaxOverride is not null and not 0)
+                if (code.Kind is not (TaxKind.VatInput or TaxKind.VatInputNonDeductible) && line.TaxOverride is not null and not 0)
                 {
                     throw BooksProblem.Invalid($"Line {i}: zero-rated and non-VAT lines have no tax to override.");
                 }
@@ -248,7 +248,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
                 withholding = TaxCalculator.ForLine(net, code.Rate, minor).Amount;
             }
             var purchaseLine = new PurchaseInvoiceLine(accountId, description, line.ItemId, line.Quantity, unitPrice, net,
-                line.TaxCodeId, tax, line.ValidTaxInvoice, line.WithholdingCodeId, withholding);
+                line.TaxCodeId, tax, line.WithholdingCodeId, withholding);
             purchaseLine.InUnit(unit, factor);
             if (line.ItemId is { } stockItem && await db.Items.AnyAsync(x => x.Id == stockItem && x.TrackInventory, ct))
             {
@@ -322,7 +322,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
         return rows.Select(x => new PurchaseInvoiceDto(
             x.i.Id, x.i.LedgerId, x.i.IsDebitNote ? "debit_note" : "invoice", x.i.InvoiceNo, x.i.OriginalInvoiceId, x.i.SupplierId, x.i.PayableAccountId, x.i.Date, x.i.DueDate, x.i.Reference, x.i.Description,
             x.i.Lines.OrderBy(l => l.LineNo).Select(l => new PurchaseLineDto(l.LineId, l.AccountId, l.Description, l.ItemId, Q(l.Quantity), Q(l.UnitPrice),
-                F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason, l.ValidTaxInvoice,
+                F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason,
                 l.WithholdingCodeId, F(l.WithholdingAmount), l.Unit, l.LocationId)).ToList(),
             F(x.i.NetTotal), F(x.i.TaxTotal), F(x.i.GrossTotal), F(x.i.WithholdingTotal), F(x.i.PayableTotal), taxCurrencies.GetValueOrDefault(x.i.Id),
             Text.Of(x.i.Status), x.i.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.i.Issues, BooksJson.Options)!,

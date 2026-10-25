@@ -31,7 +31,7 @@ public sealed class PurchasePropertyTests(TestHost host)
             await PartyAsync(s, new { name = "Electricité du Cambodge", is_supplier = true, payment_terms_days = 7 }),
             await PartyAsync(s, new { name = "Lucky Supermarket", is_supplier = true }),
         ];
-        string?[] taxes = ["VAT 10% (purchases)", "VAT 0% (zero-rated)", "Non-VAT", null];
+        string?[] taxes = ["VAT 10% (purchases)", "VAT 10% (purchases, non-creditable)", "VAT 0% (zero-rated)", "Non-VAT", null];
         string?[] withholdings = ["WHT 10% rent", "WHT 15% services, interest, royalties", null, null];
         await new JournalEditTests(host).CloseThroughAsync(s.Books, "2026-08-31");
 
@@ -48,7 +48,6 @@ public sealed class PurchasePropertyTests(TestHost host)
                     account_id = random.Next(2) == 0 ? s.Rent : s.Supplies,
                     amount = (random.Next(100, 100_000) / 100m).ToString("0.00", CultureInfo.InvariantCulture),
                     tax_code_id = tax is null ? (Guid?)null : s.Taxes[tax],
-                    valid_tax_invoice = random.Next(3) > 0,
                     withholding_code_id = wht is null ? (Guid?)null : s.Taxes[wht],
                 };
             }).ToArray();
@@ -67,7 +66,10 @@ public sealed class PurchasePropertyTests(TestHost host)
             foreach (var line in lines)
             {
                 var net = Dec(line, "net_amount");
-                var rate = line.GetProperty("tax_code_id").ValueKind == JsonValueKind.Null || line.GetProperty("tax_code_id").GetGuid() != s.Taxes["VAT 10% (purchases)"] ? 0m : 0.10m;
+                var code = line.GetProperty("tax_code_id");
+                var taxed = code.ValueKind != JsonValueKind.Null
+                    && (code.GetGuid() == s.Taxes["VAT 10% (purchases)"] || code.GetGuid() == s.Taxes["VAT 10% (purchases, non-creditable)"]);
+                var rate = taxed ? 0.10m : 0m;
                 Assert.Equal(Math.Round(net * rate, 2, MidpointRounding.AwayFromZero), Dec(line, "tax_amount"));
             }
             Assert.Equal(lines.Sum(l => Dec(l, "tax_amount")), Dec(doc, "tax_total"));
@@ -81,8 +83,10 @@ public sealed class PurchasePropertyTests(TestHost host)
                 Assert.Contains(doc.GetProperty("issues").EnumerateArray(), i => i.GetProperty("code").GetString() == "DATE_CLOSED");
                 continue;
             }
-            deductible += sign * lines.Where(l => l.GetProperty("valid_tax_invoice").GetBoolean()).Sum(l => Dec(l, "tax_amount"));
-            nonDeductible += sign * lines.Where(l => !l.GetProperty("valid_tax_invoice").GetBoolean()).Sum(l => Dec(l, "tax_amount"));
+            deductible += sign * lines.Where(l => l.GetProperty("tax_code_id").ValueKind != JsonValueKind.Null
+                && l.GetProperty("tax_code_id").GetGuid() == s.Taxes["VAT 10% (purchases)"]).Sum(l => Dec(l, "tax_amount"));
+            nonDeductible += sign * lines.Where(l => l.GetProperty("tax_code_id").ValueKind != JsonValueKind.Null
+                && l.GetProperty("tax_code_id").GetGuid() == s.Taxes["VAT 10% (purchases, non-creditable)"]).Sum(l => Dec(l, "tax_amount"));
             withheld += sign * Dec(doc, "withholding_total");
             payable += sign * Dec(doc, "payable_total");
         }

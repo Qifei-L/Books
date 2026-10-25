@@ -17,15 +17,18 @@ public sealed class CambodiaTemplateTests(TestHost host)
 
         var summary = await (await ApplyAsync(books)).DataAsync();
 
-        Assert.Equal(36, summary.GetProperty("created").GetArrayLength());
+        Assert.Equal(37, summary.GetProperty("created").GetArrayLength());
         var accounts = (await AccountTests.ListAsync(books.Admin, books.OrgId, books.LedgerId)).EnumerateArray().ToDictionary(a => a.GetProperty("code").GetString()!);
         Assert.Equal(["payable"], accounts["2000"].GetProperty("usages").EnumerateArray().Select(u => u.GetString()));
         Assert.True(accounts["2000"].GetProperty("is_control").GetBoolean());
         Assert.Equal(["suspense"], accounts["2999"].GetProperty("purposes").EnumerateArray().Select(u => u.GetString()));
         var taxCodes = await GetAsync(books, "tax-codes");
         var purchasesVat = taxCodes.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "VAT 10% (purchases)");
-        Assert.Equal(accounts["5900"].Id(), purchasesVat.GetProperty("non_deductible_account_id").GetGuid());
-        Assert.Equal(12, taxCodes.GetArrayLength());
+        var nonCreditable = taxCodes.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "VAT 10% (purchases, non-creditable)");
+        Assert.Equal("vat_input", purchasesVat.GetProperty("kind").GetString());
+        Assert.Equal("vat_input_non_deductible", nonCreditable.GetProperty("kind").GetString());
+        Assert.Equal(accounts["5900"].Id(), nonCreditable.GetProperty("account_id").GetGuid());
+        Assert.Equal(13, taxCodes.GetArrayLength());
         Assert.Equal("cambodia-2026", (await GetAsync(books, "")).GetProperty("tax_pack").GetString());
     }
 

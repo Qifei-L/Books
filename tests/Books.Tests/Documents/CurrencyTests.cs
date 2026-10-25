@@ -44,7 +44,7 @@ public sealed class CurrencyTests(TestHost host)
         var invoice = await (await s.Books.Admin.PostAsync(s.Url, new
         {
             supplier_id = s.Supplier, date = "2026-10-15", currency = "KHR",
-            lines = Enumerable.Range(0, 3).Select(_ => new { account_id = s.Rent, amount = "10001", tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true }).ToArray(),
+            lines = Enumerable.Range(0, 3).Select(_ => new { account_id = s.Rent, amount = "10001", tax_code_id = s.Taxes["VAT 10% (purchases)"] }).ToArray(),
         })).DataAsync(HttpStatusCode.Created);
 
         // Each 10,001 KHR is 2.44 USD and each 1,000 KHR of VAT 0.24; the payable takes 7.32 + 0.72.

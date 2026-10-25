@@ -141,7 +141,7 @@ internal sealed class TaxCodeConfiguration : IEntityTypeConfiguration<TaxCode>
     {
         b.ToTable("tax_codes", t =>
         {
-            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_zero_rated', 'non_vat', 'withholding', 'other_tax')");
+            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_input_non_deductible', 'vat_zero_rated', 'non_vat', 'withholding', 'other_tax')");
             t.HasCheckConstraint("ck_tax_codes_rate", "rate >= 0 AND rate <= 100");
         });
         b.Property(x => x.Id).ValueGeneratedNever();
@@ -154,9 +154,6 @@ internal sealed class TaxCodeConfiguration : IEntityTypeConfiguration<TaxCode>
             .OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Account>().WithMany()
             .HasForeignKey(x => new { x.LedgerId, x.AccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
-            .OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<Account>().WithMany()
-            .HasForeignKey(x => new { x.LedgerId, x.NonDeductibleAccountId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

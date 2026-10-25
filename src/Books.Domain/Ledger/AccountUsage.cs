@@ -53,6 +53,7 @@ public static class Usages
     {
         TaxKind.VatOutput => Usage.OutputVat,
         TaxKind.VatInput => Usage.InputVat,
+        TaxKind.VatInputNonDeductible => Usage.NonDeductibleVat,
         TaxKind.Withholding => Usage.WithholdingPayable,
         TaxKind.OtherTax => Usage.OtherTaxPayable,
         _ => null,

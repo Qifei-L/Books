@@ -25,7 +25,7 @@ public sealed class TaxReturnPropertyTests(TestHost host)
         var supplier = (await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/parties", new { name = "Supplier", is_supplier = true })).DataAsync(HttpStatusCode.Created)).Id();
         var expense = (await AccountTests.CreateAsync(s.Books.Admin, s.Books.OrgId, s.Books.LedgerId, "5000", "Expenses", "cost_and_expense")).Id();
         string?[] salesTaxes = ["VAT 10% (sales)", "VAT 0% (zero-rated)", "Non-VAT", null];
-        string?[] purchaseTaxes = ["VAT 10% (purchases)", "VAT 0% (zero-rated)", "Non-VAT", null];
+        string?[] purchaseTaxes = ["VAT 10% (purchases)", "VAT 10% (purchases, non-creditable)", "VAT 0% (zero-rated)", "Non-VAT", null];
         string?[] withholding = ["WHT 15% services, interest, royalties", "WHT 10% rent", "WHT 14% non-resident", null, null];
         string Amount() => (random.Next(100, 100_000) / 100m).ToString("0.00", CultureInfo.InvariantCulture);
         Guid? Code(string? name) => name is null ? null : s.Taxes[name];
@@ -52,7 +52,7 @@ public sealed class TaxReturnPropertyTests(TestHost host)
                     lines = Enumerable.Range(0, lineCount).Select(_ => new
                     {
                         account_id = expense, amount = Amount(), tax_code_id = Code(purchaseTaxes[random.Next(purchaseTaxes.Length)]),
-                        valid_tax_invoice = random.Next(3) > 0, withholding_code_id = Code(withholding[random.Next(withholding.Length)]),
+                        withholding_code_id = Code(withholding[random.Next(withholding.Length)]),
                     }).ToArray(),
                 })).DataAsync(HttpStatusCode.Created);
             }

@@ -23,8 +23,7 @@ public sealed class BooksBankTools(
         [property: JsonPropertyName("account_id"), Description("The account. An account with the Payable or Receivable usage settles with the party; omit to settle on the document's own side.")] Guid? AccountId = null,
         [property: JsonPropertyName("invoice_id"), Description("The invoice this line settles, if known.")] Guid? InvoiceId = null,
         [property: JsonPropertyName("description")] string? Description = null,
-        [property: JsonPropertyName("tax_code_id"), Description("Account lines: VAT code.")] Guid? TaxCodeId = null,
-        [property: JsonPropertyName("valid_tax_invoice"), Description("Payments with input VAT: true only if a valid tax invoice was received.")] bool ValidTaxInvoice = true,
+        [property: JsonPropertyName("tax_code_id"), Description("Account lines: VAT code (input VAT creditable or non-creditable on payments, output VAT on receipts).")] Guid? TaxCodeId = null,
         [property: JsonPropertyName("withholding_code_id"), Description("Payments: WHT code when tax is withheld.")] Guid? WithholdingCodeId = null,
         [property: JsonPropertyName("settled_amount"), Description("Lines naming an invoice in another currency than the bank's: how much of the invoice this settles, in the invoice's currency; omit to convert at the day's rate.")] string? SettledAmount = null);
 
@@ -182,7 +181,7 @@ public sealed class BooksBankTools(
         {
             var inputs = McpWrites.ParseAll(documents, d => (PaymentEndpoints.Input(new PaymentEndpoints.PaymentRequest(d.BankAccountId, d.PartyId, d.Date, d.Reference, d.Description,
                 (d.Lines ?? []).Select(l => new PaymentEndpoints.LineRequest(l.InvoiceId, l.AccountId, l.Description, null, null, null, l.Amount, l.TaxCodeId, null, null,
-                    l.ValidTaxInvoice, l.WithholdingCodeId, l.SettledAmount)).ToList(), Post: false, ExchangeRate: d.ExchangeRate)),
+                    l.WithholdingCodeId, l.SettledAmount)).ToList(), Post: false, ExchangeRate: d.ExchangeRate)),
                 d.Type switch
                 {
                     "payment" => false,

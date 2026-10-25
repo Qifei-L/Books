@@ -1817,10 +1817,6 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("numeric(20,4)")
                         .HasColumnName("unit_price");
 
-                    b.Property<bool>("ValidTaxInvoice")
-                        .HasColumnType("boolean")
-                        .HasColumnName("valid_tax_invoice");
-
                     b.Property<decimal>("WithholdingAmount")
                         .HasPrecision(20, 4)
                         .HasColumnType("numeric(20,4)")
@@ -2062,10 +2058,6 @@ namespace Books.Infrastructure.Migrations
                         .HasPrecision(20, 4)
                         .HasColumnType("numeric(20,4)")
                         .HasColumnName("unit_price");
-
-                    b.Property<bool>("ValidTaxInvoice")
-                        .HasColumnType("boolean")
-                        .HasColumnName("valid_tax_invoice");
 
                     b.Property<decimal>("WithholdingAmount")
                         .HasPrecision(20, 4)
@@ -3805,8 +3797,8 @@ namespace Books.Infrastructure.Migrations
 
                     b.Property<string>("Kind")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
                         .HasColumnName("kind");
 
                     b.Property<Guid>("LedgerId")
@@ -3818,10 +3810,6 @@ namespace Books.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("name");
-
-                    b.Property<Guid?>("NonDeductibleAccountId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("non_deductible_account_id");
 
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid")
@@ -3850,15 +3838,12 @@ namespace Books.Infrastructure.Migrations
                     b.HasIndex("LedgerId", "AccountId")
                         .HasDatabaseName("ix_tax_codes_ledger_id_account_id");
 
-                    b.HasIndex("LedgerId", "NonDeductibleAccountId")
-                        .HasDatabaseName("ix_tax_codes_ledger_id_non_deductible_account_id");
-
                     b.HasIndex("OrgId", "LedgerId")
                         .HasDatabaseName("ix_tax_codes_org_id_ledger_id");
 
                     b.ToTable("tax_codes", null, t =>
                         {
-                            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_zero_rated', 'non_vat', 'withholding', 'other_tax')");
+                            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_input_non_deductible', 'vat_zero_rated', 'non_vat', 'withholding', 'other_tax')");
 
                             t.HasCheckConstraint("ck_tax_codes_rate", "rate >= 0 AND rate <= 100");
                         });
@@ -5049,13 +5034,6 @@ namespace Books.Infrastructure.Migrations
                         .HasPrincipalKey("LedgerId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_tax_codes_accounts_ledger_id_account_id");
-
-                    b.HasOne("Books.Domain.Ledgers.Account", null)
-                        .WithMany()
-                        .HasForeignKey("LedgerId", "NonDeductibleAccountId")
-                        .HasPrincipalKey("LedgerId", "Id")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_tax_codes_accounts_ledger_id_non_deductible_account_id");
 
                     b.HasOne("Books.Domain.Ledgers.Ledger", null)
                         .WithMany()

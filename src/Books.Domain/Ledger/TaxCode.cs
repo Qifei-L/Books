@@ -3,10 +3,11 @@ using Books.Domain.Access;
 namespace Books.Domain.Ledgers;
 
 /// <summary>
-/// VAT output (sales) and input (purchases) at a rate; zero-rated VAT and non-VAT are separate kinds with no tax
-/// (owner decision); withholding tax at a rate.
+/// VAT output (sales) and input (purchases): input VAT is either creditable or non-creditable by its kind, so the
+/// tax code itself decides the account. Zero-rated VAT and non-VAT are separate kinds with no tax; withholding tax
+/// at a rate (owner decision 2026-10-25).
 /// </summary>
-public enum TaxKind { VatOutput, VatInput, VatZeroRated, NonVat, Withholding, OtherTax }
+public enum TaxKind { VatOutput, VatInput, VatInputNonDeductible, VatZeroRated, NonVat, Withholding, OtherTax }
 
 /// <summary>
 /// A tax a person chooses on a document line (rule 34). Owned by the ledger and maintained by administrators.
@@ -16,7 +17,7 @@ public sealed class TaxCode
 {
     private TaxCode() { }
 
-    public TaxCode(Guid id, Ledger ledger, string name, TaxKind kind, decimal rate, Account? account, Account? nonDeductibleAccount,
+    public TaxCode(Guid id, Ledger ledger, string name, TaxKind kind, decimal rate, Account? account,
         DateOnly? effectiveFrom, DateOnly? effectiveTo, DateTimeOffset createdAt)
     {
         Id = id;
@@ -24,7 +25,7 @@ public sealed class TaxCode
         LedgerId = ledger.Id;
         Kind = kind;
         CreatedAt = createdAt;
-        Set(name, rate, account, nonDeductibleAccount, effectiveFrom, effectiveTo);
+        Set(name, rate, account, effectiveFrom, effectiveTo);
     }
 
     public Guid Id { get; private set; }
@@ -36,14 +37,9 @@ public sealed class TaxCode
     /// <summary>Percent, for example 10 for 10%.</summary>
     public decimal Rate { get; private set; }
 
-    /// <summary>Where the tax is posted: a liability for output VAT and withholding, an asset for input VAT; none for 0% and non-VAT.</summary>
+    /// <summary>Where the tax is posted: a liability for output VAT and withholding, an asset for creditable input VAT,
+    /// a Cost &amp; Expense account for non-creditable input VAT; none for 0% and non-VAT.</summary>
     public Guid? AccountId { get; private set; }
-
-    /// <summary>
-    /// Input VAT only: where the VAT goes when no valid tax invoice was received (a Cost &amp; Expense account,
-    /// owner decision). Required for input VAT; the setting is generic so other kinds can use it later.
-    /// </summary>
-    public Guid? NonDeductibleAccountId { get; private set; }
 
     public DateOnly? EffectiveFrom { get; private set; }
     public DateOnly? EffectiveTo { get; private set; }
@@ -75,14 +71,14 @@ public sealed class TaxCode
     public bool AppliesOn(DateOnly date) =>
         Active && (EffectiveFrom is null || date >= EffectiveFrom) && (EffectiveTo is null || date <= EffectiveTo);
 
-    public void Update(string name, decimal rate, Account? account, Account? nonDeductibleAccount, DateOnly? effectiveFrom, DateOnly? effectiveTo, bool active)
+    public void Update(string name, decimal rate, Account? account, DateOnly? effectiveFrom, DateOnly? effectiveTo, bool active)
     {
-        Set(name, rate, account, nonDeductibleAccount, effectiveFrom, effectiveTo);
+        Set(name, rate, account, effectiveFrom, effectiveTo);
         Active = active;
         Version++;
     }
 
-    private void Set(string name, decimal rate, Account? account, Account? nonDeductibleAccount, DateOnly? effectiveFrom, DateOnly? effectiveTo)
+    private void Set(string name, decimal rate, Account? account, DateOnly? effectiveFrom, DateOnly? effectiveTo)
     {
         var carriesTax = Kind is not (TaxKind.VatZeroRated or TaxKind.NonVat);
         if (!carriesTax && (rate != 0 || account is not null))
@@ -97,14 +93,6 @@ public sealed class TaxCode
         {
             throw new DomainException($"This tax code needs a {string.Join(" or ", Usages.Types(Usages.ForTaxKind(Kind)!.Value))} account in the same ledger.");
         }
-        if ((Kind == TaxKind.VatInput) != (nonDeductibleAccount is not null))
-        {
-            throw new DomainException("Input VAT codes need a non-deductible account; other kinds have none.");
-        }
-        if (nonDeductibleAccount is not null && (nonDeductibleAccount.LedgerId != LedgerId || nonDeductibleAccount.Type != AccountType.CostAndExpense))
-        {
-            throw new DomainException("The non-deductible account must be a Cost & Expense account in the same ledger.");
-        }
         if (effectiveFrom is { } from && effectiveTo is { } to && to < from)
         {
             throw new DomainException("effective_to must not be before effective_from.");
@@ -112,7 +100,6 @@ public sealed class TaxCode
         Name = Names.Require(name);
         Rate = rate;
         AccountId = account?.Id;
-        NonDeductibleAccountId = nonDeductibleAccount?.Id;
         EffectiveFrom = effectiveFrom;
         EffectiveTo = effectiveTo;
     }

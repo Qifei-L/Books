@@ -129,7 +129,7 @@ public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner read
                 ?? throw BooksProblem.Invalid($"{field} must be a {string.Join(", ", kinds.Select(Text.Of))} tax code in this ledger.")
             : null;
         var salesTax = await TaxAsync(input.SalesTaxCodeId, "sales_tax_code_id", TaxKind.VatOutput, TaxKind.VatZeroRated, TaxKind.NonVat);
-        var purchaseTax = await TaxAsync(input.PurchaseTaxCodeId, "purchase_tax_code_id", TaxKind.VatInput, TaxKind.VatZeroRated, TaxKind.NonVat);
+        var purchaseTax = await TaxAsync(input.PurchaseTaxCodeId, "purchase_tax_code_id", TaxKind.VatInput, TaxKind.VatInputNonDeductible, TaxKind.VatZeroRated, TaxKind.NonVat);
         var code = string.IsNullOrWhiteSpace(input.Code) ? null : input.Code.Trim().ToLowerInvariant();
         if (code is not null && await db.Items.AnyAsync(x => x.LedgerId == ledgerId && x.Id != item.Id && x.Code != null && x.Code.ToLower() == code, ct))
         {

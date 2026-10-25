@@ -17,7 +17,7 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
 
     private sealed record AccountSpec(string Code, string Name, AccountType Type, string Group, Usage[] Usages, SystemPurpose? Purpose = null);
 
-    private sealed record TaxSpec(string Name, TaxKind Kind, decimal Rate, string? AccountCode, string? NonDeductibleCode = null, DateOnly? From = null, string? Category = null);
+    private sealed record TaxSpec(string Name, TaxKind Kind, decimal Rate, string? AccountCode, DateOnly? From = null, string? Category = null);
 
     private static readonly AccountSpec[] Accounts =
     [
@@ -50,8 +50,9 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
     private static readonly TaxSpec[] TaxCodes =
     [
         new("VAT 10% (sales)", TaxKind.VatOutput, 10m, "2100"),
-        new("VAT 10% (purchases)", TaxKind.VatInput, 10m, "1300", "5900"),
-        new("VAT 10% (imports)", TaxKind.VatInput, 10m, "1300", "5900", Category: "import"),
+        new("VAT 10% (purchases)", TaxKind.VatInput, 10m, "1300"),
+        new("VAT 10% (purchases, non-creditable)", TaxKind.VatInputNonDeductible, 10m, "5900"),
+        new("VAT 10% (imports)", TaxKind.VatInput, 10m, "1300", Category: "import"),
         new("VAT 0% (zero-rated)", TaxKind.VatZeroRated, 0m, null),
         new("Non-VAT", TaxKind.NonVat, 0m, null),
         new("VAT 4% fuel (sales)", TaxKind.VatOutput, 4m, "2100", From: new DateOnly(2026, 3, 1)),
@@ -108,8 +109,7 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
                     continue;
                 }
                 var account = spec.AccountCode is null ? null : byCode[spec.AccountCode];
-                var nonDeductible = spec.NonDeductibleCode is null ? null : byCode[spec.NonDeductibleCode];
-                var code = new TaxCode(Guid.CreateVersion7(), ledger, spec.Name, spec.Kind, spec.Rate, account, nonDeductible, spec.From, null, scope.Now);
+                var code = new TaxCode(Guid.CreateVersion7(), ledger, spec.Name, spec.Kind, spec.Rate, account, spec.From, null, scope.Now);
                 var builtin = Books.Domain.Documents.TaxReturns.Builtin(Key)!;
                 code.SetReturnCategory(spec.Category, spec.Kind == TaxKind.Withholding
                     ? [.. builtin.WithholdingCategories.Select(c => c.Key)]

@@ -67,7 +67,7 @@ public sealed class AccountUsageService(IBooksDb db, WriteRunner writes)
             Usage.Bank => await db.BankAccounts.AnyAsync(b => b.AccountId == account.Id, ct),
             Usage.OutputVat or Usage.InputVat or Usage.WithholdingPayable or Usage.OtherTaxPayable =>
                 await db.TaxCodes.AnyAsync(t => t.AccountId == account.Id, ct),
-            Usage.NonDeductibleVat => await db.TaxCodes.AnyAsync(t => t.NonDeductibleAccountId == account.Id, ct),
+            Usage.NonDeductibleVat => await db.TaxCodes.AnyAsync(t => t.AccountId == account.Id && t.Kind == TaxKind.VatInputNonDeductible, ct),
             // Until payments exist every posted invoice is open; M5.4 narrows this to unpaid invoices.
             Usage.Payable => await db.PurchaseInvoices.AnyAsync(i => i.PayableAccountId == account.Id && i.Status == Books.Domain.Documents.DocumentStatus.Posted, ct),
             Usage.Receivable => await db.SalesInvoices.AnyAsync(i => i.ReceivableAccountId == account.Id && i.Status == Books.Domain.Documents.DocumentStatus.Posted, ct),

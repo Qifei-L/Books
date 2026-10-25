@@ -21,8 +21,7 @@ public sealed class BooksPurchaseTools(PrincipalAccessor principals, PurchaseInv
         [property: JsonPropertyName("account_id")] Guid AccountId,
         [property: JsonPropertyName("description")] string? Description,
         [property: JsonPropertyName("amount"), Description("Net amount, VAT excluded, as a decimal string.")] string Amount,
-        [property: JsonPropertyName("tax_code_id"), Description("Input VAT, VAT 0% or Non-VAT code from list_tax_codes.")] Guid? TaxCodeId,
-        [property: JsonPropertyName("valid_tax_invoice"), Description("True only when a valid VAT tax invoice was received; otherwise VAT is non-deductible.")] bool ValidTaxInvoice,
+        [property: JsonPropertyName("tax_code_id"), Description("Input VAT (creditable or non-creditable), VAT 0% or Non-VAT code from list_tax_codes.")] Guid? TaxCodeId,
         [property: JsonPropertyName("withholding_code_id"), Description("WHT code when tax must be withheld from this line.")] Guid? WithholdingCodeId = null,
         [property: JsonPropertyName("item_id")] Guid? ItemId = null,
         [property: JsonPropertyName("quantity"), Description("Required for inventory items, as a decimal string.")] string? Quantity = null,
@@ -47,7 +46,7 @@ public sealed class BooksPurchaseTools(PrincipalAccessor principals, PurchaseInv
 
     [McpServerTool(Name = "save_purchase_drafts", Idempotent = true)]
     [Description("Saves up to 100 supplier invoices and debit notes as drafts for a person to review and post, all or none. "
-        + "Amounts are net of VAT; set valid_tax_invoice only if a valid VAT tax invoice was received. If any document has an input error, "
+        + "Amounts are net of VAT; choose the creditable or non-creditable input VAT code. If any document has an input error, "
         + "nothing is saved and every error is listed by document number; fix them and resend the whole batch with a new idempotency_key. "
         + "Saved drafts list issues that would block posting.")]
     public Task<CallToolResult> SaveDrafts(
@@ -69,7 +68,7 @@ public sealed class BooksPurchaseTools(PrincipalAccessor principals, PurchaseInv
 
     private static PurchaseInvoiceInput Input(PurchaseDocument d) =>
         PurchaseEndpoints.Input(new PurchaseEndpoints.InvoiceRequest(d.SupplierId, null, d.Date, d.DueDate, d.Reference, d.Description,
-            (d.Lines ?? []).Select(l => new PurchaseEndpoints.LineRequest(l.AccountId, l.Description, l.ItemId, l.Quantity, null, l.Amount, l.TaxCodeId, null, null, l.ValidTaxInvoice, l.WithholdingCodeId, l.Unit)).ToList(),
+            (d.Lines ?? []).Select(l => new PurchaseEndpoints.LineRequest(l.AccountId, l.Description, l.ItemId, l.Quantity, null, l.Amount, l.TaxCodeId, null, null, l.WithholdingCodeId, l.Unit)).ToList(),
             Post: false, d.OriginalInvoiceId, d.TaxCurrencyRate, d.TaxCurrencyReason));
 
     [McpServerTool(Name = "get_ap_aging", ReadOnly = true, Idempotent = true)]

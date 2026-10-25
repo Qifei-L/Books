@@ -11,7 +11,7 @@ namespace Books.Domain.Documents;
 /// <param name="PostingUsage">For a journal posting on a tax account (DocumentKind "journal"): the account's usage; its amount is in Tax.</param>
 public sealed record TaxLine(
     string DocumentKind, Guid DocumentId, long DocumentNo, DateOnly Date, Guid PartyId, string? Reference, int LineNo, string? Description,
-    Guid AccountId, Guid? TaxCodeId, TaxKind? TaxKind, decimal Net, decimal Tax, decimal TaxCalculated, string? TaxReason, bool ValidTaxInvoice,
+    Guid AccountId, Guid? TaxCodeId, TaxKind? TaxKind, decimal Net, decimal Tax, decimal TaxCalculated, string? TaxReason,
     string? WithholdingCategory, decimal Withholding, decimal? KhrRate, string? PostingUsage = null, bool PartyTaxable = false, PayRunLine? Payroll = null,
     decimal PayrollScale = 1, string? TaxCategory = null, decimal OtherTax = 0, string? OtherTaxCategory = null)
 {
@@ -62,8 +62,9 @@ public sealed record PayrollRule(string Amount, bool? Resident = null);
 public sealed record PostingRule(string Usage);
 
 /// <param name="Side">sale or purchase.</param>
-/// <param name="TaxKinds">vat_output, vat_input, vat_zero_rated, non_vat or none (no tax code); omit for any.</param>
-/// <param name="ValidTaxInvoice">Purchases: only lines with (true) or without (false) a valid tax invoice; omit for both.</param>
+/// <param name="TaxKinds">vat_output, vat_input, vat_input_non_deductible, vat_zero_rated, non_vat or none (no tax code); omit for any.</param>
+/// <param name="ValidTaxInvoice">Legacy compatibility: definitions written before non-creditable codes used false to mean
+/// vat_input_non_deductible. Compile translates it; new definitions should use tax_kinds directly.</param>
 /// <param name="WithholdingCategory">Only lines whose withholding code has this category; omit for any.</param>
 /// <param name="Amount">net, tax, withholding, other_tax, or taxable (net plus other tax: the VAT base).</param>
 /// <param name="Party">taxable (the customer or supplier has a tax ID) or non_taxable; omit for both.</param>
@@ -98,8 +99,8 @@ public static class TaxReturns
 {
     private static readonly Dictionary<string, TaxKind?> Kinds = new()
     {
-        ["vat_output"] = TaxKind.VatOutput, ["vat_input"] = TaxKind.VatInput, ["vat_zero_rated"] = TaxKind.VatZeroRated,
-        ["non_vat"] = TaxKind.NonVat, ["none"] = null,
+        ["vat_output"] = TaxKind.VatOutput, ["vat_input"] = TaxKind.VatInput, ["vat_input_non_deductible"] = TaxKind.VatInputNonDeductible,
+        ["vat_zero_rated"] = TaxKind.VatZeroRated, ["non_vat"] = TaxKind.NonVat, ["none"] = null,
     };
 
     /// <summary>The tax pack's built-in definition, used until a ledger publishes its own version.</summary>
@@ -264,10 +265,14 @@ public static class TaxReturns
     private static Func<TaxLine, decimal?> Line(LineRule rule)
     {
         var kinds = rule.TaxKinds?.Where(Kinds.ContainsKey).Select(k => Kinds[k]).ToList();
+        // Definitions published before the non-creditable code existed: false meant "VAT not claimable".
+        if (rule.ValidTaxInvoice == false && kinds is not null)
+        {
+            kinds = kinds.Select(k => k == TaxKind.VatInput ? TaxKind.VatInputNonDeductible : k).ToList();
+        }
         return l =>
             (rule.Side == "sale" ? l.IsSale : l.IsPurchase)
             && (kinds is null || kinds.Contains(l.TaxKind))
-            && (rule.ValidTaxInvoice is not { } valid || l.ValidTaxInvoice == valid)
             && (rule.WithholdingCategory is null || l.WithholdingCategory == rule.WithholdingCategory)
             && (rule.Party is null || (rule.Party == "taxable") == l.PartyTaxable)
             && (rule.TaxCategory is null || (rule.TaxCategory == "none" ? l.TaxCategory is null : l.TaxCategory == rule.TaxCategory))
@@ -317,18 +322,18 @@ public static class TaxReturns
     /// </summary>
     private static readonly ReturnDefinitionSpec Cambodia = new("Cambodia monthly tax return (TTR001, T7 01, WT 03)", CambodiaWithholding,
     [
-        new("t701_03", VatPurchases, "03 Local purchases with VAT 10%, excluding VAT", new LineRule("purchase", ["vat_input"], true, TaxCategory: "none")),
-        new("t701_04", VatPurchases, "04 VAT on local purchases", new LineRule("purchase", ["vat_input"], true, Amount: "tax", TaxCategory: "none")),
+        new("t701_03", VatPurchases, "03 Local purchases with VAT 10%, excluding VAT", new LineRule("purchase", ["vat_input"], TaxCategory: "none")),
+        new("t701_04", VatPurchases, "04 VAT on local purchases", new LineRule("purchase", ["vat_input"], Amount: "tax", TaxCategory: "none")),
         new("t701_05", VatPurchases, "05 Imports from overseas suppliers, excluding VAT", new LineRule("purchase", ["vat_input"], TaxCategory: "import")),
         new("t701_06", VatPurchases, "06 VAT on imports (paid at customs)", new LineRule("purchase", ["vat_input"], Amount: "tax", TaxCategory: "import")),
         new("t701_07", VatPurchases, "07 Purchases without VAT, taxable persons", new LineRule("purchase", ["vat_zero_rated", "non_vat", "none"], Party: "taxable")),
         new("t701_08", VatPurchases, "08 Purchases without VAT, non-taxable persons", new LineRule("purchase", ["vat_zero_rated", "non_vat", "none"], Party: "non_taxable")),
-        new("t701_09", VatPurchases, "09 Non-creditable purchases, taxable persons", new LineRule("purchase", ["vat_input"], false, Party: "taxable")),
-        new("t701_10", VatPurchases, "10 Non-creditable purchases, non-taxable persons", new LineRule("purchase", ["vat_input"], false, Party: "non_taxable")),
+        new("t701_09", VatPurchases, "09 Non-creditable purchases, taxable persons", new LineRule("purchase", ["vat_input_non_deductible"], Party: "taxable")),
+        new("t701_10", VatPurchases, "10 Non-creditable purchases, non-taxable persons", new LineRule("purchase", ["vat_input_non_deductible"], Party: "non_taxable")),
         new("t701_input_journals", VatPurchases, "Input VAT posted by journals (in box 11)", Postings: new PostingRule("input_vat")),
         new("t701_11", VatPurchases, "11 Total input tax (04 + 06)", Formula: new FormulaRule([new("t701_04"), new("t701_06"), new("t701_input_journals")])),
         new("t701_non_deductible_vat", VatPurchases, "VAT on non-creditable purchases (expensed, not on the form)",
-            new LineRule("purchase", ["vat_input"], false, Amount: "tax"), Information: true),
+            new LineRule("purchase", ["vat_input_non_deductible"], Amount: "tax"), Information: true),
         new("t701_12", VatSales, "12 Sales with VAT 10% to taxable persons, excluding VAT", new LineRule("sale", ["vat_output"], Party: "taxable", Amount: "taxable")),
         new("t701_13", VatSales, "13 VAT on sales to taxable persons", new LineRule("sale", ["vat_output"], Party: "taxable", Amount: "tax")),
         new("t701_14", VatSales, "14 Sales with VAT 10% to non-taxable persons, excluding VAT", new LineRule("sale", ["vat_output"], Party: "non_taxable", Amount: "taxable")),

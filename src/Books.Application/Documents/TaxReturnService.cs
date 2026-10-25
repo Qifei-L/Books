@@ -177,7 +177,7 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
             var sign = i.IsDebitNote ? -1 : 1;
             decimal B(decimal amount) => sign * i.ToBase(amount, baseMinor);
             return new TaxLine(i.SourceKind, i.Id, i.InvoiceNo, i.Date, i.SupplierId, i.Reference, l.LineNo, l.Description, l.AccountId, l.TaxCodeId, Kind(l.TaxCodeId),
-                B(l.NetAmount), B(l.TaxAmount), B(l.TaxCalculated), l.TaxReason, l.ValidTaxInvoice,
+                B(l.NetAmount), B(l.TaxAmount), B(l.TaxCalculated), l.TaxReason,
                 l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, B(l.WithholdingAmount), Rate(i.Id), PartyTaxable: taxable.Contains(i.SupplierId),
                 TaxCategory: Category(l.TaxCodeId));
         })).Concat(sales.SelectMany(i => i.Lines.Select(l =>
@@ -185,7 +185,7 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
             var sign = i.IsCreditNote ? -1 : 1;
             decimal B(decimal amount) => sign * i.ToBase(amount, baseMinor);
             return new TaxLine(i.SourceKind, i.Id, i.InvoiceNo, i.Date, i.CustomerId, i.Reference, l.LineNo, l.Description, l.AccountId, l.TaxCodeId, Kind(l.TaxCodeId),
-                B(l.NetAmount), B(l.TaxAmount), B(l.TaxCalculated), l.TaxReason, true, null, 0, Rate(i.Id), PartyTaxable: taxable.Contains(i.CustomerId),
+                B(l.NetAmount), B(l.TaxAmount), B(l.TaxCalculated), l.TaxReason, null, 0, Rate(i.Id), PartyTaxable: taxable.Contains(i.CustomerId),
                 TaxCategory: Category(l.TaxCodeId), OtherTax: B(l.OtherTaxAmount), OtherTaxCategory: l.OtherTaxCodeId is { } o ? codes[o].ReturnCategory : null);
         })));
 
@@ -199,7 +199,7 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
             JOIN journal_revisions r ON r.id = j.effective_revision_id
             JOIN journal_lines l ON l.revision_id = r.id
             JOIN accounts a ON a.id = l.account_id
-            JOIN account_usages u ON u.account_id = l.account_id AND u.usage IN ('output_vat', 'input_vat', 'withholding_payable')
+            JOIN account_usages u ON u.account_id = l.account_id AND u.usage IN ('output_vat', 'input_vat', 'non_deductible_vat', 'withholding_payable')
             WHERE j.ledger_id = {ledgerId} AND r.accounting_date >= {from} AND r.accounting_date <= {to}
             ORDER BY r.accounting_date, j.journal_no, l.line_no
             """).ToListAsync(ct);
@@ -210,7 +210,7 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         {
             var amount = Sign(p.Usage) * p.Amount;
             return new TaxLine(TaxLine.JournalKind, p.JournalId, p.JournalNo, p.AccountingDate, Guid.Empty, p.Reference, p.LineNo, p.Description, p.AccountId,
-                null, null, 0, amount, amount, null, true, null, 0, rate?.Rate ?? monthEnd, p.Usage);
+                null, null, 0, amount, amount, null, null, 0, rate?.Rate ?? monthEnd, p.Usage);
         });
         // Payments and receipts: lines posted straight to an account count when they carry a tax code or withholding
         // (a fee, a transfer or tax a customer withheld is not a sale or purchase), at the month-end rate.
@@ -219,7 +219,7 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         var paymentLines = payments.SelectMany(p => p.Lines
             .Where(l => l.Kind == PaymentLineKind.Account && (l.TaxCodeId is not null || l.WithholdingCodeId is not null))
             .Select(l => new TaxLine(p.SourceKind, p.Id, p.PaymentNo, p.Date, p.PartyId ?? Guid.Empty, p.Reference, l.LineNo, l.Description, l.AccountId!.Value,
-                l.TaxCodeId, Kind(l.TaxCodeId), p.ToBase(l.NetAmount, baseMinor), p.ToBase(l.TaxAmount, baseMinor), p.ToBase(l.TaxCalculated, baseMinor), l.TaxReason, l.ValidTaxInvoice,
+                l.TaxCodeId, Kind(l.TaxCodeId), p.ToBase(l.NetAmount, baseMinor), p.ToBase(l.TaxAmount, baseMinor), p.ToBase(l.TaxCalculated, baseMinor), l.TaxReason,
                 l.WithholdingCodeId is { } w ? codes[w].ReturnCategory : null, p.ToBase(l.WithholdingAmount, baseMinor),
                 rate?.Rate ?? (p.ExchangeRate is { } own && p.Currency == slot?.Currency ? own : monthEnd),
                 PartyTaxable: p.PartyId is { } party && taxable.Contains(party), TaxCategory: Category(l.TaxCodeId))));
@@ -232,7 +232,7 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         // Lines in the tax currency (KHR from the payroll system) keep their own amounts: scaled to the ledger's
         // currency and back at the pay run's rate, so the KHR boxes equal what the payroll system reported.
         var payrollLines = payRuns.SelectMany(r => r.Lines.Select(l => new TaxLine(PayRun.Kind, r.Id, r.PayRunNo, r.Date, Guid.Empty, r.Reference, l.LineNo,
-            $"{l.EmployeeCode} {l.Name}", Guid.Empty, null, null, 0, 0, 0, null, true, null, 0,
+            $"{l.EmployeeCode} {l.Name}", Guid.Empty, null, null, 0, 0, 0, null, null, 0,
             r.Rate is { } own && r.Currency == slot?.Currency ? own : rate?.Rate ?? fifteenth, Payroll: l, PayrollScale: r.Rate is { } payRate ? 1 / payRate : 1)));
         lines = lines.Concat(journalLines).Concat(paymentLines).Concat(payrollLines).OrderBy(l => l.Date).ThenBy(l => l.DocumentKind).ThenBy(l => l.DocumentNo).ThenBy(l => l.LineNo).ToList();
 
@@ -289,7 +289,7 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         string? SourceKind, decimal Amount);
 
     /// <summary>Liability usages count credits as positive; input VAT counts debits.</summary>
-    private static int Sign(string usage) => usage == "input_vat" ? 1 : -1;
+    private static int Sign(string usage) => usage is "input_vat" or "non_deductible_vat" ? 1 : -1;
 
     private static readonly string[] DocumentKinds =
         [PurchaseInvoice.Kind, PurchaseInvoice.DebitNoteKind, SalesInvoice.Kind, SalesInvoice.CreditNoteKind, Payment.Kind, Payment.ReceiptKind];
@@ -304,7 +304,8 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         (string Usage, string Label, decimal Expected)[] usages =
         [
             ("output_vat", "Output VAT", lines.Where(l => l.IsSale && l.TaxKind == TaxKind.VatOutput).Sum(l => l.Tax) + Journals("output_vat")),
-            ("input_vat", "Deductible input VAT", lines.Where(l => l.IsPurchase && l.TaxKind == TaxKind.VatInput && l.ValidTaxInvoice).Sum(l => l.Tax) + Journals("input_vat")),
+            ("input_vat", "Deductible input VAT", lines.Where(l => l.IsPurchase && l.TaxKind == TaxKind.VatInput).Sum(l => l.Tax) + Journals("input_vat")),
+            ("non_deductible_vat", "Non-creditable input VAT", lines.Where(l => l.IsPurchase && l.TaxKind == TaxKind.VatInputNonDeductible).Sum(l => l.Tax) + Journals("non_deductible_vat")),
             ("withholding_payable", "Withholding tax payable", lines.Where(l => l.IsPurchase).Sum(l => l.Withholding) + Journals("withholding_payable")),
         ];
         return usages.Select(u =>

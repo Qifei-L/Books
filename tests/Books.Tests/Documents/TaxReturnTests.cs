@@ -27,6 +27,8 @@ public sealed class TaxReturnTests(TestHost host)
         Assert.Equal(("1000.00", "100.00", "50.00", "100.00", "-10.00", "5.00"),
             (boxes["t701_03"].Usd, boxes["t701_04"].Usd, boxes["t701_10"].Usd, boxes["t701_11"].Usd, boxes["t701_vat_payable"].Usd, boxes["t701_non_deductible_vat"].Usd));
         Assert.Equal(("1150.00", "11.50"), (boxes["t701_turnover"].Usd, boxes["t701_ppi_01"].Usd));
+        var nonCreditable = october.GetProperty("reconciliation").EnumerateArray().Single(r => Get(r, "usage") == "non_deductible_vat");
+        Assert.Equal(("5.00", "5.00", true), (Get(nonCreditable, "ledger_amount"), Get(nonCreditable, "return_amount"), nonCreditable.GetProperty("matches").GetBoolean()));
         Assert.Equal(("1000.00", "100.00", "0.00", "100.00", "100.00"),
             (boxes["wt03_r5_rent_base"].Usd, boxes["wt03_r5_rent"].Usd, boxes["wt03_r1_services"].Usd, boxes["wt03_resident_total"].Usd, boxes["wt03_total"].Usd));
         Assert.Equal(("369000", "410000", "-41000", "47150"), (boxes["t701_19"].Khr, boxes["t701_11"].Khr, boxes["t701_vat_payable"].Khr, boxes["t701_ppi_01"].Khr));
@@ -107,7 +109,7 @@ public sealed class TaxReturnTests(TestHost host)
             bank_account_id = bank, party_id = supplier, date = "2026-10-12",
             lines = new object[]
             {
-                new { account_id = expense, amount = "200.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true, withholding_code_id = s.Taxes["WHT 10% rent"] },
+                new { account_id = expense, amount = "200.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], withholding_code_id = s.Taxes["WHT 10% rent"] },
                 new { account_id = expense, description = "Bank fee", amount = "1.00" },
             },
         })).DataAsync(HttpStatusCode.Created);
@@ -138,7 +140,7 @@ public sealed class TaxReturnTests(TestHost host)
         await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/purchase-invoices", new
         {
             supplier_id = overseas, date = "2026-10-08", reference = "CUSTOMS-2026-0815",
-            lines = new[] { new { account_id = stock, amount = "2000.00", tax_code_id = s.Taxes["VAT 10% (imports)"], valid_tax_invoice = true } },
+            lines = new[] { new { account_id = stock, amount = "2000.00", tax_code_id = s.Taxes["VAT 10% (imports)"] } },
         })).DataAsync(HttpStatusCode.Created);
 
         var boxes = Boxes(await GetAsync(s, "tax-returns/2026-10"));
@@ -165,7 +167,7 @@ public sealed class TaxReturnTests(TestHost host)
 
     /// <summary>
     /// October: sales invoice (goods 1000 at VAT 10%, export service 250 at 0%), credit note 100 + VAT 10,
-    /// purchase invoice (rent 1000 at VAT 10% with a valid invoice and WHT 10%; supplies 50 without a valid invoice),
+    /// purchase invoice (rent 1000 at creditable VAT 10% with WHT 10%; supplies 50 at non-creditable VAT 10%),
     /// a draft sale that must not count. KHR rate 4100 from the setup.
     /// </summary>
     internal async Task<SalesInvoiceTests.Setup> SeedAsync(string? subject = null)
@@ -184,8 +186,8 @@ public sealed class TaxReturnTests(TestHost host)
             supplier_id = supplier, date = "2026-10-01",
             lines = new object[]
             {
-                new { account_id = rent, amount = "1000.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true, withholding_code_id = s.Taxes["WHT 10% rent"] },
-                new { account_id = rent, amount = "50.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = false },
+                new { account_id = rent, amount = "1000.00", tax_code_id = s.Taxes["VAT 10% (purchases)"], withholding_code_id = s.Taxes["WHT 10% rent"] },
+                new { account_id = rent, amount = "50.00", tax_code_id = s.Taxes["VAT 10% (purchases, non-creditable)"] },
             },
         })).DataAsync(HttpStatusCode.Created);
         await (await s.Books.Admin.PostAsync(s.Url, new

@@ -16,7 +16,7 @@ namespace Books.Application.Documents;
 /// <param name="SettledAmount">Invoice lines in another currency: the amount of the invoice settled, in the invoice's currency; omit when it is the line's amount converted at the day's rate.</param>
 public sealed record PaymentLineInput(
     Guid? InvoiceId, Guid? AccountId, string? Description, Guid? ItemId, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
-    Guid? TaxCodeId = null, decimal? TaxOverride = null, string? TaxReason = null, bool ValidTaxInvoice = true, Guid? WithholdingCodeId = null,
+    Guid? TaxCodeId = null, decimal? TaxOverride = null, string? TaxReason = null, Guid? WithholdingCodeId = null,
     decimal? SettledAmount = null);
 
 /// <param name="ControlAccountId">Party lines: the Payable or Receivable account; omit to use the ledger's only one.</param>
@@ -27,7 +27,7 @@ public sealed record PaymentInput(
 
 public sealed record PaymentLineDto(
     Guid LineId, string Kind, Guid? InvoiceId, Guid? AccountId, Guid? ControlAccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice,
-    string Amount, Guid? TaxCodeId, string TaxCalculated, string TaxAmount, bool TaxAdjusted, string? TaxReason, bool ValidTaxInvoice,
+    string Amount, Guid? TaxCodeId, string TaxCalculated, string TaxAmount, bool TaxAdjusted, string? TaxReason,
     Guid? WithholdingCodeId, string WithholdingAmount, string Total, string? SettledAmount = null, string? ControlAmount = null);
 
 /// <param name="Currency">The bank account's currency; amounts are in it.</param>
@@ -273,12 +273,15 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
                 if (line.TaxCodeId is { } taxId)
                 {
                     var code = codes.GetValueOrDefault(taxId) ?? throw BooksProblem.Invalid($"Line {i}: tax_code_id must be a tax code of this ledger.");
-                    var vat = receipt ? TaxKind.VatOutput : TaxKind.VatInput;
-                    if (code.Kind != vat && code.Kind is not (TaxKind.VatZeroRated or TaxKind.NonVat))
+                    var allowed = receipt
+                        ? code.Kind is TaxKind.VatOutput or TaxKind.VatZeroRated or TaxKind.NonVat
+                        : code.Kind is TaxKind.VatInput or TaxKind.VatInputNonDeductible or TaxKind.VatZeroRated or TaxKind.NonVat;
+                    if (!allowed)
                     {
-                        throw BooksProblem.Invalid($"Line {i}: {(receipt ? "receipt" : "payment")} lines take {(receipt ? "output" : "input")} VAT, zero-rated or non-VAT codes.");
+                        throw BooksProblem.Invalid($"Line {i}: {(receipt ? "receipt" : "payment")} lines take {(receipt ? "output" : "input")} VAT (creditable or non-creditable), zero-rated or non-VAT codes.");
                     }
-                    if (code.Kind != vat && line.TaxOverride is not null and not 0)
+                    var canOverride = receipt ? code.Kind == TaxKind.VatOutput : code.Kind is TaxKind.VatInput or TaxKind.VatInputNonDeductible;
+                    if (!canOverride && line.TaxOverride is not null and not 0)
                     {
                         throw BooksProblem.Invalid($"Line {i}: zero-rated and non-VAT lines have no tax to override.");
                     }
@@ -307,7 +310,7 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
                     withholding = TaxCalculator.ForLine(net, code.Rate, minor).Amount;
                 }
                 lines.Add(PaymentLine.ForAccount(accountId, line.Description, line.ItemId, line.Quantity, line.UnitPrice, net,
-                    line.TaxCodeId, tax, line.ValidTaxInvoice, line.WithholdingCodeId, withholding));
+                    line.TaxCodeId, tax, line.WithholdingCodeId, withholding));
             }
         }
         if (party is not null && (!party.Active
@@ -380,7 +383,7 @@ public sealed class PaymentService(IBooksDb db, WriteRunner writes, ReadRunner r
                 x.p.Id, x.p.LedgerId, x.p.IsReceipt ? "receipt" : "payment", x.p.PaymentNo, x.p.BankAccountId, x.p.PartyId, x.p.Date, x.p.Reference, x.p.Description,
                 x.p.Lines.OrderBy(l => l.LineNo).Select(l => new PaymentLineDto(l.LineId, Text.Of(l.Kind), l.InvoiceId, l.AccountId, l.ControlAccountId, l.Description,
                     l.ItemId, Q(l.Quantity), Q(l.UnitPrice), F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason,
-                    l.ValidTaxInvoice, l.WithholdingCodeId, F(l.WithholdingAmount), F(l.Total), Q(l.SettledAmount),
+                    l.WithholdingCodeId, F(l.WithholdingAmount), F(l.Total), Q(l.SettledAmount),
                     l.Kind == PaymentLineKind.Account ? null : B(l.ControlAmount))).ToList(),
                 F(x.p.Total), Text.Of(x.p.Status), x.p.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.p.Issues, BooksJson.Options)!,
                 x.p.JournalId, x.JournalNo, x.p.Version.ToString(CultureInfo.InvariantCulture), currency,

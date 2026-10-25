@@ -70,7 +70,7 @@ public sealed class SettlementTests(TestHost host)
         (await (await s.Books.Admin.PostAsync(s.Url, new
         {
             supplier_id = s.Supplier, date, due_date = DateOnly.Parse(date).AddDays(30).ToString("yyyy-MM-dd"),
-            lines = new[] { new { account_id = s.Rent, amount, tax_code_id = s.Taxes["VAT 10% (purchases)"], valid_tax_invoice = true } },
+            lines = new[] { new { account_id = s.Rent, amount, tax_code_id = s.Taxes["VAT 10% (purchases)"] } },
         })).DataAsync(HttpStatusCode.Created)).Id();
 
     private static async Task PayAsync(PurchaseInvoiceTests.Setup s, Guid bank, string date, params object[] lines) =>
