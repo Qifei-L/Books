@@ -114,27 +114,18 @@ async function chooseLedger(ledger) {
   const months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   $("ledger-meta").textContent = `${ledger.base_currency} · FY from ${months[ledger.fy_start_month]} · `
     + (ledger.closed_through ? `closed to ${ledger.closed_through}` : "not closed") + (ledger.effective_access === "edit" ? "" : " · read only");
-  await renderChart();
-  await renderJournals();
-  await renderSetup();
-  await renderSales();
-  await renderPurchases();
-  await renderBank();
-  await renderInventory();
-  await renderAssets();
-  await renderPayroll();
-  await renderTax("2026-10");
-  for (const id of ["tb-out", "gl-out", "pl-out", "bs-out"]) $(id).innerHTML = "";
-  for (const id of ["tb-form", "pl-form", "bs-form"]) $(id).requestSubmit();
+  state.rendered = {};
+  await loadAccounts();
+  await showTab(state.tab ?? "sales", true);
 }
 
 // Drilldown: a report's account opens its GL detail for the same period; a GL line opens its journal.
-function openGl(accountId, from, to) {
+async function openGl(accountId, from, to) {
   const f = $("gl-form");
   f.account.value = accountId;
   f.from.value = from;
   f.to.value = to;
-  document.querySelector('.tabs button[data-tab="gl"]').click();
+  await showTab("gl");
   f.requestSubmit();
 }
 
@@ -175,7 +166,7 @@ async function openDocument(kind, id) {
     else if (kind === "payment" || kind === "receipt") showPayment(doc, party);
     else if (kind === "pay_run") {
       $("journal-dialog").close();
-      document.querySelector('.tabs button[data-tab="payroll"]').click();
+      await showTab("payroll");
       showPayRun(doc);
     }
     else if (kind === "stock_adjustment") {
@@ -222,21 +213,74 @@ async function showStatement(kind, partyId, asOf) {
   }
 }
 
-for (const button of document.querySelectorAll(".tabs button")) {
-  button.onclick = () => {
-    for (const b of document.querySelectorAll(".tabs button")) b.classList.toggle("active", b === button);
-    for (const tab of document.querySelectorAll(".tab")) tab.classList.toggle("hidden", tab.id !== `tab-${button.dataset.tab}`);
-  };
+// One register drives the sidebar, the page heading and what each page loads. A page renders the first
+// time it is opened, so switching companies no longer fetches every list at once.
+const PAGES = {
+  sales: { title: "Sales", sub: "Sales invoices and credit notes, and what customers owe", render: () => renderSales() },
+  purchases: { title: "Purchases", sub: "Purchase invoices and debit notes, and what we owe suppliers", render: () => renderPurchases() },
+  bank: { title: "Cash and bank", sub: "Payments, receipts, transfers, statements and reconciliation", render: () => renderBank() },
+  payroll: { title: "Payroll", sub: "Pay runs received from the payroll system; Books does not calculate pay", render: () => renderPayroll() },
+  inventory: { title: "Inventory", sub: "Stock on hand, adjustments, locations, transfers and assemblies", render: () => renderInventory() },
+  assets: { title: "Fixed assets", sub: "The register and monthly depreciation", render: () => renderAssets() },
+  parties: { title: "Customers and suppliers", sub: "One record for each party, with tax ID and payment terms", render: () => renderParties() },
+  banks: { title: "Bank accounts", sub: "Cash and bank accounts in the chart of accounts", render: () => renderBanks() },
+  taxcodes: { title: "Tax codes", sub: "Rates, tax accounts and the return category each code feeds", render: () => renderTaxCodes() },
+  journals: { title: "Journals", sub: "Every posting, with its revision and its source document", render: () => renderJournals() },
+  chart: { title: "Chart of accounts", sub: "Groups are headings that never take postings; accounts carry the balances", render: () => renderChart() },
+  pl: { title: "Profit and loss", sub: "Income and cost and expense over a period", render: () => runReport("pl") },
+  bs: { title: "Balance sheet", sub: "Assets, liabilities and equity at a date", render: () => runReport("bs") },
+  tb: { title: "Trial balance", sub: "Opening, period and closing balances by account", render: () => runReport("tb") },
+  gl: { title: "GL detail", sub: "Every line in one account, with a running balance", render: () => runReport("gl") },
+  tax: { title: "Tax return", sub: "The month's return on the GDT forms, with filing", render: () => renderTax(state.taxPeriod ?? "2026-10") },
+  "settings-ledger": { title: "Ledger and periods", sub: "Currency, fiscal year, close date and year-end revaluation", render: () => renderSettingsLedger() },
+  "settings-invoicing": { title: "Invoicing", sub: "Seller details and the numbers printed on invoices", render: () => renderSettingsInvoicing() },
+  "settings-org": { title: "Organization", sub: "The organization, its companies and the exchange rates they share", render: () => renderSettingsOrg() },
+};
+
+function runReport(id) {
+  const form = $(`${id}-form`);
+  if (form) form.requestSubmit();
+}
+
+async function showTab(id, force = false) {
+  const page = PAGES[id];
+  if (!page) return;
+  state.tab = id;
+  for (const b of document.querySelectorAll(".sidenav button")) b.classList.toggle("active", b.dataset.tab === id);
+  for (const t of document.querySelectorAll(".tab")) t.classList.toggle("hidden", t.id !== `tab-${id}`);
+  $("page-title").textContent = page.title;
+  $("page-sub").textContent = page.sub;
+  state.rendered ??= {};
+  if (!force && state.rendered[id]) return;
+  state.rendered[id] = true;
+  try {
+    await page.render();
+  } catch (error) {
+    state.rendered[id] = false;
+    showError(error);
+  }
+}
+
+for (const button of document.querySelectorAll(".sidenav button")) button.onclick = () => showTab(button.dataset.tab);
+
+// Every page names accounts, so groups, accounts and purposes load once per company.
+async function loadAccounts() {
+  const [groups, accounts, purposes] = await Promise.all([
+    api(`${ledgerUrl()}/groups`), api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/purposes`),
+  ]);
+  state.groups = groups;
+  state.accounts = accounts;
+  state.purposes = purposes;
+  state.purposeOf = Object.fromEntries(purposes.filter((p) => p.account_id).map((p) => [p.account_id, p.purpose.replaceAll("_", " ")]));
+  $("gl-form").account.innerHTML = accounts.map((a) => `<option value="${a.id}">${esc(a.code)} ${esc(a.name)}</option>`).join("");
 }
 
 const TYPES = { assets: "Assets", liabilities: "Liabilities", equity: "Equity", income: "Income", cost_and_expense: "Cost & Expense" };
 
 async function renderChart() {
-  const [groups, accounts, purposes] = await Promise.all([
-    api(`${ledgerUrl()}/groups`), api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/purposes`),
-  ]);
-  state.accounts = accounts;
-  const purposeOf = Object.fromEntries(purposes.filter((p) => p.account_id).map((p) => [p.account_id, p.purpose.replaceAll("_", " ")]));
+  const groups = state.groups ?? [];
+  const accounts = state.accounts ?? [];
+  const purposeOf = state.purposeOf ?? {};
   const rows = [];
   for (const [type, label] of Object.entries(TYPES)) {
     const typeGroups = groups.filter((g) => g.type === type);
@@ -250,7 +294,6 @@ async function renderChart() {
     for (const a of loose) rows.push(accountRow(a, purposeOf, false));
   }
   $("tab-chart").innerHTML = `<table><tr><th>Code</th><th>Account</th><th>Status</th><th>System purpose</th></tr>${rows.join("")}</table>`;
-  $("gl-form").account.innerHTML = accounts.map((a) => `<option value="${a.id}">${esc(a.code)} ${esc(a.name)}</option>`).join("");
   const year = new Date().getFullYear();
   for (const tr of $("tab-chart").querySelectorAll("tr[data-account]")) tr.onclick = () => openGl(tr.dataset.account, `${year}-01-01`, `${year}-12-31`);
 }
@@ -381,8 +424,9 @@ async function openPdf(path) {
 }
 
 async function renderBank() {
-  const [banks, payments, receipts, parties] = await Promise.all([
+  const [banks, payments, receipts, parties, transfers] = await Promise.all([
     api(`${ledgerUrl()}/bank-accounts`), api(`${ledgerUrl()}/payments`), api(`${ledgerUrl()}/receipts`), api(`${ledgerUrl()}/parties`),
+    api(`${ledgerUrl()}/transfers`),
   ]);
   if (!banks.length) {
     $("tab-bank").innerHTML = `<p class="muted">No bank accounts.</p>`;
@@ -394,6 +438,7 @@ async function renderBank() {
   const r = await api(`${ledgerUrl()}/bank-accounts/${bank.account_id ?? bank.id}/reconciliation?asOf=${latest?.to ?? "2026-10-31"}${latest ? `&statementBalance=${latest.closing_balance}` : ""}`);
   const party = (id) => parties.find((p) => p.id === id)?.name ?? "";
   const docs = [...payments, ...receipts].filter((d) => d.bank_account_id === (bank.account_id ?? bank.id) && d.status !== "deleted").sort((a, b) => a.date.localeCompare(b.date));
+  const shownTransfers = transfers.filter((t) => t.status !== "deleted");
   $("tab-bank").innerHTML = `
     ${canEdit() ? `<p><button onclick="paymentForm('payment')">New payment</button> <button class="secondary" onclick="paymentForm('receipt')">New receipt</button></p>` : ""}
     <p><label>Account <select id="bank-pick">${banks.map((b) => `<option value="${b.account_id ?? b.id}" ${b === bank ? "selected" : ""}>${esc(b.code)} ${esc(b.name)} · ${esc(b.bank_name)}</option>`).join("")}</select></label></p>
@@ -403,6 +448,12 @@ async function renderBank() {
       <td>${d.lines.map((l) => `${l.kind === "account" ? esc(accountName(l.account_id)) : l.kind === "invoice" ? "invoice" : "party balance"} ${l.amount}`).join("; ")}</td>
       <td class="num">${d.type === "receipt" ? d.total : ""}</td><td class="num">${d.type === "payment" ? d.total : ""}</td>
       <td>${d.status === "posted" ? `<span class="pill posted">posted</span>` : `<span class="pill draft">${d.status}</span> ${d.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>
+    <h3 style="margin-top:16px">Bank transfers ${canEdit() ? `<button class="secondary small" onclick="transferForm()">New</button>` : ""}</h3>
+    ${shownTransfers.length ? `<table><tr><th>No.</th><th>Date</th><th>From</th><th>To</th><th class="num">Amount</th><th class="num">Fee</th><th>Journal</th></tr>
+      ${shownTransfers.map((t) => `<tr ${canEdit() ? `class="click" data-transfer="${t.id}"` : ""}><td>${t.transfer_no}</td><td>${t.date}</td><td>${esc(accountName(t.from_account_id))}</td><td>${esc(accountName(t.to_account_id))}</td>
+        <td class="num">${t.amount}${t.to_amount ? ` → ${t.to_amount}` : ""}</td><td class="num">${t.fee_amount}</td>
+        <td>${t.status === "posted" ? `posted, journal No. ${t.journal_no}` : `<span class="pill draft">${t.status}</span> ${t.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>`
+      : `<p class="muted small">No transfers yet. A transfer moves money between two bank accounts, in one journal.</p>`}
     <h3 style="margin-top:16px">Reconciliation at ${r.as_of}</h3>
     <p>Book ${r.book_balance} · cleared ${r.cleared_balance}${r.statement_balance ? ` · statement ${r.statement_balance} · ${r.reconciled ? `<span class="ok">reconciled</span>` : `<span class="error">difference ${r.difference}</span>`}` : ""}</p>
     <table><tr><th>Pending</th><th>Date</th><th>Source</th><th>Reference</th><th class="num">Amount</th></tr>
@@ -414,6 +465,7 @@ async function renderBank() {
       ${st.lines.map((l) => `<tr class="${l.status === "duplicate" ? "" : "click"}" data-line-journal="${l.journal_id ?? ""}" data-line-payment="${l.payment_id ?? ""}" data-line-kind="${Number(l.amount) > 0 ? "receipt" : "payment"}"><td>${l.date}</td><td>${esc(l.description ?? "")}</td><td class="num">${l.amount}</td><td><span class="pill ${l.status === "matched" ? "posted" : "draft"}">${l.status}</span></td></tr>`).join("")}</table>`).join("")}`;
   $("bank-pick").onchange = (e) => { state.bankId = e.target.value; renderBank(); };
   for (const tr of $("tab-bank").querySelectorAll("tr[data-pay]")) tr.onclick = () => showPayment(docs.find((d) => d.id === tr.dataset.pay), party);
+  for (const tr of $("tab-bank").querySelectorAll("tr[data-transfer]")) tr.onclick = () => transferForm(shownTransfers.find((t) => t.id === tr.dataset.transfer));
   for (const tr of $("tab-bank").querySelectorAll("tr[data-journal]")) tr.onclick = () => openJournal(tr.dataset.journal);
   for (const tr of $("tab-bank").querySelectorAll("tr[data-line-kind]")) {
     tr.onclick = () => tr.dataset.lineJournal ? openJournal(tr.dataset.lineJournal) : tr.dataset.linePayment && openDocument(tr.dataset.lineKind, tr.dataset.linePayment);
@@ -431,14 +483,14 @@ async function renderTax(period) {
   const sections = [...new Set(r.boxes.map((b) => b.section))];
   const months = Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, "0")}`);
   $("tab-tax").innerHTML = `
-    <p><label>Month <select id="tax-period">${months.map((m) => `<option ${m === period ? "selected" : ""}>${m}</option>`).join("")}</select></label>
+    <p class="filter-bar"><label>Month <select id="tax-period">${months.map((m) => `<option ${m === period ? "selected" : ""}>${m}</option>`).join("")}</select></label>
       <a class="button" href="#" id="tax-xlsx">Excel</a>
-      <span class="muted">${esc(r.return_name)} · definition v${r.definition_version} · ${r.currency} / ${r.tax_currency ?? ""}
+      <span class="muted small">${esc(r.return_name)} · definition v${r.definition_version} · ${r.currency} / ${r.tax_currency ?? ""}
       ${r.tax_currency_basis === "override" ? `at ${r.override_rate}` : "from document snapshots"}</span></p>
     <p>${r.filed ? `<span class="pill posted">filed ${r.filed.filed_at.slice(0, 10)}</span> ${r.filed.differences.length ? `<span class="error">${r.filed.differences.length} boxes differ from the filed return</span>` : ""}` : `<span class="pill draft">not filed</span>`}</p>
     ${r.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}
     ${sections.map((s) => `<h3>${esc(s)}</h3><table><tr><th>Box</th><th>Label</th><th class="num">${r.currency}</th><th class="num">${r.tax_currency ?? ""}</th></tr>
-      ${r.boxes.filter((b) => b.section === s).map((b) => `<tr class="${b.lines ? "click" : "total"}" data-box="${b.key}"><td>${b.key}</td><td>${esc(b.label)}${b.information ? " <span class='muted'>(information)</span>" : ""}</td>
+      ${r.boxes.filter((b) => b.section === s).map((b) => `<tr class="${b.lines ? "click" : "subtotal"}" data-box="${b.key}"><td>${b.key}</td><td>${esc(b.label)}${b.information ? " <span class='muted'>(information)</span>" : ""}</td>
         <td class="num">${b.amount}</td><td class="num">${b.tax_currency_amount ? Number(b.tax_currency_amount).toLocaleString() : ""}</td></tr>`).join("")}</table>`).join("")}
     <h3>Reconciliation with tax accounts</h3>
     <table><tr><th>Usage</th><th>Accounts</th><th class="num">Ledger</th><th class="num">Documents</th><th class="num">Difference</th><th>Other postings</th></tr>
