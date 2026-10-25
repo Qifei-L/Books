@@ -32,6 +32,9 @@ public interface IBooksDb
     DbSet<ItemCategory> ItemCategories { get; }
     DbSet<Item> Items { get; }
     DbSet<ItemUnit> ItemUnits { get; }
+    DbSet<Location> Locations { get; }
+    DbSet<StockTransfer> StockTransfers { get; }
+    DbSet<StockTransferLine> StockTransferLines { get; }
     DbSet<BankTransfer> BankTransfers { get; }
     DbSet<PurchaseInvoice> PurchaseInvoices { get; }
     DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines { get; }

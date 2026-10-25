@@ -10,12 +10,12 @@ namespace Books.Application.Documents;
 
 /// <summary>One movement of an inventory item: positive quantities and values come in, negative ones go out.</summary>
 internal sealed record StockMovement(Guid ItemId, DateOnly Date, Guid DocumentId, decimal Quantity, decimal Value,
-    string Kind = "", long Number = 0, string? Reference = null, Guid? PartyId = null);
+    string Kind = "", long Number = 0, string? Reference = null, Guid? PartyId = null, Guid? LocationId = null);
 
 /// <param name="Kind">The document: purchase_invoice, debit_note, sales_invoice, credit_note or stock_adjustment.</param>
 public sealed record ItemMovementLine(
     DateOnly Date, string Kind, Guid DocumentId, long Number, string? Reference, Guid? PartyId, string QuantityIn, string QuantityOut, string Value,
-    string BalanceQuantity, string BalanceValue);
+    string BalanceQuantity, string BalanceValue, Guid? LocationId = null);
 
 /// <summary>An item's movements between two dates with the balance after each, Manager.io and QuickBooks style.</summary>
 public sealed record ItemMovements(
@@ -75,6 +75,10 @@ public static class Inventory
         return last ?? await db.Items.Where(i => i.Id == itemId).Select(i => i.PurchasePrice).SingleAsync(ct) ?? 0;
     }
 
+    /// <summary>Quantity of the item at one location on the date, leaving out one document (the one being saved).</summary>
+    internal static async Task<decimal> QuantityAtAsync(IBooksDb db, Guid ledgerId, Guid itemId, Guid locationId, DateOnly date, Guid excludeDocument, CancellationToken ct) =>
+        (await MovementsAsync(db, ledgerId, date, ct)).Where(m => m.ItemId == itemId && m.LocationId == locationId && m.DocumentId != excludeDocument).Sum(m => m.Quantity);
+
     /// <summary>Quantity on hand and its value on the date, leaving out one document (the one being saved).</summary>
     internal static async Task<(decimal Quantity, decimal Value)> PositionAsync(IBooksDb db, Guid ledgerId, Guid itemId, DateOnly date, Guid excludeDocument, CancellationToken ct)
     {
@@ -92,14 +96,22 @@ public static class Inventory
             .Where(i => i.LedgerId == ledgerId && i.Status == DocumentStatus.Posted && i.Date <= to).ToListAsync(ct);
         var adjustments = await db.StockAdjustments.AsNoTracking().Include(a => a.Lines)
             .Where(a => a.LedgerId == ledgerId && a.Status == DocumentStatus.Posted && a.Date <= to).ToListAsync(ct);
+        var transfers = await db.StockTransfers.AsNoTracking().Include(t => t.Lines)
+            .Where(t => t.LedgerId == ledgerId && t.Status == DocumentStatus.Posted && t.Date <= to).ToListAsync(ct);
         return purchases.SelectMany(p => p.Lines.Where(l => l.ItemId is { } id && tracked.Contains(id))
                 .Select(l => new StockMovement(l.ItemId!.Value, p.Date, p.Id, (p.IsDebitNote ? -1 : 1) * (l.BaseQuantity ?? 0), (p.IsDebitNote ? -1 : 1) * p.ToBase(l.NetAmount, minor),
-                    p.IsDebitNote ? "debit_note" : "purchase_invoice", p.InvoiceNo, p.Reference, p.SupplierId)))
+                    p.IsDebitNote ? "debit_note" : "purchase_invoice", p.InvoiceNo, p.Reference, p.SupplierId, l.LocationId)))
             .Concat(sales.SelectMany(s => s.Lines.Where(l => l.ItemId is { } id && tracked.Contains(id))
                 .Select(l => new StockMovement(l.ItemId!.Value, s.Date, s.Id, (s.IsCreditNote ? 1 : -1) * (l.BaseQuantity ?? 0), (s.IsCreditNote ? 1 : -1) * l.CostAmount,
-                    s.IsCreditNote ? "credit_note" : "sales_invoice", s.InvoiceNo, s.Reference, s.CustomerId))))
+                    s.IsCreditNote ? "credit_note" : "sales_invoice", s.InvoiceNo, s.Reference, s.CustomerId, l.LocationId))))
             .Concat(adjustments.SelectMany(a => a.Lines.Select(l => new StockMovement(l.ItemId, a.Date, a.Id, l.Quantity, l.Value,
-                StockAdjustment.Kind, a.AdjustmentNo, a.Reference))))
+                StockAdjustment.Kind, a.AdjustmentNo, a.Reference, LocationId: l.LocationId))))
+            // Transfers move quantities between locations and no value (one average cost across locations).
+            .Concat(transfers.SelectMany(t => t.Lines.SelectMany(l => new[]
+            {
+                new StockMovement(l.ItemId, t.Date, t.Id, -l.Quantity, 0, StockTransfer.Kind, t.TransferNo, t.Reference, LocationId: t.FromLocationId),
+                new StockMovement(l.ItemId, t.Date, t.Id, l.Quantity, 0, StockTransfer.Kind, t.TransferNo, t.Reference, LocationId: t.ToLocationId),
+            })))
             .ToList();
     }
 
@@ -162,7 +174,7 @@ public sealed class InventoryReportService(IBooksDb db, ReadRunner reads)
                 quantity += m.Quantity;
                 value += m.Value;
                 return new ItemMovementLine(m.Date, m.Kind, m.DocumentId, m.Number, m.Reference, m.PartyId,
-                    m.Quantity > 0 ? Q(m.Quantity) : "", m.Quantity < 0 ? Q(-m.Quantity) : "", F(m.Value), Q(quantity), F(value));
+                    m.Quantity > 0 ? Q(m.Quantity) : "", m.Quantity < 0 ? Q(-m.Quantity) : "", F(m.Value), Q(quantity), F(value), m.LocationId);
             }).ToList();
             return new ItemMovements(item.Id, item.Name, item.Unit, from, to, currency, Q(openingQuantity), F(openingValue), lines, Q(quantity), F(value));
         }, ct);

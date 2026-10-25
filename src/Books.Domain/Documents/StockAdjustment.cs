@@ -164,6 +164,15 @@ public sealed class StockAdjustmentLine
     public Guid? AccountId { get; private set; }
     public Guid InventoryAccountId { get; private set; }
 
+    /// <summary>The location counted or adjusted; null when the ledger has no locations.</summary>
+    public Guid? LocationId { get; private set; }
+
+    public StockAdjustmentLine AtLocation(Guid? locationId)
+    {
+        LocationId = locationId;
+        return this;
+    }
+
     internal StockAdjustmentLine Numbered(Guid adjustmentId, int lineNo)
     {
         AdjustmentId = adjustmentId;
