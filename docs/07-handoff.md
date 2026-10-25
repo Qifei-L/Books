@@ -98,6 +98,6 @@ are admin-only; per-ledger language, comparative, paper, orientation, watermark,
 editable through Settings → Branding & output. Defaults are English, prior-period comparison, A4 portrait, no watermark
 and a seven-day share window.
 
-Still open: Stimulsoft PDF/Excel report packs, tax workpapers, report templates/versioning, report runs and share links.
-Tax workpapers come before official GDT form facsimiles.
+Done: branding/output settings and the Stimulsoft tax workpaper PDF (trial watermark until a licence key is configured).
+Still open: report packs, templates/versioning, report runs/share links and official GDT form facsimiles.
 

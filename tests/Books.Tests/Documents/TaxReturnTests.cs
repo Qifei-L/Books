@@ -198,6 +198,19 @@ public sealed class TaxReturnTests(TestHost host)
         return s;
     }
 
+    [Fact]
+    public async Task The_tax_workpaper_pdf_is_generated_for_a_month()
+    {
+        var s = await SeedAsync();
+
+        var response = await s.Books.Admin.GetAsync($"{s.LedgerUrl}/tax-returns/2026-10.pdf", Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
+        var bytes = await response.Content.ReadAsByteArrayAsync(Ct);
+        Assert.True(bytes.Length > 1000);
+    }
+
     /// <summary>Deletes the month's drafts, which would otherwise block filing.</summary>
     internal static async Task DeleteDraftsAsync(SalesInvoiceTests.Setup s)
     {
