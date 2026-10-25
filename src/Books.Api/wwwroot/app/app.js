@@ -667,10 +667,11 @@ async function renderDocList(kind) {
     <label class="check"><input type="checkbox" data-col="${c.key}" ${chosen.has(c.key) ? "checked" : ""}> ${c.label}</label>`).join("")}
     <p class="muted small" style="margin:6px 0 0">The list always shows ${amountLabel.toLowerCase()}; these are extra columns.</p></div>`;
 
-  setActions(canEdit() ? `<button onclick="documentForm('${k.formKey}')">+ ${k.newLabel}</button>` : "");
+  setActions("");
 
   $(`tab-${k.container}`).innerHTML = `
     <form class="filter-bar" id="${ids.filter}" autocomplete="off">
+      ${canEdit() ? `<button type="button" class="new-doc" onclick="documentForm('${k.formKey}')">+ ${k.newLabel}</button>` : ""}
       <label>Period <select id="${ids.filter}-preset" name="preset">
         ${DOC_PRESETS.map((p) => `<option value="${p}" ${f.preset === p ? "selected" : ""}>${PRESET_LABELS[p]}</option>`).join("")}
       </select></label>

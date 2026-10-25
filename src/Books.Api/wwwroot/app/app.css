@@ -173,7 +173,8 @@ th.sortable:hover { color: var(--ink); }
 th.sortable .caret { font-size: 9px; margin-left: 4px; color: var(--accent); }
 th.sorted { color: var(--ink); }
 .filter-bar .spacer { flex: 1 1 24px; }
-.filter-bar .search { flex: 1 1 240px; }
+/* The list's primary action sits with the filters, at the left, where Manager.io keeps it. */
+.filter-bar .new-doc { align-self: flex-end; padding: 5px 12px; font-size: 13px; margin-right: 4px; white-space: nowrap; }.filter-bar .search { flex: 1 1 240px; }
 .filter-bar .search input { width: 100%; }
 
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 2px 0 16px; }
