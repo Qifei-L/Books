@@ -61,7 +61,6 @@ public sealed class StockAdjustmentTests(TestHost host)
             await (await s.Books.Admin.PostAsync(Url(s), new { date = "2026-10-10", lines = new[] { line } })).AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
 
         await Refused(new { item_id = item, quantity = "-1", counted_quantity = "9" });
-        await Refused(new { item_id = item, quantity = "-11" });
         await Refused(new { item_id = item, quantity = "-1", unit_cost = "5.00" });
         await Refused(new { item_id = item, counted_quantity = "10" });
         await Refused(new { item_id = plain, quantity = "1" });
@@ -148,6 +147,45 @@ public sealed class StockAdjustmentTests(TestHost host)
         Assert.Equal(("20.00", "15.00", "5.00"), (journal[s.Account("1400")].Cr, journal[loss].Dr, journal[staff].Dr));
         Assert.Equal(2, split.GetProperty("entries").GetArrayLength());
         Assert.Equal(JsonValueKind.Null, split.GetProperty("lines")[0].GetProperty("account_id").ValueKind);
+    }
+
+    [Fact]
+    public async Task An_items_movements_show_each_document_with_the_running_balance()
+    {
+        var (s, item) = await SetUpAsync();
+        await BuyAsync(s, item, "2026-10-01", "10", "50.00");
+        await (await s.Books.Admin.PostAsync(s.Url, new
+        {
+            customer_id = s.Customer, date = "2026-10-05", reference = "INV-77",
+            lines = new[] { new { account_id = s.Books.Sales, item_id = item, quantity = "4", unit_price = "9.00" } },
+        })).DataAsync(HttpStatusCode.Created);
+        await SaveAsync(s, new { date = "2026-10-20", reference = "WO-1", lines = new[] { new { item_id = item, quantity = "-1" } } });
+
+        var report = await (await s.Books.Admin.GetAsync($"{s.LedgerUrl}/reports/inventory/{item}/movements?from=2026-10-03&to=2026-10-31", Ct)).DataAsync();
+
+        Assert.Equal(("10", "50.00", "5", "25.00"), (Get(report, "opening_quantity"), Get(report, "opening_value"), Get(report, "closing_quantity"), Get(report, "closing_value")));
+        Assert.Equal(["sales_invoice INV-77 out 4 -20.00 = 6 30.00", "stock_adjustment WO-1 out 1 -5.00 = 5 25.00"],
+            report.GetProperty("lines").EnumerateArray().Select(l =>
+                $"{Get(l, "kind")} {Get(l, "reference")} out {Get(l, "quantity_out")} {Get(l, "value")} = {Get(l, "balance_quantity")} {Get(l, "balance_value")}"));
+    }
+
+    [Fact]
+    public async Task Stock_may_go_below_zero_with_a_warning()
+    {
+        var (s, item) = await SetUpAsync();
+        await BuyAsync(s, item, "2026-10-01", "10", "50.00");
+
+        var sale = await (await s.Books.Admin.PostAsync(s.Url, new
+        {
+            customer_id = s.Customer, date = "2026-10-10", lines = new[] { new { account_id = s.Books.Sales, item_id = item, quantity = "12", unit_price = "9.00" } },
+        })).DataAsync(HttpStatusCode.Created);
+        var adjustment = await SaveAsync(s, new { date = "2026-10-12", lines = new[] { new { item_id = item, quantity = "-1" } } });
+        var fine = await SaveAsync(s, new { date = "2026-09-01", lines = new[] { new { item_id = item, quantity = "5", unit_cost = "5.00" } } });
+
+        Assert.Equal("posted", Get(sale, "status"));
+        Assert.Contains("goes below zero on 2026-10-10 (-2 on hand)", Assert.Single(sale.GetProperty("warnings").EnumerateArray()).GetString());
+        Assert.Contains("(-3 on hand)", Assert.Single(adjustment.GetProperty("warnings").EnumerateArray()).GetString());
+        Assert.Equal(JsonValueKind.Null, fine.GetProperty("warnings").ValueKind);
     }
 
     private static List<string> Posting(SalesInvoiceTests.Setup s, JsonElement adjustment) =>

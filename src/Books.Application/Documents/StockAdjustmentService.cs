@@ -38,7 +38,7 @@ public sealed record AdjustmentPostingDto(Guid AccountId, string Debit, string C
 public sealed record StockAdjustmentDto(
     Guid Id, Guid LedgerId, long AdjustmentNo, DateOnly Date, string? Reference, string? Description, IReadOnlyList<StockAdjustmentLineDto> Lines,
     string TotalValue, string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version,
-    IReadOnlyList<StockAdjustmentEntryDto>? Entries = null, IReadOnlyList<AdjustmentPostingDto>? Posting = null);
+    IReadOnlyList<StockAdjustmentEntryDto>? Entries = null, IReadOnlyList<AdjustmentPostingDto>? Posting = null, IReadOnlyList<string>? Warnings = null);
 
 /// <summary>
 /// Stock adjustments and counts (M10.3). Values are worked out when the adjustment is saved, from the stock on its
@@ -76,7 +76,7 @@ public sealed class StockAdjustmentService(IBooksDb db, WriteRunner writes, Read
             scope.Audit($"stock_adjustment.{status}", "stock_adjustment", adjustment.Id,
                 new { adjustment_no = adjustment.AdjustmentNo, journal_id = adjustment.JournalId, issues = adjustment.Issues });
             await db.SaveChangesAsync(ct);
-            return WriteResult.Of(status == "not_posted" ? 422 : 201, (await LoadAsync(ledgerId, adjustment.Id, ct)).Single(), adjustment.Version);
+            return WriteResult.Of(status == "not_posted" ? 422 : 201, await WithWarningsAsync((await LoadAsync(ledgerId, adjustment.Id, ct)).Single(), adjustment, ct), adjustment.Version);
         }, ct);
 
     /// <summary>A posted adjustment whose change cannot be posted stays unchanged (rule 28).</summary>
@@ -107,7 +107,7 @@ public sealed class StockAdjustmentService(IBooksDb db, WriteRunner writes, Read
             await db.SaveChangesAsync(ct);
             var after = (await LoadAsync(ledgerId, adjustment.Id, ct)).Single();
             scope.Audit($"stock_adjustment.{status}", "stock_adjustment", adjustment.Id, new { before, after });
-            return WriteResult.Of(status == "not_posted" ? 422 : 200, after, adjustment.Version);
+            return WriteResult.Of(status == "not_posted" ? 422 : 200, await WithWarningsAsync(after, adjustment, ct), adjustment.Version);
         }, ct);
 
     public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid adjustmentId, CancellationToken ct) =>
@@ -125,6 +125,12 @@ public sealed class StockAdjustmentService(IBooksDb db, WriteRunner writes, Read
             scope.Audit("stock_adjustment.deleted", "stock_adjustment", adjustment.Id, new { adjustment_no = adjustment.AdjustmentNo });
             return WriteResult.Of(200, new { id = adjustment.Id, deleted = true }, adjustment.Version);
         }, ct);
+
+    /// <summary>A posted adjustment taking an item below zero carries a warning (owner decision: allowed, with a warning).</summary>
+    private async Task<StockAdjustmentDto> WithWarningsAsync(StockAdjustmentDto dto, StockAdjustment adjustment, CancellationToken ct) =>
+        adjustment.Status != DocumentStatus.Posted ? dto
+        : await Inventory.NegativeStockAsync(db, adjustment.LedgerId, adjustment.Lines.Select(l => l.ItemId), adjustment.Date, ct) is { Count: > 0 } w
+            ? dto with { Warnings = w } : dto;
 
     private async Task<string> SaveAsync(WriteScope scope, Ledger ledger, StockAdjustment adjustment, bool post, CancellationToken ct)
     {
@@ -218,17 +224,17 @@ public sealed class StockAdjustmentService(IBooksDb db, WriteRunner writes, Read
             {
                 throw BooksProblem.Invalid($"lines[{i}].unit_cost applies only to stock coming in; stock going out is valued at the average cost.");
             }
-            if (onHand + change < 0)
-            {
-                throw BooksProblem.Invalid($"lines[{i}]: only {Q(onHand)} of {item.Name} is on hand on {input.Date:yyyy-MM-dd}.");
-            }
-            var average = onHand > 0 ? onHandValue / onHand : 0;
+            var average = onHand > 0 ? onHandValue / onHand : await Inventory.AverageCostAsync(db, ledger.Id, item.Id, input.Date, adjustment.Id, ct);
             var value = line.Amount is { } amount ? amount
-                : change < 0 && onHand + change == 0 ? -onHandValue
+                : change < 0 && onHand > 0 && onHand + change == 0 ? -onHandValue
                 : Math.Round(change * (change > 0 ? line.UnitCost ?? average : average), minor, MidpointRounding.AwayFromZero);
             if (decimal.Round(value, minor) != value)
             {
                 throw BooksProblem.Invalid($"lines[{i}].amount allows {minor} decimal places.");
+            }
+            if (value == 0 && change != 0 && line.Amount is null && line.UnitCost is null)
+            {
+                throw BooksProblem.Invalid($"lines[{i}]: no cost is known for {item.Name} (none bought yet and no purchase price); give an amount or a unit cost.");
             }
             if (onHand + change == 0 && onHandValue + value != 0)
             {

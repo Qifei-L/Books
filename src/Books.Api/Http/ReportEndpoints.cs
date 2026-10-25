@@ -34,6 +34,10 @@ public static class ReportEndpoints
         reports.MapGet("/customer-statement", async (Guid orgId, Guid ledgerId, Guid customerId, DateOnly from, DateOnly to, PrincipalAccessor principals, ReceivablesReportService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.StatementAsync(await principals.GetAsync(ct), orgId, ledgerId, customerId, from, to, ct)));
 
+        reports.MapGet("/inventory/{itemId:guid}/movements", async (Guid orgId, Guid ledgerId, Guid itemId, DateOnly from, DateOnly to, PrincipalAccessor principals,
+            Books.Application.Documents.InventoryReportService service, HttpContext http, CancellationToken ct) =>
+            Envelope.Ok(http, await service.MovementsAsync(await principals.GetAsync(ct), orgId, ledgerId, itemId, from, to, ct)));
+
         reports.MapGet("/inventory", async (Guid orgId, Guid ledgerId, DateOnly asOf, PrincipalAccessor principals, Books.Application.Documents.InventoryReportService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.ReportAsync(await principals.GetAsync(ct), orgId, ledgerId, asOf, ct)));
 

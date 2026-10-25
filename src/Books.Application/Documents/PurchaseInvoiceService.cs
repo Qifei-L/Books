@@ -34,7 +34,7 @@ public sealed record PurchaseInvoiceDto(
     string? Reference, string? Description, IReadOnlyList<PurchaseLineDto> Lines,
     string NetTotal, string TaxTotal, string GrossTotal, string WithholdingTotal, string PayableTotal, TaxCurrencyDto? TaxCurrency,
     string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version,
-    string Currency = "", string? ExchangeRate = null, string? BaseTotal = null);
+    string Currency = "", string? ExchangeRate = null, string? BaseTotal = null, IReadOnlyList<string>? Warnings = null);
 
 /// <summary>
 /// Purchase invoices. Save posts when valid; otherwise the invoice is kept as a draft with the reasons. A posted
@@ -55,7 +55,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var (status, invoice) = await CreateOneAsync(scope, ledger, input, post, debitNote, ct);
-            return WriteResult.Of(status == "not_posted" ? 422 : 201, (await LoadAsync(ledgerId, invoice.Id, ct)).Single(), invoice.Version);
+            return WriteResult.Of(status == "not_posted" ? 422 : 201, await WithWarningsAsync((await LoadAsync(ledgerId, invoice.Id, ct)).Single(), invoice, ct), invoice.Version);
         }, ct);
 
     /// <summary>Saves several invoices and debit notes as drafts in one transaction, all or none (MCP batches).</summary>
@@ -108,7 +108,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
             await db.SaveChangesAsync(ct);
             var after = (await LoadAsync(ledgerId, invoice.Id, ct)).Single();
             scope.Audit($"purchase_invoice.{status}", "purchase_invoice", invoice.Id, new { before, after });
-            return WriteResult.Of(status == "not_posted" ? 422 : 200, after, invoice.Version);
+            return WriteResult.Of(status == "not_posted" ? 422 : 200, await WithWarningsAsync(after, invoice, ct), invoice.Version);
         }, ct);
 
     public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid invoiceId, CancellationToken ct) =>
@@ -286,6 +286,12 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
             ?? throw BooksProblem.NotFound();
         return invoice.Status == DocumentStatus.Deleted ? throw BooksProblem.Conflict("DOCUMENT_DELETED", "This invoice was deleted.") : invoice;
     }
+
+    /// <summary>A posted debit note taking an inventory item below zero carries a warning (owner decision: allowed, with a warning).</summary>
+    private async Task<PurchaseInvoiceDto> WithWarningsAsync(PurchaseInvoiceDto dto, PurchaseInvoice invoice, CancellationToken ct) =>
+        invoice.Status != DocumentStatus.Posted || !invoice.IsDebitNote ? dto
+        : await Inventory.NegativeStockAsync(db, invoice.LedgerId, invoice.Lines.Where(l => l.ItemId is not null).Select(l => l.ItemId!.Value), invoice.Date, ct) is { Count: > 0 } w
+            ? dto with { Warnings = w } : dto;
 
     private async Task<IReadOnlyList<PurchaseInvoiceDto>> LoadAsync(Guid ledgerId, Guid? id, CancellationToken ct)
     {
