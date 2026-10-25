@@ -147,6 +147,7 @@ async function chooseLedger(ledger) {
   state.rendered = {};
   // The cached document lists belong to the previous company.
   state.docData = {};
+  state.docSearchIndex = {};
   await loadAccounts();
   await showTab(state.tab ?? "sales-invoices", true);
 }
@@ -633,17 +634,22 @@ async function renderDocList(kind) {
   const inPeriod = docs.filter((d) => d.status !== "deleted");
   const inRange = inPeriod.filter((d) => d.date >= range.from && d.date <= range.to);
   // What the search box looks in: the number, the reference, the party, the description, and every
-  // amount on the document — both as stored ("2250.00") and as shown ("2,250.00").
-  const searchText = (d) => {
-    const amounts = [...k.amounts.map((a) => a.key), "other_tax_total"]
-      .map((key) => d[key])
-      .filter((value) => value !== undefined && value !== null && value !== "")
-      .flatMap((value) => [String(value), money(value)]);
-    return `${k.prefix} ${d.invoice_no} ${d.reference ?? ""} ${d.description ?? ""} ${partyName(d)} ${amounts.join(" ")}`.toLowerCase();
-  };
+  // amount on the document — as stored ("2250.00") and as shown ("2,250.00"). It is built once per
+  // document when the list loads: at a few thousand documents, rebuilding it per keystroke is the
+  // difference between typing and waiting.
+  const searchIndex = (state.docSearchIndex ??= {});
+  if (!searchIndex[kind]) {
+    searchIndex[kind] = new Map(docs.map((d) => {
+      const amounts = [...k.amounts.map((a) => a.key), "other_tax_total"]
+        .map((key) => d[key])
+        .filter((value) => value !== undefined && value !== null && value !== "")
+        .flatMap((value) => [String(value), money(value)]);
+      return [d.id, `${k.prefix} ${d.invoice_no} ${d.reference ?? ""} ${d.description ?? ""} ${partyName(d)} ${amounts.join(" ")}`.toLowerCase()];
+    }));
+  }
   const needle = f.q.trim().toLowerCase();
   const rows = inRange.filter((d) => (!f.party || d[k.partyKey] === f.party)
-    && (!needle || searchText(d).includes(needle)));
+    && (!needle || searchIndex[kind].get(d.id)?.includes(needle)));
   const posted = rows.filter((d) => d.status === "posted");
   const drafts = rows.filter((d) => d.status !== "posted");
   const shown = tab === "posted" ? posted : drafts;

@@ -54,6 +54,7 @@ const options = (rows, selected, label, empty) =>
 async function refreshLedger() {
   state.rendered = {};
   state.docData = {};
+  state.docSearchIndex = {};
   await showTab(state.tab ?? "sales-invoices", true);
 }
 
