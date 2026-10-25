@@ -7,7 +7,7 @@ namespace Books.Domain.Ledgers;
 /// tax code itself decides the account. Zero-rated VAT and non-VAT are separate kinds with no tax; withholding tax
 /// at a rate (owner decision 2026-10-25).
 /// </summary>
-public enum TaxKind { VatOutput, VatInput, VatInputNonDeductible, VatZeroRated, NonVat, Withholding, OtherTax }
+public enum TaxKind { VatOutput, VatInput, VatInputNonDeductible, VatZeroRated, NonVat, Withholding, OtherTax, StateCharge }
 
 /// <summary>How a manual journal's tax line is reported on the monthly return.</summary>
 public enum TaxDirection { Sale, SaleAdjustment, Purchase, PurchaseAdjustment }
@@ -58,7 +58,7 @@ public sealed class TaxCode
     public void SetReturnCategory(string? category, IReadOnlyCollection<string> allowed)
     {
         category = string.IsNullOrWhiteSpace(category) ? null : category.Trim();
-        if (category is not null && Kind is not (TaxKind.Withholding or TaxKind.VatInput or TaxKind.VatOutput or TaxKind.OtherTax))
+        if (category is not null && Kind is not (TaxKind.Withholding or TaxKind.VatInput or TaxKind.VatOutput or TaxKind.OtherTax or TaxKind.StateCharge))
         {
             throw new DomainException("Only withholding, VAT and other tax codes have a return category.");
         }

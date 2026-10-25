@@ -176,7 +176,7 @@ async function documentChoices(side) {
     accounts: accounts.filter((a) => usable(a) && (sale ? a.type === "income" : ["cost_and_expense", "assets"].includes(a.type))),
     items: items.filter((i) => i.active),
     vat: taxCodes.filter((t) => t.active && [sale ? "vat_output" : "vat_input", "vat_zero_rated", "non_vat"].includes(t.kind)),
-    other: taxCodes.filter((t) => t.active && t.kind === "other_tax"),
+    other: taxCodes.filter((t) => t.active && ["other_tax", "state_charge"].includes(t.kind)),
     wht: taxCodes.filter((t) => t.active && t.kind === "withholding"),
     invoices: invoices.filter((i) => i.status === "posted" && i.type === "invoice"),
     classes: classes.filter((c) => c.active),
@@ -451,7 +451,7 @@ async function journalForm(j) {
     const activeClasses = classes.filter((c) => c.active);
     const activeLocations = locations.filter((l) => l.active);
     const manualTaxCodes = taxCodes.filter((t) => t.active && ["vat_output", "vat_input", "vat_input_non_deductible", "other_tax"].includes(t.kind));
-    const postable = accounts.filter((a) => a.postable && a.active);
+    const postable = accounts.filter((a) => a.postable && a.active && (isAdmin() || !a.is_control));
     const form = openForm(j ? `Edit journal ${j.journal_no}` : "New journal", `
       <div class="grid">
         <label>Date <input type="date" name="accounting_date" value="${j?.accounting_date ?? today()}" required></label>

@@ -89,6 +89,10 @@
 | 2026-10-25 | Journal lines carry optional class and location dimensions. Class is a ledger-scoped reporting segment; location is the existing location/branch dimension (stock continues to use the same table). They are dimensions only: class and location never change the account or the subledger. Sales and purchase lines carry the same dimensions; other document types follow. GL Detail shows both; TB/BS/P&L filters are the next step. |
 | 2026-10-25 | A manual journal line may carry a VAT or other tax code. Its amount is gross; the server posts the net to the line's account, the tax to the code's tax account, and keeps the code, tax amount and sale/purchase direction on the net line for GL and return drilldown. The generated tax line is marked and hidden when the journal is edited; saving the net line re-splits it, so an edit cannot double the tax. Withholding on manual journals remains unsupported; use a payment or payroll document. |
 | 2026-10-25 | Report dimensions: TB, BS, P&L and GL Detail take optional class_id and location_id, combined with AND. When a filter is set, ledger-wide Suspense and Opening Balance Clearing warnings are suppressed because they describe the whole ledger, not the slice. The app and Excel carry the same filters. |
+| 2026-10-25 | Manual journals may post AR/AP only for organization administrators until ledger roles are implemented. The API enforces it; the journal form hides control accounts for other editors. Documents are unaffected. |
+| 2026-10-25 | State Charge is a tax kind (state_charge) using the other-tax line, account and print path, with its own return category. It prints as its own line; the old StateCharge flag still means "label VAT as state charge" for VAT paid on behalf of the state. |
+| 2026-10-25 | A manual VAT tax line carries its tax code and sale/purchase direction. The tax return uses the direction for line boxes and drops the posting-usage box for that line, so manual VAT is not counted twice. |
+
 
 ## Proposed defaults (accept or change)
 

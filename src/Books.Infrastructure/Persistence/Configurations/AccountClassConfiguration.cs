@@ -13,7 +13,7 @@ internal sealed class AccountClassConfiguration : IEntityTypeConfiguration<Accou
         b.Property(x => x.Name).HasMaxLength(200);
         b.Property(x => x.Code).HasMaxLength(20);
         b.HasAlternateKey(x => new { x.LedgerId, x.Id });
-        b.HasIndex(x => new { x.LedgerId, x.Name });
+        b.HasIndex(x => new { x.LedgerId, x.Name }).IsUnique();
         b.HasOne<Ledger>().WithMany()
             .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);

@@ -49,12 +49,13 @@ public sealed class JournalDimensionTests(TestHost host)
         Assert.Equal("posted", posted.GetProperty("status").GetString());
         var lines = posted.GetProperty("lines").EnumerateArray().ToList();
         Assert.Equal(3, lines.Count);
-        var net = lines.Single((l) => l.TryGetProperty("tax_code_id", out var id) && id.ValueKind == JsonValueKind.String && id.GetGuid() == tax);
+        var net = lines.Single((l) => l.TryGetProperty("tax_code_id", out var id) && id.ValueKind == JsonValueKind.String && id.GetGuid() == tax && Text(l, "debit") == "100.00");
         Assert.Equal("100.00", Text(net, "debit"));
         Assert.Equal("10.00", Text(net, "tax_amount"));
         Assert.Equal("purchase", Text(net, "tax_direction"));
-        var taxLine = lines.Single((l) => (!l.TryGetProperty("tax_code_id", out var id) || id.ValueKind == JsonValueKind.Null) && Text(l, "debit") == "10.00");
+        var taxLine = lines.Single((l) => Text(l, "debit") == "10.00");
         Assert.Equal("10.00", Text(taxLine, "debit"));
+        Assert.True(taxLine.GetProperty("tax_line").GetBoolean());
     }
 
     [Fact]
@@ -160,6 +161,25 @@ public sealed class JournalDimensionTests(TestHost host)
         Assert.Equal("100.00", Text(gl, "period_debit"));
         var bs = await GetAsync(books.Admin, $"{ledger}/reports/balance-sheet?asOf=2026-10-31&classId={retail}");
         Assert.Equal("100.00", Text(bs, "total_assets"));
+    }
+
+    [Fact]
+    public async Task A_non_admin_editor_cannot_post_a_manual_control_account_journal()
+    {
+        var s = await new PurchaseInvoiceTests(host).SetUpAsync();
+        using var editor = await s.Books.AddMemberAsync("edit");
+
+        var response = await editor.PostAsync($"{s.LedgerUrl}/journals", new
+        {
+            accounting_date = "2026-10-25", post = false,
+            lines = new object[]
+            {
+                new { account_id = s.Account("2000"), credit = "100.00", party_id = s.Supplier },
+                new { account_id = s.Rent, debit = "100.00" },
+            },
+        });
+
+        await response.AssertProblemAsync(HttpStatusCode.Forbidden, "FORBIDDEN");
     }
 
     private static async Task<JsonElement> PostAsync(HttpClient client, string url, object body) =>

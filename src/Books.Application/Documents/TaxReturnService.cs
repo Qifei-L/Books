@@ -194,7 +194,7 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         var postings = await db.Database.SqlQuery<Posting>($"""
             SELECT u.usage AS usage, a.code AS code, j.id AS journal_id, j.journal_no AS journal_no, l.line_no AS line_no, l.account_id AS account_id,
                    r.accounting_date AS accounting_date, r.reference AS reference, COALESCE(l.description, r.description) AS description,
-                   j.source_kind AS source_kind, l.amount AS amount
+                   j.source_kind AS source_kind, l.tax_code_id AS tax_code_id, l.tax_direction AS tax_direction, l.amount AS amount
             FROM journals j
             JOIN journal_revisions r ON r.id = j.effective_revision_id
             JOIN journal_lines l ON l.revision_id = r.id
@@ -209,8 +209,16 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
         var journalLines = postings.Where(p => p.SourceKind is null || !DocumentKinds.Contains(p.SourceKind)).Select(p =>
         {
             var amount = Sign(p.Usage) * p.Amount;
+            var kind = p.TaxCodeId is { } codeId && codes.TryGetValue(codeId, out var code) ? code.Kind : (TaxKind?)null;
+            var direction = Direction(p.TaxDirection);
+            // A manual VAT line with a direction belongs in the return's line boxes; do not also count it in the
+            // posting boxes, or the same tax would be reported twice.
+            var postingUsage = kind is TaxKind.VatOutput or TaxKind.VatInput or TaxKind.VatInputNonDeductible && direction is not null
+                ? null
+                : p.Usage;
             return new TaxLine(TaxLine.JournalKind, p.JournalId, p.JournalNo, p.AccountingDate, Guid.Empty, p.Reference, p.LineNo, p.Description, p.AccountId,
-                null, null, 0, amount, amount, null, null, 0, rate?.Rate ?? monthEnd, p.Usage);
+                p.TaxCodeId, kind, 0, amount, amount, null, null, 0, rate?.Rate ?? monthEnd, postingUsage,
+                TaxCategory: Category(p.TaxCodeId), TaxDirection: direction);
         });
         // Payments and receipts: lines posted straight to an account count when they carry a tax code or withholding
         // (a fee, a transfer or tax a customer withheld is not a sale or purchase), at the month-end rate.
@@ -286,10 +294,19 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
 
     private sealed record Posting(
         string Usage, string Code, Guid JournalId, long JournalNo, int LineNo, Guid AccountId, DateOnly AccountingDate, string? Reference, string? Description,
-        string? SourceKind, decimal Amount);
+        string? SourceKind, Guid? TaxCodeId, string? TaxDirection, decimal Amount);
 
     /// <summary>Liability usages count credits as positive; input VAT counts debits.</summary>
     private static int Sign(string usage) => usage is "input_vat" or "non_deductible_vat" ? 1 : -1;
+
+    private static TaxDirection? Direction(string? value) => value switch
+    {
+        "sale" => TaxDirection.Sale,
+        "sale_adjustment" => TaxDirection.SaleAdjustment,
+        "purchase" => TaxDirection.Purchase,
+        "purchase_adjustment" => TaxDirection.PurchaseAdjustment,
+        _ => null,
+    };
 
     private static readonly string[] DocumentKinds =
         [PurchaseInvoice.Kind, PurchaseInvoice.DebitNoteKind, SalesInvoice.Kind, SalesInvoice.CreditNoteKind, Payment.Kind, Payment.ReceiptKind];

@@ -13,15 +13,18 @@ public sealed record TaxLine(
     string DocumentKind, Guid DocumentId, long DocumentNo, DateOnly Date, Guid PartyId, string? Reference, int LineNo, string? Description,
     Guid AccountId, Guid? TaxCodeId, TaxKind? TaxKind, decimal Net, decimal Tax, decimal TaxCalculated, string? TaxReason,
     string? WithholdingCategory, decimal Withholding, decimal? KhrRate, string? PostingUsage = null, bool PartyTaxable = false, PayRunLine? Payroll = null,
-    decimal PayrollScale = 1, string? TaxCategory = null, decimal OtherTax = 0, string? OtherTaxCategory = null)
+    decimal PayrollScale = 1, string? TaxCategory = null, decimal OtherTax = 0, string? OtherTaxCategory = null,
+    TaxDirection? TaxDirection = null)
 {
     public const string JournalKind = "journal";
 
     /// <summary>Sales invoices and credit notes, and receipt lines posted straight to an account with a tax code.</summary>
-    public bool IsSale => DocumentKind is SalesInvoice.Kind or SalesInvoice.CreditNoteKind or Payment.ReceiptKind;
+    public bool IsSale => DocumentKind is SalesInvoice.Kind or SalesInvoice.CreditNoteKind or Payment.ReceiptKind
+        || TaxDirection is Books.Domain.Ledgers.TaxDirection.Sale or Books.Domain.Ledgers.TaxDirection.SaleAdjustment;
 
     /// <summary>Purchase invoices and debit notes, and payment lines posted straight to an account with a tax code.</summary>
-    public bool IsPurchase => DocumentKind is PurchaseInvoice.Kind or PurchaseInvoice.DebitNoteKind or Payment.Kind;
+    public bool IsPurchase => DocumentKind is PurchaseInvoice.Kind or PurchaseInvoice.DebitNoteKind or Payment.Kind
+        || TaxDirection is Books.Domain.Ledgers.TaxDirection.Purchase or Books.Domain.Ledgers.TaxDirection.PurchaseAdjustment;
     public bool TaxAdjusted => Tax != TaxCalculated;
 }
 
@@ -100,7 +103,7 @@ public static class TaxReturns
     private static readonly Dictionary<string, TaxKind?> Kinds = new()
     {
         ["vat_output"] = TaxKind.VatOutput, ["vat_input"] = TaxKind.VatInput, ["vat_input_non_deductible"] = TaxKind.VatInputNonDeductible,
-        ["vat_zero_rated"] = TaxKind.VatZeroRated, ["non_vat"] = TaxKind.NonVat, ["none"] = null,
+        ["vat_zero_rated"] = TaxKind.VatZeroRated, ["non_vat"] = TaxKind.NonVat, ["state_charge"] = TaxKind.StateCharge, ["none"] = null,
     };
 
     /// <summary>The tax pack's built-in definition, used until a ledger publishes its own version.</summary>

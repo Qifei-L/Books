@@ -31,7 +31,9 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             RefuseAgentPosting(principal, post);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var expanded = await ExpandTaxAsync(draft, ledger, ct);
-            var issues = RejectUnknownReferences(JournalValidator.Validate(expanded, await ContextAsync(ledger, expanded, null, ct)));
+            var context = await ContextAsync(ledger, expanded, null, ct);
+            RequireManualControlPermission(scope, expanded, context);
+            var issues = RejectUnknownReferences(JournalValidator.Validate(expanded, context));
             var status = !post ? RevisionStatus.Draft : issues.Count == 0 ? RevisionStatus.Posted : RevisionStatus.Error;
 
             var journal = new Journal(Guid.CreateVersion7(), orgId, ledgerId, ledger.IssueJournalNo(), principal.UserId, scope.Now);
@@ -73,7 +75,9 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var effective = journal.EffectiveRevisionId is { } effectiveId ? await db.JournalRevisions.SingleAsync(r => r.Id == effectiveId, ct) : null;
             var expanded = await ExpandTaxAsync(draft, ledger, ct);
-            var issues = RejectUnknownReferences(JournalValidator.Validate(expanded, await ContextAsync(ledger, expanded, effective?.AccountingDate, ct)));
+            var context = await ContextAsync(ledger, expanded, effective?.AccountingDate, ct);
+            RequireManualControlPermission(scope, expanded, context);
+            var issues = RejectUnknownReferences(JournalValidator.Validate(expanded, context));
             var status = !post ? RevisionStatus.Draft : issues.Count == 0 ? RevisionStatus.Posted : RevisionStatus.Error;
 
             await SupersedeAsync(journal, keepEffective: status != RevisionStatus.Posted, scope.Now, ct);
@@ -202,6 +206,18 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             : journal.EffectiveRevisionId.Value;
 
     /// <summary>
+    /// A manual journal may reach AR/AP only for an organization administrator. Documents post control accounts through
+    /// their own adapters and never call this path.
+    /// </summary>
+    private static void RequireManualControlPermission(WriteScope scope, JournalDraft draft, JournalContext context)
+    {
+        if (draft.Lines.Any(l => context.Accounts.TryGetValue(l.AccountId, out var account) && account.IsControl))
+        {
+            scope.RequireAdmin();
+        }
+    }
+
+    /// <summary>
     /// Splits a manual journal line that carries a tax code: the entered amount is gross, the account gets the net,
     /// a tax line goes to the code's tax account, and the net line keeps the code/amount/direction for reporting.
     /// </summary>
@@ -282,7 +298,8 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             });
             if (tax.Amount != 0)
             {
-                lines.Add(new DraftLine(taxAccountId, tax.Amount, $"{code.Name} (tax)", TaxLine: true));
+                lines.Add(new DraftLine(taxAccountId, tax.Amount, $"{code.Name} (tax)", TaxCodeId: code.Id,
+                    TaxAmount: tax.Amount, TaxCalculated: tax.Calculated, TaxDirection: direction, TaxLine: true));
             }
         }
         return draft with { Lines = lines };

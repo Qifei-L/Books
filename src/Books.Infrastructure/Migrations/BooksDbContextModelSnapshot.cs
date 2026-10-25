@@ -3152,6 +3152,7 @@ namespace Books.Infrastructure.Migrations
                         .HasName("ak_classes_ledger_id_id");
 
                     b.HasIndex("LedgerId", "Name")
+                        .IsUnique()
                         .HasDatabaseName("ix_classes_ledger_id_name");
 
                     b.HasIndex("OrgId", "LedgerId")
@@ -3947,7 +3948,7 @@ namespace Books.Infrastructure.Migrations
 
                     b.ToTable("tax_codes", null, t =>
                         {
-                            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_input_non_deductible', 'vat_zero_rated', 'non_vat', 'withholding', 'other_tax')");
+                            t.HasCheckConstraint("ck_tax_codes_kind", "kind IN ('vat_output', 'vat_input', 'vat_input_non_deductible', 'vat_zero_rated', 'non_vat', 'withholding', 'other_tax', 'state_charge')");
 
                             t.HasCheckConstraint("ck_tax_codes_rate", "rate >= 0 AND rate <= 100");
                         });

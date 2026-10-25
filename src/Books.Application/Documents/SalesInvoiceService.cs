@@ -223,9 +223,9 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             if (line.OtherTaxCodeId is { } otherId)
             {
                 var other = codes.GetValueOrDefault(otherId) ?? throw BooksProblem.Invalid($"Line {i}: other_tax_code_id must be a tax code of this ledger.");
-                if (other.Kind != TaxKind.OtherTax)
+                if (other.Kind is not (TaxKind.OtherTax or TaxKind.StateCharge))
                 {
-                    throw BooksProblem.Invalid($"Line {i}: other_tax_code_id must be an other tax code (specific, accommodation or public lighting).");
+                    throw BooksProblem.Invalid($"Line {i}: other_tax_code_id must be an other tax or state charge code (specific, accommodation, public lighting or state charge).");
                 }
                 if (!other.AppliesOn(input.Date))
                 {
