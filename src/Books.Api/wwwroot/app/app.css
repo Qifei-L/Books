@@ -201,16 +201,20 @@ table.list td, table.list th { overflow: hidden; }
    (A container query would be more precise, but `container-type` breaks the sticky header.) */
 @media (max-width: 1300px) {
   table.list .col-description, table.list .col-other_tax_total { display: none; }
+  table.list.bank .col-category { display: none; }
 }
 @media (max-width: 1120px) {
   table.list .col-fx { display: none; }
-  table.list.bank .col-category { display: none; }
   table.list.chart .col-purpose { display: none; }
   table.list td, table.list th { padding-left: 6px; padding-right: 6px; font-size: 13px; }
 }
 @media (max-width: 960px) {
   table.list .col-khr, table.list .col-reference { display: none; }
   table.list.chart .col-bank { width: 200px; }
+  table.list.bank .col-type { width: 76px !important; }
+  table.list.bank .col-bank { width: 140px !important; }
+  table.list.bank .col-in, table.list.bank .col-amount { width: 90px !important; }
+  table.list.bank .col-status { width: 96px !important; }
   .cell-sub { white-space: normal; }
 }
 th.sortable { cursor: pointer; user-select: none; }

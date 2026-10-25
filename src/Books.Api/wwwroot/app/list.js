@@ -43,10 +43,10 @@ const DOC_KINDS = {
     third: "ref", refLabel: "Debits", refPrefix: "PI", refPath: "purchase-invoices", extra: "credits",
     amounts: [{ key: "net_total", label: "Net" }, { key: "tax_total", label: "VAT" }, { key: "withholding_total", label: "WHT" }, { key: "payable_total", label: "Payable" }],
   },
-  // Cash and bank. Payments, receipts and transfers are one list: a payment and a receipt differ by the
-  // endpoint and number series, a transfer has no party. Each row carries what it is, the bank account it
-  // touches, and the category the money went to. It has no Posted/Draft tabs: the status is in the row,
-  // and the page says how many drafts are not in the books.
+  // Cash and bank. Payments, receipts and transfers are one list for one bank account at a time. Money
+  // coming in and money going out are separate columns, never Dr/Cr: a receipt is In, a payment is Out,
+  // and a transfer is Out on its sending account and In on its receiving one. It has no Posted/Draft tabs:
+  // the status is in the row, and the page says how many drafts are not in the books.
   transaction: {
     container: "bank-transactions", noun: "transaction", plural: "transactions", prefix: "",
     numberKey: "doc_no", newLabel: "New transaction",
@@ -56,15 +56,16 @@ const DOC_KINDS = {
       { label: "Transfer", run: () => transferForm() },
     ],
     partyKey: "party_id", partyFilter: (p) => p.active, partyLabel: "Party",
-    hide: BANK_HIDDEN, extra: "none", tabs: false, hideGroup: true, tableClass: "bank", searchHint: "type, reference, party, bank, amount",
-    amounts: [{ key: "amount", label: "Amount" }], amountWidth: "104px", statusWidth: "110px",
-    columnOrder: ["type", "party", "date", "reference", "bank", "category", "amount", "status", "description"],
+    hide: BANK_HIDDEN, extra: "none", tabs: false, hideGroup: true, tableClass: "bank", searchHint: "type, reference, party, amount",
+    amounts: [{ key: "in", label: "In", always: true, w: "104px" }, { key: "out", label: "Out" }],
+    amountWidth: "104px", statusWidth: "110px",
+    columnOrder: ["type", "party", "date", "reference", "bank", "category", "in", "amount", "status", "description"],
     columnDefaults: ["description"],
     facets: [
       { key: "doc_kind", label: "Type", all: "All types", options: () => [
         { value: "payment", label: "Payment" }, { value: "receipt", label: "Receipt" }, { value: "transfer", label: "Transfer" },
       ] },
-      { key: "bank_account_id", label: "Bank account", all: "All bank accounts", options: (c) => c.banks.map((b) => ({ value: b.account_id, label: `${b.code} ${b.name}` })) },
+      { key: "bank_account_id", label: "Bank account", required: true, options: (c) => c.banks.map((b) => ({ value: b.account_id, label: `${b.code} ${b.name} · ${b.currency}` })) },
     ],
     extraColumns: {
       type: { label: "Type", always: true, sortable: true, w: "84px", value: (d) => d.type_label.toLowerCase() },
@@ -76,11 +77,19 @@ const DOC_KINDS = {
       party: (d, c) => transactionIdentity(d, c),
       bank: (d) => transactionBankCell(d),
       category: (d) => transactionCategoryCell(d),
-      amount: (d, c) => transactionAmountCell(d, c),
+      in: (d, c) => (Number(d.in) ? money(d.in, c.currencyOf(d)) : ""),
+      amount: (d, c) => (Number(d.out) ? money(d.out, c.currencyOf(d)) : ""),
     },
     currencyOf: (d) => d.currency || state.ledger.base_currency,
     pathOf: (d) => d.doc_path,
     nounOf: (d) => (d.doc_kind === "transfer" ? "transfer" : d.doc_kind),
+    summary: (list) => {
+      const currency = list[0]?.currency ?? state.ledger.base_currency;
+      const inTotal = list.reduce((s, d) => s + Number(d.in ?? 0), 0);
+      const outTotal = list.reduce((s, d) => s + Number(d.out ?? 0), 0);
+      return `${money(inTotal, currency)} ${currency} in · ${money(outTotal, currency)} ${currency} out`;
+    },
+    noData: (c) => (c.banks.length ? "" : "No bank or cash accounts yet. Add one in Books → Chart of accounts."),
     load: async () => {
       const [payments, receipts, transfers, banks, parties] = await Promise.all([
         api(`${ledgerUrl()}/payments`), api(`${ledgerUrl()}/receipts`), api(`${ledgerUrl()}/transfers`),
@@ -91,28 +100,39 @@ const DOC_KINDS = {
       const paymentsAndReceipts = (docs, kind, path, label) => docs.map((d) => ({
         ...d, doc_kind: kind, doc_path: path, doc_no: d.payment_no, type_label: label,
         amount: d.total, currency: d.currency || currencyOf(d.bank_account_id),
+        in: kind === "receipt" ? d.total : "0",
+        out: kind === "payment" ? d.total : "0",
+        direction: kind === "receipt" ? "in" : "out",
         party_label: partyName(d.party_id) || d.description || "",
       }));
-      // A transfer has no party and no line grid: its sending account is the bank account the filter and
-      // the bank column use, and its amount is what left that account.
-      const transfersRows = transfers.map((d) => ({
-        ...d, doc_kind: "transfer", doc_path: "transfers", doc_no: d.transfer_no, type_label: "Transfer", type: "transfer",
-        party_id: null, bank_account_id: d.from_account_id, amount: d.amount, currency: currencyOf(d.from_account_id),
-        party_label: d.description || "Bank transfer",
-      }));
+      // A transfer is one document but two bank-account movements. The sending account sees Out, the
+      // receiving account sees In; a cross-currency transfer arrives as to_amount in the receiving currency.
+      const transferRows = transfers.flatMap((d) => {
+        const sent = d.amount;
+        const received = d.to_amount ?? d.amount;
+        const base = { ...d, doc_kind: "transfer", doc_path: "transfers", doc_no: d.transfer_no, type_label: "Transfer", type: "transfer",
+          party_id: null, party_label: d.description || "Bank transfer" };
+        return [
+          { ...base, bank_account_id: d.from_account_id, counterparty_account_id: d.to_account_id, direction: "out",
+            amount: sent, currency: currencyOf(d.from_account_id), in: "0", out: sent },
+          { ...base, bank_account_id: d.to_account_id, counterparty_account_id: d.from_account_id, direction: "in",
+            amount: received, currency: currencyOf(d.to_account_id), in: received, out: "0" },
+        ];
+      });
       return {
         docs: [
           ...paymentsAndReceipts(payments, "payment", "payments", "Payment"),
           ...paymentsAndReceipts(receipts, "receipt", "receipts", "Receipt"),
-          ...transfersRows,
+          ...transferRows,
         ],
         banks, parties,
       };
     },
     searchText: (d) => [
-      d.type_label, d.description, bankLabel(d.bank_account_id),
-      d.doc_kind === "transfer" ? bankLabel(d.to_account_id) : "",
-      transactionCategoryText(d), ...(d.lines ?? []).map((l) => paymentLineText(l)),
+      d.type_label, d.doc_kind === "transfer" ? "transfer in transfer out" : d.direction,
+      d.description, bankLabel(d.bank_account_id), bankLabel(d.counterparty_account_id),
+      d.doc_kind === "transfer" ? `${bankLabel(d.from_account_id)} ${bankLabel(d.to_account_id)} Transfer in Transfer out` : transactionCategoryText(d),
+      ...(d.lines ?? []).map((l) => paymentLineText(l)),
     ].join(" "),
     open: (d, c) => (d.doc_kind === "transfer" ? showTransfer(d) : showPayment(d, c.nameOf)),
     edit: (d) => (d.doc_kind === "transfer" ? transferForm(d) : editPayment(d.doc_kind, d.id)),
@@ -252,16 +272,13 @@ const documentIdentity = (d, c) => {
   return `<div class="cell-main"><span class="cell-clip" title="${esc(name)}">${esc(name)}</span></div>
     <div class="cell-sub">${d.date}${reference}</div>`;
 };
-const transferAmountCell = (d, c) => {
-  const sent = money(d.amount, c.currencyOf(d));
-  const received = d.to_amount ? `<div class="cell-sub">→ ${money(d.to_amount, bankCurrency(d.to_account_id))} ${esc(bankCurrency(d.to_account_id))}</div>` : "";
-  return `${sent}${received}`;
-};
-// The merged bank list has three document kinds. A transfer's description is its identity; its sending
-// and receiving accounts are in the bank column, so the row still reads as one movement.
-const transactionCategoryText = (d) => (d.doc_kind === "transfer" ? "Transfer" : paymentCategoryText(d));
+// The merged bank list has three document kinds. A transfer's description is its identity; its bank cell
+// says which side of the movement this account is on, and the In/Out columns say which way the money moved.
+const transactionCategoryText = (d) => (d.doc_kind === "transfer"
+  ? (d.direction === "in" ? "Transfer in" : "Transfer out")
+  : paymentCategoryText(d));
 const transactionCategoryCell = (d) => (d.doc_kind === "transfer"
-  ? `<span class="muted">Transfer</span>`
+  ? `<span class="muted">${d.direction === "in" ? "Transfer in" : "Transfer out"}</span>`
   : paymentCategoryCell(d));
 const transactionIdentity = (d, c) => {
   if (d.doc_kind !== "transfer") return documentIdentity(d, c);
@@ -272,13 +289,12 @@ const transactionIdentity = (d, c) => {
 };
 const transactionBankCell = (d) => {
   if (d.doc_kind !== "transfer") return bankCell(d.bank_account_id);
-  const from = bankOf(d.from_account_id);
-  if (!from) return "";
-  const to = bankLabel(d.to_account_id);
-  return `<div class="cell-main"><span class="cell-clip" title="${esc(`${from.code} ${from.name}`)}">${esc(from.code)} ${esc(from.name)}</span></div>
-    <div class="cell-sub">→ ${esc(to)}</div>`;
+  const account = bankOf(d.bank_account_id);
+  if (!account) return "";
+  const other = bankLabel(d.counterparty_account_id);
+  return `<div class="cell-main"><span class="cell-clip" title="${esc(`${account.code} ${account.name}`)}">${esc(account.code)} ${esc(account.name)}</span></div>
+    <div class="cell-sub">${d.direction === "in" ? "←" : "→"} ${esc(other)}</div>`;
 };
-const transactionAmountCell = (d, c) => (d.doc_kind === "transfer" ? transferAmountCell(d, c) : money(d.amount, c.currencyOf(d)));
 
 async function loadDocData(k) {
   if (k.load) return k.load();
@@ -326,9 +342,14 @@ async function renderDocList(kind) {
   const ctx = { docs, parties, counterparts, banks, nameOf, partyName, chosen, numberOf, currencyOf, amountKey, amountLabel };
   const facets = f.facets ??= {};
   const facetDefs = (k.facets ?? []).map((def) => ({ ...def, options: def.options(ctx) }));
+  // A required facet is a choice, not a filter: the page always works on one bank account and never adds
+  // different currencies together. Fall back to the first account if the saved one is gone.
+  for (const def of facetDefs) {
+    if (def.required && !def.options.some((o) => o.value === facets[def.key])) facets[def.key] = def.options[0]?.value ?? "";
+  }
   const facetValue = (def) => facets[def.key];
   const facetLabel = (def, value) => def.options.find((o) => o.value === value)?.label ?? value;
-  const activeFacets = facetDefs.filter((def) => facetValue(def));
+  const activeFacets = facetDefs.filter((def) => !def.required && facetValue(def));
   const amountTotal = (list, key = amountKey, separator = "<br>") => {
     if (!k.currencyOf) return money(sum(list, key));
     const groups = new Map();
@@ -358,7 +379,10 @@ async function renderDocList(kind) {
   }
   const needle = f.q.trim().toLowerCase();
   const rows = inRange.filter((d) => (!f.party || d[k.partyKey] === f.party)
-    && facetDefs.every((def) => !facets[def.key] || d[def.key] === facets[def.key])
+    && facetDefs.every((def) => {
+      const value = facets[def.key];
+      return def.required ? !!value && d[def.key] === value : !value || d[def.key] === value;
+    })
     && (!needle || searchIndex[kind].get(d.id)?.includes(needle)));
   const posted = rows.filter((d) => d.status === "posted");
   const drafts = rows.filter((d) => d.status !== "posted");
@@ -377,7 +401,7 @@ async function renderDocList(kind) {
     due: { label: "Due", always: true, sortable: true, w: "100px" },
     date: { label: "Date", sortable: true, w: "96px" },
     reference: { label: "Reference", sortable: true, w: "132px" },
-    ...Object.fromEntries(k.amounts.slice(0, -1).map((a) => [a.key, { label: a.label, sortable: true, num: true, w: "84px" }])),
+    ...Object.fromEntries(k.amounts.slice(0, -1).map((a) => [a.key, { label: a.label, sortable: true, num: true, always: !!a.always, w: a.w ?? "84px" }])),
     other_tax_total: { label: "Other tax", sortable: true, num: true, w: "84px" },
     amount: { label: k.currencyOf ? amountLabel : `${amountLabel} (${currency})`, always: true, sortable: true, num: true, valueKey: amountKey, w: k.amountWidth ?? "116px" },
     fx: { label: "Currency", sortable: true, w: "84px" },
@@ -589,8 +613,8 @@ async function renderDocList(kind) {
         </span>
       </label>`;
   const facetPickers = facetDefs.map((def) => `<label>${def.label}
-      <select id="${ids.facet}-${def.key}" name="facet-${def.key}">
-        <option value="">${esc(def.all ?? "All")}</option>
+      <select id="${ids.facet}-${def.key}" name="facet-${def.key}" ${def.options.length ? "" : "disabled"}>
+        ${def.required ? "" : `<option value="">${esc(def.all ?? "All")}</option>`}
         ${def.options.map((o) => `<option value="${esc(o.value)}" ${facets[def.key] === o.value ? "selected" : ""}>${esc(o.label)}</option>`).join("")}
       </select></label>`).join("");
   const tabMeta = withTabs
@@ -634,7 +658,7 @@ async function renderDocList(kind) {
     ${(tab === "draft" && drafts.length) || (k.tabs === false && drafts.length) ? `<p class="warning">These are not posted, so they are not in the ledger and they block filing the months they are dated in. Fix and post each one, or delete it.</p>` : ""}
     ${sorted.length
       ? `<div class="table-scroll"><table class="list ${docDensity()} ${k.tableClass ?? ""}"><tr>${header}</tr>${body}${(withTabs ? tab === "posted" : counted.length > 0) ? totals : ""}</table></div>${grouped ? "" : pager}`
-      : `<p class="muted">No ${withTabs && tab === "draft" ? "draft" : "posted"} ${k.plural} in ${PRESET_LABELS[f.preset]?.toLowerCase() ?? "this period"}${f.party ? ` for ${esc(nameOf(f.party))}` : ""}${activeFacets.map((def) => ` on ${esc(facetLabel(def, facets[def.key]))}`).join("")}${f.q ? ` matching “${esc(f.q)}”` : ""}.</p>`}`;
+      : (k.noData?.(ctx) ? `<p class="muted">${esc(k.noData(ctx))}</p>` : `<p class="muted">No ${withTabs && tab === "draft" ? "draft" : "posted"} ${k.plural} in ${PRESET_LABELS[f.preset]?.toLowerCase() ?? "this period"}${f.party ? ` for ${esc(nameOf(f.party))}` : ""}${activeFacets.map((def) => ` on ${esc(facetLabel(def, facets[def.key]))}`).join("")}${f.q ? ` matching “${esc(f.q)}”` : ""}.</p>`)}`;
 
   $(`${ids.filter}-preset`).onchange = (event) => {
     f.preset = event.target.value;
@@ -717,7 +741,7 @@ async function renderDocList(kind) {
     $(`${ids.bar}-count`).textContent = picked.length;
     const postedPicked = picked.filter((d) => d.status === "posted");
     const draftsPicked = picked.length - postedPicked.length;
-    const pickedTotal = postedPicked.length ? amountTotal(postedPicked, amountKey, " · ") : "";
+    const pickedTotal = postedPicked.length ? (k.summary ? k.summary(postedPicked) : amountTotal(postedPicked, amountKey, " · ")) : "";
     $(`${ids.bar}-total`).textContent = picked.length
       ? [pickedTotal, draftsPicked ? `${draftsPicked} ${draftsPicked === 1 ? "draft" : "drafts"} not counted` : ""].filter(Boolean).join(" · ")
       : "";
