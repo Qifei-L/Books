@@ -456,48 +456,40 @@ $("gl-form").addEventListener("submit", async (event) => {
   }
 });
 
-// Document lists. The layout follows Manager.io: one toolbar per list (new document on the left, search
-// on the right), a table whose headers sort, a totals row at the bottom, and Posted / Draft tabs that
-// carry their counts. Sales and purchases share this renderer; what differs is the party, the amount
-// columns and which dialog opens.
+// Document lists. The layout follows Manager.io for the toolbar and QuickBooks for the table: a two-line
+// invoice cell, one amount column, a status badge, a row menu on hover, sticky header and totals, and a
+// density switch. Sales and purchases share the renderer.
 const DOC_KINDS = {
   invoice: {
-    path: "sales-invoices", container: "sales-invoices", formKey: "invoice",
+    path: "sales-invoices", container: "sales-invoices", formKey: "invoice", side: "sale",
     noun: "sales invoice", plural: "sales invoices", prefix: "SI", newLabel: "New sales invoice",
     partyKey: "customer_id", partyFilter: (p) => p.is_customer, partyLabel: "Customer",
     third: "due", extra: "overdue",
     amounts: [{ key: "net_total", label: "Net" }, { key: "tax_total", label: "VAT" }, { key: "gross_total", label: "Gross" }],
-    dialog: "sale",
   },
   credit_note: {
-    path: "credit-notes", container: "sales-credit-notes", formKey: "credit_note",
+    path: "credit-notes", container: "sales-credit-notes", formKey: "credit_note", side: "sale",
     noun: "credit note", plural: "credit notes", prefix: "CN", newLabel: "New credit note",
     partyKey: "customer_id", partyFilter: (p) => p.is_customer, partyLabel: "Customer",
     third: "ref", refLabel: "Credits", refPrefix: "SI", refPath: "sales-invoices", extra: "credits",
     amounts: [{ key: "net_total", label: "Net" }, { key: "tax_total", label: "VAT" }, { key: "gross_total", label: "Gross" }],
-    dialog: "sale",
   },
   purchase_invoice: {
-    path: "purchase-invoices", container: "purchases-invoices", formKey: "purchase_invoice",
+    path: "purchase-invoices", container: "purchases-invoices", formKey: "purchase_invoice", side: "purchase",
     noun: "purchase invoice", plural: "purchase invoices", prefix: "PI", newLabel: "New purchase invoice",
     partyKey: "supplier_id", partyFilter: (p) => p.is_supplier, partyLabel: "Supplier",
     third: "due", extra: "overdue",
     amounts: [{ key: "net_total", label: "Net" }, { key: "tax_total", label: "VAT" }, { key: "withholding_total", label: "WHT" }, { key: "payable_total", label: "Payable" }],
-    dialog: "purchase",
   },
   debit_note: {
-    path: "debit-notes", container: "purchases-debit-notes", formKey: "debit_note",
+    path: "debit-notes", container: "purchases-debit-notes", formKey: "debit_note", side: "purchase",
     noun: "debit note", plural: "debit notes", prefix: "DN", newLabel: "New debit note",
     partyKey: "supplier_id", partyFilter: (p) => p.is_supplier, partyLabel: "Supplier",
     third: "ref", refLabel: "Debits", refPrefix: "PI", refPath: "purchase-invoices", extra: "credits",
     amounts: [{ key: "net_total", label: "Net" }, { key: "tax_total", label: "VAT" }, { key: "withholding_total", label: "WHT" }, { key: "payable_total", label: "Payable" }],
-    dialog: "purchase",
   },
 };
 
-// Filter state per list: a period preset (whole fiscal year by default), one party, one search string.
-// Everything applies as it is picked, so there is no Apply button; active filters show as chips so an
-// empty list always has an explanation.
 const DOC_PRESETS = ["this-month", "last-month", "this-quarter", "this-year", "last-year", "custom"];
 const PRESET_LABELS = {
   "this-month": "This month", "last-month": "Last month", "this-quarter": "This quarter",
@@ -515,14 +507,13 @@ const monthStart = (date) => new Date(Date.UTC(date.getFullYear(), date.getMonth
 const addMonths = (date, months) => new Date(Date.UTC(date.getFullYear(), date.getMonth() + months, 1));
 const dayBefore = (date) => new Date(date.getTime() - 86400000);
 
-// The fiscal year the given date falls in, from the ledger's start month: this is the unit a
-// bookkeeper thinks in, and it includes dates later in the year (a bill dated at month end).
+// The fiscal year the given date falls in, from the ledger's start month: the unit a bookkeeper thinks
+// in, and it includes dates later in the year (a bill dated at month end).
 function fiscalYear(ledger, today = new Date()) {
   const startMonth = ledger.fy_start_month ?? 1;
   const year = today.getMonth() + 1 >= startMonth ? today.getFullYear() : today.getFullYear() - 1;
   const start = new Date(Date.UTC(year, startMonth - 1, 1));
-  const end = dayBefore(addMonths(start, 12));
-  return { start, end };
+  return { start, end: dayBefore(addMonths(start, 12)) };
 }
 
 function presetRange(preset, f) {
@@ -536,17 +527,17 @@ function presetRange(preset, f) {
       const s = new Date(Date.UTC(now.getFullYear(), q, 1));
       return { from: iso(s), to: iso(dayBefore(addMonths(s, 3))) };
     }
-    case "last-year": {
-      const s = addMonths(fy.start, -12);
-      return { from: iso(s), to: iso(dayBefore(addMonths(s, 12))) };
-    }
+    case "last-year": { const s = addMonths(fy.start, -12); return { from: iso(s), to: iso(dayBefore(addMonths(s, 12))) }; }
     case "custom": return { from: f.from || iso(fy.start), to: f.to || iso(fy.end) };
     default: return { from: iso(fy.start), to: iso(fy.end) };
   }
 }
 
 const docTab = (kind) => ((state.docTab ??= {})[kind] ??= "posted");
-const docSort = (kind) => ((state.docSort ??= {})[kind] ??= { key: "date", dir: "desc" });
+const docSort = (kind) => ((state.docSort ??= {})[kind] ??= { key: "invoice", dir: "desc" });
+// Optional columns, off by default: the list shows one amount and the rest is detail.
+const docColumns = (kind) => ((state.docCols ??= {})[kind] ??= new Set());
+const docDensity = () => (state.density ??= "comfortable");
 const overdueDays = (d) => Math.floor((new Date(today()) - new Date(d.due_date)) / 86400000);
 
 async function renderDocList(kind) {
@@ -565,8 +556,7 @@ async function renderDocList(kind) {
   const counterpartNo = (id) => counterparts.find((c) => c.id === id)?.invoice_no ?? "";
   const khr = (d) => (d.tax_currency ? `${money(d.tax_currency.gross_total, "KHR")} ៛` : "");
   const sum = (list, key) => list.reduce((s, d) => s + Number(d[key] ?? 0), 0).toFixed(2);
-  // Every list keeps its own ids: the same id twice in the DOM would make getElementById lie.
-  const ids = { filter: `${k.container}-filter`, tabs: `${k.container}-tabs`, party: `${k.container}-party`, list: `${k.container}-party-list`, search: `${k.container}-search` };
+  const ids = { filter: `${k.container}-filter`, tabs: `${k.container}-tabs`, party: `${k.container}-party`, list: `${k.container}-party-list`, search: `${k.container}-search`, cols: `${k.container}-cols`, colsMenu: `${k.container}-cols-menu`, density: `${k.container}-density` };
 
   const inPeriod = docs.filter((d) => d.status !== "deleted");
   const inRange = inPeriod.filter((d) => d.date >= range.from && d.date <= range.to);
@@ -575,15 +565,18 @@ async function renderDocList(kind) {
   const posted = rows.filter((d) => d.status === "posted");
   const drafts = rows.filter((d) => d.status !== "posted");
   const shown = tab === "posted" ? posted : drafts;
+  const amountKey = k.amounts[k.amounts.length - 1].key;
+  const amountLabel = k.amounts[k.amounts.length - 1].label;
 
   const sortValue = (d) => {
     switch (sort.key) {
-      case "invoice_no": return Number(d.invoice_no);
+      case "invoice": return Number(d.invoice_no);
       case "date": return d.date;
       case "due": return d.due_date ?? "";
       case "party": return partyName(d).toLowerCase();
-      case "reference": return (d.reference ?? "").toLowerCase();
       case "status": return d.status;
+      case "khr": return Number(d.tax_currency?.gross_total ?? 0);
+      case "amount": return Number(d[amountKey] ?? 0);
       default: return Number(d[sort.key] ?? 0);
     }
   };
@@ -594,21 +587,19 @@ async function renderDocList(kind) {
   });
 
   const late = posted.filter((d) => d.due_date && d.due_date < today());
-  const overdueKey = k.amounts[k.amounts.length - 1].key;
   const currency = state.ledger.base_currency;
+  const chosen = docColumns(kind);
 
-  // Fixed widths: the party column takes what is left, so numbers and dates line up page after page.
+  // Fixed widths for everything except the party column, which takes what is left.
   const columns = [
-    { key: "invoice_no", label: "No.", sortable: true, w: "96px" },
-    { key: "date", label: "Date", sortable: true, w: "108px" },
-    k.third === "due"
-      ? { key: "due", label: "Due", sortable: true, w: "168px" }
-      : { key: "ref", label: k.refLabel, sortable: false, w: "128px" },
+    { key: "invoice", label: k.side === "sale" ? "Invoice" : "Bill", sortable: true, w: "250px" },
+    ...(k.third === "due" ? [{ key: "due", label: "Due", sortable: true, w: "150px" }] : [{ key: "ref", label: k.refLabel, w: "130px" }]),
     { key: "party", label: k.partyLabel, sortable: true },
-    { key: "reference", label: "Reference", sortable: true, w: "152px" },
-    ...k.amounts.map((a) => ({ key: a.key, label: a.label, sortable: true, num: true, w: "112px" })),
-    { key: "khr", label: "KHR", num: true, w: "140px" },
-    { key: "status", label: "Status", sortable: true, w: "200px" },
+    ...k.amounts.slice(0, -1).filter((a) => chosen.has(a.key)).map((a) => ({ key: a.key, label: a.label, num: true, sortable: true, w: "110px", opt: true })),
+    { key: "amount", label: `${amountLabel} (${currency})`, num: true, sortable: true, w: "132px" },
+    ...(chosen.has("khr") ? [{ key: "khr", label: "KHR", num: true, sortable: true, w: "132px", opt: true }] : []),
+    { key: "status", label: "Status", sortable: true, w: "116px" },
+    { key: "menu", label: "", w: "46px" },
   ];
 
   const header = columns.map((c) => {
@@ -617,19 +608,22 @@ async function renderDocList(kind) {
     return `<th class="${cls}" ${c.sortable ? `data-sort="${c.key}"` : ""}${c.w ? ` style="width:${c.w}"` : ""}>${c.label}${caret}</th>`;
   }).join("");
 
-  const cell = (d) => ({
-    invoice_no: `${k.prefix} ${d.invoice_no}`,
-    date: d.date,
-    due: `${d.due_date ?? ""}${d.status === "posted" && d.due_date && d.due_date < today() ? ` <span class="pill draft" title="${overdueDays(d)} days overdue">overdue</span>` : ""}`,
-    ref: d.original_invoice_id ? `${k.refPrefix} ${counterpartNo(d.original_invoice_id)}` : "",
-    party: `<span class="cell-clip" title="${esc(partyName(d))}">${esc(partyName(d))}</span>`,
-    reference: `<span class="cell-clip" title="${esc(d.reference ?? "")}">${esc(d.reference ?? "")}</span>`,
-    khr: khr(d),
-    status: d.status === "posted"
-      ? `<span class="pill posted">posted</span> No. ${d.journal_no ?? ""}`
-      : draftStatus(d),
-    ...Object.fromEntries(k.amounts.map((a) => [a.key, money(d[a.key])])),
-  });
+  const badge = (d) => `<span class="pill ${d.status}">${d.status}</span>`;
+  const cell = (d) => {
+    const lateDays = d.status === "posted" && d.due_date && d.due_date < today() ? overdueDays(d) : 0;
+    return {
+      invoice: `<div class="cell-main">${k.prefix} ${d.invoice_no}</div>
+        <div class="cell-sub">${d.date}${d.reference ? ` · ${esc(d.reference)}` : ""}</div>`,
+      due: d.due_date ? `${d.due_date}${lateDays > 0 ? ` <span class="late" title="${lateDays} days overdue">${lateDays}d late</span>` : ""}` : "",
+      ref: d.original_invoice_id ? `${k.refPrefix} ${counterpartNo(d.original_invoice_id)}` : "",
+      party: `<span class="cell-clip" title="${esc(partyName(d))}">${esc(partyName(d))}</span>`,
+      amount: money(d[amountKey]),
+      khr: khr(d),
+      status: badge(d),
+      menu: `<button class="row-menu-btn" data-menu="${d.id}" title="Actions">⋯</button>`,
+      ...Object.fromEntries(k.amounts.slice(0, -1).map((a) => [a.key, money(d[a.key])])),
+    };
+  };
 
   const body = sorted.map((d) => {
     const cells = cell(d);
@@ -637,9 +631,10 @@ async function renderDocList(kind) {
   }).join("");
 
   const totals = `<tr class="total">${columns.map((c) => {
-    if (c.key === "invoice_no") return `<td>Total</td>`;
+    if (c.key === "invoice") return `<td>Total</td>`;
     if (c.key === "status") return `<td>${sorted.length} ${sorted.length === 1 ? k.noun : k.plural}</td>`;
-    if (c.num && c.key !== "khr") return `<td class="num">${money(sum(sorted, c.key))}</td>`;
+    if (c.key === "amount") return `<td class="num">${money(sum(sorted, amountKey))}</td>`;
+    if (c.num) return `<td class="num">${money(sum(sorted, c.key))}</td>`;
     return `<td></td>`;
   }).join("")}</tr>`;
 
@@ -649,11 +644,10 @@ async function renderDocList(kind) {
     tab === "draft"
       ? `<div class="figure"><span class="muted small">Drafts block filing the month</span><b>${drafts.length} to fix</b></div>`
       : k.extra === "overdue"
-        ? `<div class="figure"><span class="muted small">Overdue</span><b class="${late.length ? "error" : ""}">${money(sum(late, overdueKey))} ${currency}</b></div>`
+        ? `<div class="figure"><span class="muted small">Overdue</span><b class="${late.length ? "error" : ""}">${money(sum(late, amountKey))} ${currency}</b></div>`
         : `<div class="figure"><span class="muted small">${kindsNoun(k)}</span><b>${new Set(shown.map((d) => d.original_invoice_id).filter(Boolean)).size}</b></div>`,
   ].join("");
 
-  // Active filters, so a short or empty list always says why.
   const chips = [
     f.preset !== "this-year"
       ? `<span class="chip">${PRESET_LABELS[f.preset] ?? "This year"}${f.preset === "custom" ? ` · ${range.from} → ${range.to}` : ""}<button data-clear="preset" title="Back to the whole fiscal year">×</button></span>`
@@ -662,9 +656,15 @@ async function renderDocList(kind) {
     f.q ? `<span class="chip">Search: “${esc(f.q)}”<button data-clear="q" title="Remove">×</button></span>` : "",
   ].filter(Boolean).join("");
   const filtered = f.party || f.q || f.preset !== "this-year";
-  const chipRow = chips || filtered
-    ? `<div class="chips">${chips}${filtered ? `<button class="link" id="${k.container}-clear">Clear all</button>` : ""}</div>`
-    : "";
+  const chipRow = chips || filtered ? `<div class="chips">${chips}${filtered ? `<button class="link" id="${k.container}-clear">Clear all</button>` : ""}</div>` : "";
+
+  const extras = [
+    ...k.amounts.slice(0, -1).map((a) => ({ key: a.key, label: a.label })),
+    { key: "khr", label: "KHR" },
+  ];
+  const columnsMenu = `<div class="popover hidden" id="${ids.colsMenu}">${extras.map((c) => `
+    <label class="check"><input type="checkbox" data-col="${c.key}" ${chosen.has(c.key) ? "checked" : ""}> ${c.label}</label>`).join("")}
+    <p class="muted small" style="margin:6px 0 0">The list always shows ${amountLabel.toLowerCase()}; these are extra columns.</p></div>`;
 
   setActions(canEdit() ? `<button onclick="documentForm('${k.formKey}')">${k.newLabel}</button>` : "");
 
@@ -683,6 +683,9 @@ async function renderDocList(kind) {
       </label>
       <span class="spacer"></span>
       <label class="search">Search <input id="${ids.search}" name="q" value="${esc(f.q)}" placeholder="${k.prefix}, reference, ${k.partyLabel.toLowerCase()}"></label>
+      <button type="button" class="secondary small" id="${ids.cols}" title="Extra columns">Columns</button>
+      <button type="button" class="secondary small" id="${ids.density}" title="Row height">${docDensity() === "compact" ? "Comfortable" : "Compact"}</button>
+      ${columnsMenu}
     </form>
     ${chipRow}
 
@@ -696,7 +699,7 @@ async function renderDocList(kind) {
 
     ${tab === "draft" && drafts.length ? `<p class="warning">These are not posted, so they are not in the ledger and they block filing the months they are dated in. Fix and post each one, or delete it.</p>` : ""}
     ${sorted.length
-      ? `<table class="list"><tr>${header}</tr>${body}${totals}</table>`
+      ? `<div class="table-scroll"><table class="list ${docDensity()}"><tr>${header}</tr>${body}${totals}</table></div>`
       : `<p class="muted">No ${tab === "posted" ? "posted" : "draft"} ${k.plural} in ${PRESET_LABELS[f.preset]?.toLowerCase() ?? "this period"}${f.party ? ` for ${esc(nameOf(f.party))}` : ""}${f.q ? ` matching “${esc(f.q)}”` : ""}.</p>`}`;
 
   $(`${ids.filter}-preset`).onchange = (event) => {
@@ -707,33 +710,36 @@ async function renderDocList(kind) {
   $(ids.filter).onsubmit = (event) => event.preventDefault();
   for (const input of $(ids.filter).querySelectorAll('input[type="date"]')) {
     input.onchange = () => {
+      const form = $(ids.filter);
       f.preset = "custom";
-      f.from = $(ids.filter).querySelector('input[name="from"]').value;
-      f.to = $(ids.filter).querySelector('input[name="to"]').value;
+      f.from = form.querySelector('input[name="from"]').value;
+      f.to = form.querySelector('input[name="to"]').value;
       renderDocList(kind);
     };
   }
+  $(ids.cols).onclick = () => $(ids.colsMenu).classList.toggle("hidden");
+  for (const box of $(ids.colsMenu).querySelectorAll("input[data-col]")) {
+    box.onchange = () => {
+      if (box.checked) chosen.add(box.dataset.col);
+      else chosen.delete(box.dataset.col);
+      renderDocList(kind);
+    };
+  }
+  $(ids.density).onclick = () => { state.density = docDensity() === "compact" ? "comfortable" : "compact"; renderDocList(kind); };
 
-  // Party combobox: type to narrow the list, arrows to move, Enter to take one, Esc to leave it.
   const partyInput = $(ids.party);
   const partyList = $(ids.list);
   const partyRows = parties.filter(k.partyFilter);
   let active = -1;
   const paintParties = (text) => {
     const needle = text.trim().toLowerCase();
-    const matches = partyRows
-      .filter((p) => !needle || `${p.name} ${p.tax_id ?? ""}`.toLowerCase().includes(needle))
-      .slice(0, 40);
+    const matches = partyRows.filter((p) => !needle || `${p.name} ${p.tax_id ?? ""}`.toLowerCase().includes(needle)).slice(0, 40);
     partyList.innerHTML = `<button type="button" data-party="">All ${k.partyLabel.toLowerCase()}s</button>`
       + matches.map((p) => `<button type="button" data-party="${p.id}">${esc(p.name)}${p.tax_id ? ` <span class="muted small">${esc(p.tax_id)}</span>` : ""}</button>`).join("");
     partyList.hidden = false;
     active = -1;
   };
-  const chooseParty = (id) => {
-    f.party = id;
-    partyList.hidden = true;
-    renderDocList(kind);
-  };
+  const chooseParty = (id) => { f.party = id; partyList.hidden = true; renderDocList(kind); };
   partyInput.onfocus = () => paintParties("");
   partyInput.oninput = () => paintParties(partyInput.value);
   partyInput.onkeydown = (event) => {
@@ -754,7 +760,10 @@ async function renderDocList(kind) {
     const button = event.target.closest("button[data-party]");
     if (button) { event.preventDefault(); chooseParty(button.dataset.party); }
   };
-  partyInput.onblur = () => setTimeout(() => { partyList.hidden = true; if (!f.party) partyInput.value = ""; else partyInput.value = nameOf(f.party); }, 120);
+  partyInput.onblur = () => setTimeout(() => {
+    partyList.hidden = true;
+    partyInput.value = f.party ? nameOf(f.party) : "";
+  }, 120);
 
   for (const button of $(`tab-${k.container}`).querySelectorAll("[data-clear]")) {
     button.onclick = () => {
@@ -770,7 +779,6 @@ async function renderDocList(kind) {
     renderDocList(kind);
   });
 
-  // Search filters as it is typed; the field keeps the caret after the redraw.
   let typing;
   $(ids.search).addEventListener("input", (event) => {
     const value = event.target.value;
@@ -795,17 +803,56 @@ async function renderDocList(kind) {
     th.onclick = () => {
       const key = th.dataset.sort;
       if (sort.key === key) sort.dir = sort.dir === "asc" ? "desc" : "asc";
-      else { sort.key = key; sort.dir = key === "date" || key === "invoice_no" ? "desc" : "asc"; }
+      else { sort.key = key; sort.dir = key === "invoice" ? "desc" : "asc"; }
       renderDocList(kind);
     };
   }
+
+  const openDoc = (doc) => (k.side === "sale" ? showSale(doc, nameOf) : showPurchase(doc, nameOf));
   for (const tr of $(`tab-${k.container}`).querySelectorAll("tr[data-id]")) {
-    tr.onclick = () => {
-      const doc = sorted.find((d) => d.id === tr.dataset.id);
-      if (k.dialog === "sale") showSale(doc, nameOf);
-      else showPurchase(doc, nameOf);
+    tr.onclick = (event) => {
+      if (event.target.closest(".row-menu-btn") || event.target.closest(".row-menu")) return;
+      openDoc(sorted.find((d) => d.id === tr.dataset.id));
     };
   }
+  for (const button of $(`tab-${k.container}`).querySelectorAll(".row-menu-btn")) {
+    button.onclick = (event) => {
+      event.stopPropagation();
+      const doc = sorted.find((d) => d.id === button.dataset.menu);
+      openRowMenu(button, [
+        { label: "Open", run: () => openDoc(doc) },
+        ...(k.side === "sale" ? [{ label: "Print PDF", run: () => openPdf(`${k.path}/${doc.id}/pdf`) }] : []),
+        ...(canEdit() ? [{ label: "Edit", run: () => editDocument(k.side, doc.type, doc.id) }] : []),
+        ...(canEdit() ? [{
+          label: "Delete", danger: true, run: async () => {
+            if (!confirm(`Delete ${k.noun} ${doc.invoice_no}?${doc.status === "posted" ? " Its journal is removed too." : ""}`)) return;
+            try {
+              await write("DELETE", `${ledgerUrl()}/${k.path}/${doc.id}`, undefined, doc.version);
+              await refreshLedger();
+            } catch (error) { showError(error); }
+          },
+        }] : []),
+      ]);
+    };
+  }
+}
+
+// A small menu under the row button; it closes on the next click anywhere else.
+function openRowMenu(anchor, items) {
+  document.querySelector(".row-menu")?.remove();
+  const menu = document.createElement("div");
+  menu.className = "row-menu";
+  menu.innerHTML = items.map((item, i) => `<button type="button" data-item="${i}" class="${item.danger ? "danger" : ""}">${esc(item.label)}</button>`).join("");
+  document.body.appendChild(menu);
+  const rect = anchor.getBoundingClientRect();
+  menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
+  menu.style.left = `${Math.max(8, rect.right + window.scrollX - menu.offsetWidth)}px`;
+  const close = () => { menu.remove(); document.removeEventListener("mousedown", outside); };
+  const outside = (event) => { if (!menu.contains(event.target)) close(); };
+  menu.querySelectorAll("button").forEach((b) => {
+    b.onclick = () => { close(); items[Number(b.dataset.item)].run(); };
+  });
+  setTimeout(() => document.addEventListener("mousedown", outside), 0);
 }
 const kindsNoun = (k) => (k.dialog === "sale" ? "Invoices credited" : "Bills debited");
 // Who owes us or who we owe, how late, and their statements. A report, so it keeps its own as-of date
