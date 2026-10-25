@@ -681,7 +681,6 @@ async function renderDocList(kind) {
           <div class="combo-list" id="${ids.list}" hidden></div>
         </span>
       </label>
-      <span class="spacer"></span>
       <label class="search">Search <input id="${ids.search}" name="q" value="${esc(f.q)}" placeholder="${k.prefix}, reference, ${k.partyLabel.toLowerCase()}"></label>
       <button type="button" class="secondary small" id="${ids.cols}" title="Extra columns">Columns</button>
       <button type="button" class="secondary small" id="${ids.density}" title="Row height">${docDensity() === "compact" ? "Comfortable" : "Compact"}</button>

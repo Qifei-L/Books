@@ -173,8 +173,9 @@ th.sortable:hover { color: var(--ink); }
 th.sortable .caret { font-size: 9px; margin-left: 4px; color: var(--accent); }
 th.sorted { color: var(--ink); }
 .filter-bar .spacer { flex: 1 1 24px; }
-.filter-bar .search input { min-width: 220px; }
-.filter-bar .search { margin-left: auto; }
+.filter-bar .search { flex: 1 1 240px; }
+.filter-bar .search input { width: 100%; }
+
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 2px 0 16px; }
 .tabs button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted); padding: 6px 10px; }
 .tabs button:hover { color: var(--ink); background: none; }
