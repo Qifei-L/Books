@@ -494,10 +494,54 @@ const DOC_KINDS = {
   },
 };
 
+// Filter state per list: a period preset (whole fiscal year by default), one party, one search string.
+// Everything applies as it is picked, so there is no Apply button; active filters show as chips so an
+// empty list always has an explanation.
+const DOC_PRESETS = ["this-month", "last-month", "this-quarter", "this-year", "last-year", "custom"];
+const PRESET_LABELS = {
+  "this-month": "This month", "last-month": "Last month", "this-quarter": "This quarter",
+  "this-year": "This year", "last-year": "Last year", custom: "Custom…",
+};
+
 function docFilters(kind) {
   state.docFilters ??= {};
-  state.docFilters[kind] ??= { from: `${today().slice(0, 4)}-01-01`, to: today(), party: "", q: "" };
+  state.docFilters[kind] ??= { preset: "this-year", from: "", to: "", party: "", q: "" };
   return state.docFilters[kind];
+}
+
+const iso = (date) => date.toISOString().slice(0, 10);
+const monthStart = (date) => new Date(Date.UTC(date.getFullYear(), date.getMonth(), 1));
+const addMonths = (date, months) => new Date(Date.UTC(date.getFullYear(), date.getMonth() + months, 1));
+const dayBefore = (date) => new Date(date.getTime() - 86400000);
+
+// The fiscal year the given date falls in, from the ledger's start month: this is the unit a
+// bookkeeper thinks in, and it includes dates later in the year (a bill dated at month end).
+function fiscalYear(ledger, today = new Date()) {
+  const startMonth = ledger.fy_start_month ?? 1;
+  const year = today.getMonth() + 1 >= startMonth ? today.getFullYear() : today.getFullYear() - 1;
+  const start = new Date(Date.UTC(year, startMonth - 1, 1));
+  const end = dayBefore(addMonths(start, 12));
+  return { start, end };
+}
+
+function presetRange(preset, f) {
+  const now = new Date();
+  const fy = fiscalYear(state.ledger, now);
+  switch (preset) {
+    case "this-month": { const s = monthStart(now); return { from: iso(s), to: iso(dayBefore(addMonths(s, 1))) }; }
+    case "last-month": { const s = addMonths(monthStart(now), -1); return { from: iso(s), to: iso(dayBefore(addMonths(s, 1))) }; }
+    case "this-quarter": {
+      const q = Math.floor(now.getMonth() / 3) * 3;
+      const s = new Date(Date.UTC(now.getFullYear(), q, 1));
+      return { from: iso(s), to: iso(dayBefore(addMonths(s, 3))) };
+    }
+    case "last-year": {
+      const s = addMonths(fy.start, -12);
+      return { from: iso(s), to: iso(dayBefore(addMonths(s, 12))) };
+    }
+    case "custom": return { from: f.from || iso(fy.start), to: f.to || iso(fy.end) };
+    default: return { from: iso(fy.start), to: iso(fy.end) };
+  }
 }
 
 const docTab = (kind) => ((state.docTab ??= {})[kind] ??= "posted");
@@ -509,6 +553,7 @@ async function renderDocList(kind) {
   const f = docFilters(kind);
   const tab = docTab(kind);
   const sort = docSort(kind);
+  const range = presetRange(f.preset, f);
   const [docs, counterparts, parties] = await Promise.all([
     api(`${ledgerUrl()}/${k.path}`),
     k.refPath ? api(`${ledgerUrl()}/${k.refPath}`) : Promise.resolve([]),
@@ -516,17 +561,16 @@ async function renderDocList(kind) {
   ]);
   const nameOf = (id) => parties.find((p) => p.id === id)?.name ?? "";
   const partyName = (d) => nameOf(d[k.partyKey]);
-  // Every list keeps its own ids: the same page id twice in the DOM would make getElementById lie.
-  const ids = { filter: `${k.container}-filter`, tabs: `${k.container}-tabs`, reset: `${k.container}-reset`, widen: `${k.container}-widen`, search: `${k.container}-search` };
   const counterpartNo = (id) => counterparts.find((c) => c.id === id)?.invoice_no ?? "";
   const khr = (d) => (d.tax_currency ? `${Number(d.tax_currency.gross_total).toLocaleString()} ៛` : "");
   const sum = (list, key) => list.reduce((s, d) => s + Number(d[key] ?? 0), 0).toFixed(2);
+  // Every list keeps its own ids: the same id twice in the DOM would make getElementById lie.
+  const ids = { filter: `${k.container}-filter`, tabs: `${k.container}-tabs`, party: `${k.container}-party`, list: `${k.container}-party-list`, search: `${k.container}-search` };
 
   const inPeriod = docs.filter((d) => d.status !== "deleted");
-  const rows = inPeriod.filter((d) => d.date >= f.from && d.date <= f.to
-    && (!f.party || d[k.partyKey] === f.party)
+  const inRange = inPeriod.filter((d) => d.date >= range.from && d.date <= range.to);
+  const rows = inRange.filter((d) => (!f.party || d[k.partyKey] === f.party)
     && (!f.q || `${k.prefix} ${d.invoice_no} ${d.reference ?? ""} ${partyName(d)}`.toLowerCase().includes(f.q.toLowerCase())));
-  const outside = inPeriod.filter((d) => d.date < f.from || d.date > f.to).length;
   const posted = rows.filter((d) => d.status === "posted");
   const drafts = rows.filter((d) => d.status !== "posted");
   const shown = tab === "posted" ? posted : drafts;
@@ -607,42 +651,124 @@ async function renderDocList(kind) {
         : `<div class="figure"><span class="muted small">${kindsNoun(k)}</span><b>${new Set(shown.map((d) => d.original_invoice_id).filter(Boolean)).size}</b></div>`,
   ].join("");
 
+  // Active filters, so a short or empty list always says why.
+  const chips = [
+    f.preset !== "this-year"
+      ? `<span class="chip">${PRESET_LABELS[f.preset] ?? "This year"}${f.preset === "custom" ? ` · ${range.from} → ${range.to}` : ""}<button data-clear="preset" title="Back to the whole fiscal year">×</button></span>`
+      : "",
+    f.party ? `<span class="chip">${k.partyLabel}: ${esc(nameOf(f.party))}<button data-clear="party" title="Remove">×</button></span>` : "",
+    f.q ? `<span class="chip">Search: “${esc(f.q)}”<button data-clear="q" title="Remove">×</button></span>` : "",
+  ].filter(Boolean).join("");
+  const filtered = f.party || f.q || f.preset !== "this-year";
+  const chipRow = chips || filtered
+    ? `<div class="chips">${chips}${filtered ? `<button class="link" id="${k.container}-clear">Clear all</button>` : ""}</div>`
+    : "";
+
   setActions(canEdit() ? `<button onclick="documentForm('${k.formKey}')">${k.newLabel}</button>` : "");
 
   $(`tab-${k.container}`).innerHTML = `
-    <form class="filter-bar" id="${ids.filter}">
-      <label>From <input type="date" name="from" value="${f.from}"></label>
-      <label>To <input type="date" name="to" value="${f.to}"></label>
-      <label>${k.partyLabel} <select name="party">${options(parties.filter(k.partyFilter), f.party, (p) => p.name, `All ${k.partyLabel.toLowerCase()}s`)}</select></label>
-      <button type="submit">Apply</button>
-      <button type="button" class="secondary" id="${ids.reset}">Reset</button>
+    <form class="filter-bar" id="${ids.filter}" autocomplete="off">
+      <label>Period <select id="${ids.filter}-preset" name="preset">
+        ${DOC_PRESETS.map((p) => `<option value="${p}" ${f.preset === p ? "selected" : ""}>${PRESET_LABELS[p]}</option>`).join("")}
+      </select></label>
+      ${f.preset === "custom" ? `<label>From <input type="date" name="from" value="${range.from}"></label>
+        <label>To <input type="date" name="to" value="${range.to}"></label>` : ""}
+      <label class="combo-label">${k.partyLabel}
+        <span class="combo">
+          <input id="${ids.party}" name="party" placeholder="All ${k.partyLabel.toLowerCase()}s" value="${esc(f.party ? nameOf(f.party) : "")}">
+          <div class="combo-list" id="${ids.list}" hidden></div>
+        </span>
+      </label>
       <span class="spacer"></span>
-      <label class="search">Search <input id="${ids.search}" name="q" value="${esc(f.q)}" placeholder="${k.prefix}, reference, ${k.partyLabel.toLowerCase()}" autocomplete="off"></label>
+      <label class="search">Search <input id="${ids.search}" name="q" value="${esc(f.q)}" placeholder="${k.prefix}, reference, ${k.partyLabel.toLowerCase()}"></label>
     </form>
+    ${chipRow}
 
     <div class="tabs" id="${ids.tabs}">
       <button data-doc-tab="posted" class="${tab === "posted" ? "active" : ""}">Posted <span class="count">${posted.length}</span></button>
       <button data-doc-tab="draft" class="${tab === "draft" ? "active" : ""}">Draft <span class="count">${drafts.length}</span></button>
+      <span class="tabs-meta">showing ${rows.length} of ${inPeriod.length}</span>
     </div>
 
-    ${outside ? `<p class="muted small">${outside} more ${outside === 1 ? k.noun : k.plural} dated outside this period. <button class="link" id="${ids.widen}">Show to end of year</button></p>` : ""}
     <div class="figures">${figures}</div>
 
     ${tab === "draft" && drafts.length ? `<p class="warning">These are not posted, so they are not in the ledger and they block filing the months they are dated in. Fix and post each one, or delete it.</p>` : ""}
     ${sorted.length
       ? `<table class="list"><tr>${header}</tr>${body}${totals}</table>`
-      : `<p class="muted">No ${tab === "posted" ? "posted" : "draft"} ${k.plural} in this period${f.q ? ` matching "${esc(f.q)}"` : ""}.</p>`}`;
+      : `<p class="muted">No ${tab === "posted" ? "posted" : "draft"} ${k.plural} in ${PRESET_LABELS[f.preset]?.toLowerCase() ?? "this period"}${f.party ? ` for ${esc(nameOf(f.party))}` : ""}${f.q ? ` matching “${esc(f.q)}”` : ""}.</p>`}`;
 
-  $(ids.filter).onsubmit = (event) => {
-    event.preventDefault();
-    const form = event.target;
-    state.docFilters[kind] = { from: form.from.value, to: form.to.value, party: form.party.value, q: form.q.value.trim() };
+  $(`${ids.filter}-preset`).onchange = (event) => {
+    f.preset = event.target.value;
+    if (f.preset !== "custom") { f.from = ""; f.to = ""; }
     renderDocList(kind);
   };
-  $(ids.reset).onclick = () => { state.docFilters[kind] = undefined; renderDocList(kind); };
-  $(ids.widen)?.addEventListener("click", () => { f.to = `${today().slice(0, 4)}-12-31`; renderDocList(kind); });
+  $(ids.filter).onsubmit = (event) => event.preventDefault();
+  for (const input of $(ids.filter).querySelectorAll('input[type="date"]')) {
+    input.onchange = () => {
+      f.preset = "custom";
+      f.from = $(ids.filter).querySelector('input[name="from"]').value;
+      f.to = $(ids.filter).querySelector('input[name="to"]').value;
+      renderDocList(kind);
+    };
+  }
 
-  // Search filters as it is typed, as in Manager.io; the field keeps the caret after the redraw.
+  // Party combobox: type to narrow the list, arrows to move, Enter to take one, Esc to leave it.
+  const partyInput = $(ids.party);
+  const partyList = $(ids.list);
+  const partyRows = parties.filter(k.partyFilter);
+  let active = -1;
+  const paintParties = (text) => {
+    const needle = text.trim().toLowerCase();
+    const matches = partyRows
+      .filter((p) => !needle || `${p.name} ${p.tax_id ?? ""}`.toLowerCase().includes(needle))
+      .slice(0, 40);
+    partyList.innerHTML = `<button type="button" data-party="">All ${k.partyLabel.toLowerCase()}s</button>`
+      + matches.map((p) => `<button type="button" data-party="${p.id}">${esc(p.name)}${p.tax_id ? ` <span class="muted small">${esc(p.tax_id)}</span>` : ""}</button>`).join("");
+    partyList.hidden = false;
+    active = -1;
+  };
+  const chooseParty = (id) => {
+    f.party = id;
+    partyList.hidden = true;
+    renderDocList(kind);
+  };
+  partyInput.onfocus = () => paintParties("");
+  partyInput.oninput = () => paintParties(partyInput.value);
+  partyInput.onkeydown = (event) => {
+    const buttons = [...partyList.querySelectorAll("button")];
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      active = Math.max(0, Math.min(buttons.length - 1, active + (event.key === "ArrowDown" ? 1 : -1)));
+      buttons[active]?.focus();
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (active >= 0) buttons[active].click();
+    } else if (event.key === "Escape") {
+      partyList.hidden = true;
+      partyInput.blur();
+    }
+  };
+  partyList.onmousedown = (event) => {
+    const button = event.target.closest("button[data-party]");
+    if (button) { event.preventDefault(); chooseParty(button.dataset.party); }
+  };
+  partyInput.onblur = () => setTimeout(() => { partyList.hidden = true; if (!f.party) partyInput.value = ""; else partyInput.value = nameOf(f.party); }, 120);
+
+  for (const button of $(`tab-${k.container}`).querySelectorAll("[data-clear]")) {
+    button.onclick = () => {
+      const what = button.dataset.clear;
+      if (what === "party") f.party = "";
+      if (what === "q") f.q = "";
+      if (what === "preset") { f.preset = "this-year"; f.from = ""; f.to = ""; }
+      renderDocList(kind);
+    };
+  }
+  $(`${k.container}-clear`)?.addEventListener("click", () => {
+    state.docFilters[kind] = undefined;
+    renderDocList(kind);
+  });
+
+  // Search filters as it is typed; the field keeps the caret after the redraw.
   let typing;
   $(ids.search).addEventListener("input", (event) => {
     const value = event.target.value;
@@ -678,13 +804,6 @@ async function renderDocList(kind) {
       else showPurchase(doc, nameOf);
     };
   }
-}
-
-// A draft's reason is often a sentence; keep the list narrow and put the full text in the tooltip.
-function draftStatus(d) {
-  const message = d.issues.map((i) => i.message).join(" ");
-  const short = message.length > 46 ? `${message.slice(0, 46)}…` : message;
-  return `<span class="pill ${d.status}">${d.status}</span> <span class="issue" title="${esc(message)}">${esc(short)}</span>`;
 }
 const kindsNoun = (k) => (k.dialog === "sale" ? "Invoices credited" : "Bills debited");
 // Who owes us or who we owe, how late, and their statements. A report, so it keeps its own as-of date

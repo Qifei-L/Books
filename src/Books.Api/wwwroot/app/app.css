@@ -124,6 +124,17 @@ table.lines input.num { text-align: right; min-width: 70px; }
 .figure span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .figure b { font-variant-numeric: tabular-nums; font-size: 15px; }
 /* Tabs inside a page: Posted / Draft on a document list. */
+/* Filter chips explain a short list; the party combo replaces a select that cannot be searched. */
+.chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -4px 0 14px; }
+.chip { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; background: #eef2fd; color: var(--ink); border: 1px solid #d7e0f6; border-radius: 12px; padding: 1px 3px 1px 10px; }
+.chip button { background: none; border: none; color: var(--muted); padding: 0 4px; font-size: 14px; line-height: 1; border-radius: 50%; }
+.chip button:hover { color: var(--bad); background: none; }
+.combo { position: relative; display: inline-block; }
+.combo input { min-width: 190px; }
+.combo-list { position: absolute; z-index: 20; top: 100%; left: 0; min-width: 100%; max-height: 260px; overflow-y: auto; background: #fff; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 18px rgba(20, 30, 60, .12); margin-top: 2px; }
+.combo-list button { display: block; width: 100%; text-align: left; background: #fff; border: none; border-radius: 0; color: var(--ink); padding: 6px 10px; font-size: 13.5px; white-space: nowrap; }
+.combo-list button:hover, .combo-list button:focus { background: #f2f5fb; }
+.combo-list[hidden] { display: none; }
 /* Manager.io-style list mechanics: sortable headers with a caret, search on the right of the toolbar. */
 th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--ink); }
@@ -136,6 +147,7 @@ th.sorted { color: var(--ink); }
 .tabs button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted); padding: 6px 10px; }
 .tabs button:hover { color: var(--ink); background: none; }
 .tabs button.active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.tabs-meta { margin-left: auto; align-self: center; font-size: 12px; color: var(--muted); padding-bottom: 4px; }
 .tabs .count { font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; margin-left: 5px; }
 .tabs button.active .count { color: var(--ink); }
 .pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
