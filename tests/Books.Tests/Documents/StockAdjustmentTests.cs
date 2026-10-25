@@ -102,6 +102,58 @@ public sealed class StockAdjustmentTests(TestHost host)
         Assert.Equal("8", Get((await ReportRowAsync(s)).Row, "on_hand"));
     }
 
+    [Fact]
+    public async Task An_amount_alone_revalues_the_stock_into_cost_of_sales_and_the_posting_shows_where_it_went()
+    {
+        var (s, item) = await SetUpAsync();
+        await BuyAsync(s, item, "2026-10-01", "10", "50.00");                     // 10 at 5.00
+
+        var preview = await (await s.Books.Admin.PostAsync($"{Url(s)}/preview", new
+        {
+            date = "2026-10-31", description = "Write down to net realizable value", lines = new[] { new { item_id = item, amount = "-20.00" } },
+        })).DataAsync();
+        var posted = await SaveAsync(s, new { date = "2026-10-31", description = "Write down to net realizable value", lines = new[] { new { item_id = item, amount = "-20.00" } } });
+
+        Assert.Equal(("0", "-20.00", "preview"), (Line(preview, "quantity"), Line(preview, "value"), Get(preview, "status")));
+        Assert.Equal(["1400 0.00 20.00", "5800 20.00 0.00"], Posting(s, preview));
+        var journal = await JournalAsync(s, posted);
+        Assert.Equal(("20.00", "20.00"), (journal[s.Account("5800")].Dr, journal[s.Account("1400")].Cr));
+        var row = await ReportRowAsync(s);
+        Assert.Equal(("10", "3.00", "30.00", true), (Get(row.Row, "on_hand"), Get(row.Row, "average_cost"), Get(row.Row, "value"), row.MatchesControl));
+    }
+
+    [Fact]
+    public async Task Entries_split_the_other_side_like_a_journal_and_must_balance()
+    {
+        var (s, item) = await SetUpAsync();
+        await BuyAsync(s, item, "2026-10-01", "10", "50.00");
+        var loss = (await Ledger.AccountTests.CreateAsync(s.Books.Admin, s.Books.OrgId, s.Books.LedgerId, "6900", "Stock losses", "cost_and_expense")).Id();
+        var staff = (await Ledger.AccountTests.CreateAsync(s.Books.Admin, s.Books.OrgId, s.Books.LedgerId, "1250", "Staff advances", "assets")).Id();
+        var unbalanced = await s.Books.Admin.PostAsync(Url(s), new
+        {
+            date = "2026-10-20", lines = new[] { new { item_id = item, quantity = "-4" } },
+            entries = new[] { new { account_id = loss, debit = "15.00" } },
+        });
+        var toZero = await s.Books.Admin.PostAsync(Url(s), new { date = "2026-10-20", lines = new[] { new { item_id = item, counted_quantity = "0", amount = "-49.00" } } });
+
+        var split = await SaveAsync(s, new
+        {
+            date = "2026-10-20", reference = "THEFT-1", lines = new[] { new { item_id = item, quantity = "-4" } },        // 4 at 5.00 = 20.00 out
+            entries = new object[] { new { account_id = loss, debit = "15.00", description = "Not insured" }, new { account_id = staff, debit = "5.00", description = "Recovered from staff" } },
+        });
+
+        await unbalanced.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
+        await toZero.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
+        var journal = await JournalAsync(s, split);
+        Assert.Equal(("20.00", "15.00", "5.00"), (journal[s.Account("1400")].Cr, journal[loss].Dr, journal[staff].Dr));
+        Assert.Equal(2, split.GetProperty("entries").GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, split.GetProperty("lines")[0].GetProperty("account_id").ValueKind);
+    }
+
+    private static List<string> Posting(SalesInvoiceTests.Setup s, JsonElement adjustment) =>
+        adjustment.GetProperty("posting").EnumerateArray()
+            .Select(p => $"{s.Codes.Single(c => c.Value == p.GetProperty("account_id").GetGuid()).Key} {Get(p, "debit")} {Get(p, "credit")}").ToList();
+
     private static string Url(SalesInvoiceTests.Setup s) => $"{s.LedgerUrl}/stock-adjustments";
 
     private async Task<(SalesInvoiceTests.Setup, Guid Item)> SetUpAsync(string? subject = null)

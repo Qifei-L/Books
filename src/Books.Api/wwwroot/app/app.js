@@ -87,8 +87,11 @@ async function loadOrganizations(select) {
 async function chooseOrganization(orgId) {
   state.org = orgId;
   $("org-pick").value = orgId;
-  state.role = (await api("/api/v1/me/organizations")).find((o) => o.id === orgId)?.role;
+  const role = (await api("/api/v1/me/organizations")).find((o) => o.id === orgId)?.role;
   const ledgers = await api(`/api/v1/organizations/${orgId}/ledgers`);
+  // Another organization was picked while this one loaded: leave the page to that one.
+  if (state.org !== orgId) return;
+  state.role = role;
   $("ledger-pick").innerHTML = ledgers.map((l) => `<option value="${l.id}">${esc(l.company_name)}</option>`).join("");
   $("ledger-pick").onchange = (e) => chooseLedger(ledgers.find((l) => l.id === e.target.value));
   if (ledgers[0]) await chooseLedger(ledgers[0]);

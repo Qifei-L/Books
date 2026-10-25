@@ -191,7 +191,7 @@ async function documentForm(kind, doc) {
         <label>${sale ? "Reference" : "Supplier's invoice no."} <input name="reference" value="${esc(doc?.reference ?? "")}"></label>
         <label>Currency <select name="currency">${[...new Set([base, "USD", "KHR"])].map((x) => `<option ${x === currency ? "selected" : ""}>${x}</option>`).join("")}</select></label>
         <label data-rate>Exchange rate <input name="exchange_rate" inputmode="decimal" value="${doc?.exchange_rate ?? ""}" placeholder="${base} rate of the date"></label>
-        <label class="wide">Description <input name="description" value="${esc(doc?.description ?? "")}"></label>
+        <label class="wide">Description <input name="doc_description" value="${esc(doc?.description ?? "")}"></label>
       </div>
       <table class="lines"></table>
       <p><button type="button" class="secondary" data-add>Add line</button></p>
@@ -253,7 +253,7 @@ async function documentForm(kind, doc) {
       if (!lines.length) throw new Error("Add at least one line.");
       if (lines.some((l) => !l.account_id)) throw new Error("Every line needs an account.");
       const body = {
-        [partyField]: f.party.value, date: f.date.value, reference: text(f.reference.value), description: text(f.description.value), lines, post,
+        [partyField]: f.party.value, date: f.date.value, reference: text(f.reference.value), description: text(f.doc_description.value), lines, post,
         ...(spec.note ? { original_invoice_id: text(f.original_invoice_id.value) } : { due_date: text(f.due_date.value) }),
         ...(f.currency.value !== base ? { currency: f.currency.value, exchange_rate: text(f.exchange_rate.value) } : {}),
       };
@@ -336,7 +336,7 @@ async function paymentForm(type, doc) {
         <label>Date <input type="date" name="date" value="${doc?.date ?? today()}" required></label>
         <label>Reference <input name="reference" value="${esc(doc?.reference ?? "")}"></label>
         <label data-rate>Exchange rate <input name="exchange_rate" inputmode="decimal" value="${doc?.exchange_rate ?? ""}" placeholder="rate of the date"></label>
-        <label class="wide">Description <input name="description" value="${esc(doc?.description ?? "")}"></label>
+        <label class="wide">Description <input name="doc_description" value="${esc(doc?.description ?? "")}"></label>
       </div>
       <p class="muted small">Leave the account empty (or choose Accounts payable / receivable) to settle with the party; name an invoice to settle that one, otherwise the oldest open items are settled first.</p>
       <table class="lines"></table>
@@ -391,7 +391,7 @@ async function paymentForm(type, doc) {
       const foreign = banks.find((b) => b.account_id === f.bank_account_id.value)?.currency !== state.ledger.base_currency;
       const body = {
         bank_account_id: f.bank_account_id.value, party_id: text(f.party_id.value), date: f.date.value,
-        reference: text(f.reference.value), description: text(f.description.value), lines, post,
+        reference: text(f.reference.value), description: text(f.doc_description.value), lines, post,
         ...(foreign ? { exchange_rate: text(f.exchange_rate.value) } : {}),
       };
       const result = await (doc ? write("PUT", `${url}/${doc.id}`, body, doc.version) : write("POST", url, body));
@@ -422,7 +422,7 @@ async function journalForm(j) {
       <div class="grid">
         <label>Date <input type="date" name="accounting_date" value="${j?.accounting_date ?? today()}" required></label>
         <label>Reference <input name="reference" value="${esc(j?.reference ?? "")}"></label>
-        <label class="wide">Description <input name="description" value="${esc(j?.description ?? "")}"></label>
+        <label class="wide">Description <input name="doc_description" value="${esc(j?.description ?? "")}"></label>
       </div>
       <table class="lines"></table>
       <p><button type="button" class="secondary" data-add>Add line</button></p>
@@ -461,7 +461,7 @@ async function journalForm(j) {
       const lines = grid.rows().map((tr) => Object.fromEntries(columns.map((col) => [col.name, value(tr, col.name)])))
         .filter((l) => l.account_id || l.debit || l.credit);
       if (lines.some((l) => !l.account_id)) throw new Error("Every line needs an account.");
-      const body = { accounting_date: f.accounting_date.value, reference: text(f.reference.value), description: text(f.description.value), lines, post };
+      const body = { accounting_date: f.accounting_date.value, reference: text(f.reference.value), description: text(f.doc_description.value), lines, post };
       const result = await (j ? write("PUT", `${url}/${j.id}`, body, j.version) : write("POST", url, body));
       $("form-dialog").close();
       await refreshLedger();

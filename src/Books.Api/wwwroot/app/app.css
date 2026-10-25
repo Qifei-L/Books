@@ -70,7 +70,7 @@ textarea { font: inherit; padding: 5px 7px; border: 1px solid var(--line); borde
 label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--ink); font-size: 14px; }
 table.lines td { padding: 3px 4px; }
 table.lines input, table.lines select { width: 100%; }
-table.lines select[name=account_id] { min-width: 150px; }
+table.lines select[name=account_id], table.lines select[name=item_id] { min-width: 150px; }
 dialog.wide form { overflow-x: auto; }
 table.lines input.num { text-align: right; min-width: 70px; }
 .actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
