@@ -31,10 +31,12 @@ are kept in localStorage (`books.ui.v1`): a reading preference, not data.
 
 The table borrows from QuickBooks: the number, date and reference are one two-line cell; one amount column
 headed with its currency; a single status badge; days late inline on the due date; a row menu on hover
-(Open, Print PDF, Edit, Delete); sticky header and totals row. On the bank list the amount column has no
-single currency in its header, because a payment is in its bank's currency and a transfer in its sending
-account's; the totals row groups them by currency. From Manager.io: sortable headers, a totals row that ends
-with the count, and a minimum of chrome.
+(Open, Print PDF, Edit, Delete); sticky header and totals row. The bank list is the exception: it works on
+one bank account at a time (the account is a required choice, not an "all accounts" filter), and money in
+and money out are two columns rather than one amount. A receipt is In, a payment is Out, a transfer is Out on
+its sending account and In on its receiving one; a cross-currency transfer arrives as its to-amount in the
+receiving account's currency. From Manager.io: sortable headers, a totals row that ends with the count, and
+a minimum of chrome.
 
 Master data is a simpler list: no period control, no tabs and no totals row. Business parties have a role
 filter, a status filter, search and sortable columns; the footer counts the records and says a row opens its
@@ -43,15 +45,18 @@ not called "Customers and suppliers".
 
 ## Decisions worth knowing
 
-- **Bank transactions are one list.** Payments, receipts and transfers answer one question — what moved
-  through cash and bank — so they share a page rather than three. The type is a column and a filter; a
-  transfer's from and to accounts are its bank cell; the category is an account, an invoice settled, the
-  party's balance, or "Transfer". New opens a menu of the three documents. The page has no Posted/Draft
+- **Bank transactions are one list for one account.** Payments, receipts and transfers answer one question —
+  what moved through this bank account — so they share a page rather than three. The bank account is a
+  required choice, never "all accounts": amounts, In/Out totals and the reconciliation all stay in that
+  account's currency. The type is a column and a filter; the bank cell names the other side of a transfer;
+  the category is an account, an invoice settled, the party's balance, or Transfer in/out. Money in and money
+  out are separate columns, not Dr/Cr: a receipt is In, a payment Out, and a transfer Out on the sending
+  account and In on the receiving one. New opens a menu of the three documents. The page has no Posted/Draft
   tabs: the status is in the row, the line above the table says how many drafts are not in the books, and
   the totals count only what is posted. This is the list component's `tabs: false` variant.
-- **A bank amount keeps its own currency.** A payment takes the currency of the bank account it touches,
-  a transfer the sending account's; `money()` formats each row and the totals group by currency instead of
-  adding different currencies together.
+- **A bank amount keeps its own currency.** The account selection fixes the currency for the page, so each
+  amount is formatted in it; a cross-currency transfer's incoming side uses the receiving account's currency
+  and the to-amount of the transfer, not the sending amount.
 - **Statements is the reconciliation page.** One bank account at a time: as-of date, the statement's
   closing balance, book and cleared balances, pending postings that can be marked cleared, and the imported
   statements. A statement's unmatched lines are drafts to Suspense and are posted from the same page. Bank
@@ -158,9 +163,10 @@ sample data.
 
 - `renderDocList` state: `docFilters`, `docTab`, `docSort`, `docCols` are per kind; `chooseLedger` clears
   `state.rendered`, `refreshLedger` re-reads only the open page. Watch for a page showing another page's data.
-- The bank list: the type and bank account facets combine, the party filter still applies only to payments
-  and receipts, search spans all three document kinds, and the totals row groups by currency and counts
-  posted documents only. A transfer's row identity is its description; its bank cell carries both accounts.
+- The bank list: the bank account is a required facet, so the page never adds accounts or currencies
+  together; the type filter narrows the rows. A transfer appears once per account: Out on its sending side
+  and In on its receiving side, with the other account named in the bank cell. Search spans all three
+  document kinds, the totals row has separate In and Out totals, and it counts posted documents only.
 - Business parties: search looks in the name, tax ID, contact, email, phone and address; the role and status
   filters combine; the header sorts; the row count is not a total. A save or delete clears the cached list
   and re-reads the open page, like the document lists.
@@ -179,8 +185,9 @@ sample data.
   `.page-body` or to `.table-scroll` — a scroll container there captures `position: sticky` and the header
   scrolls away.
 - A narrow window drops the wide columns (description, other tax, currency, KHR, reference) at 1300/1120/960 px
-  instead of scrolling the table sideways. The bank list keeps type, party, bank, amount and status, and
-  drops category at 1120. The chart drops system purpose at 1120 and narrows bank details at 960.
+  instead of scrolling the table sideways. The bank list keeps type, party, bank, In/Out and status; category
+  drops at 1300 and the numeric columns narrow at 960. The chart drops system purpose at 1120 and narrows bank
+  details at 960.
 
 ## Next slices, as agreed with the owner (2026-10-25)
 
