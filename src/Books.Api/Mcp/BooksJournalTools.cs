@@ -26,7 +26,11 @@ public sealed class BooksJournalTools(PrincipalAccessor principals, JournalServi
         [property: JsonPropertyName("credit"), Description("Decimal string such as \"100.00\", or omit.")] string? Credit,
         [property: JsonPropertyName("description")] string? Description,
         [property: JsonPropertyName("party_id"), Description("Optional customer or supplier ID.")] Guid? PartyId = null,
-        [property: JsonPropertyName("currency_amount"), Description("Lines on a bank account in another currency (for example KHR): the amount in that currency.")] string? CurrencyAmount = null);
+        [property: JsonPropertyName("currency_amount"), Description("Lines on a bank account in another currency (for example KHR): the amount in that currency.")] string? CurrencyAmount = null,
+        [property: JsonPropertyName("class_id"), Description("Optional class ID from list_classes.")] Guid? ClassId = null,
+        [property: JsonPropertyName("location_id"), Description("Optional location/branch ID from list_locations.")] Guid? LocationId = null,
+        [property: JsonPropertyName("tax_code_id"), Description("Optional VAT or other tax code; debit/credit is then the gross amount and the server splits out the tax.")] Guid? TaxCodeId = null,
+        [property: JsonPropertyName("tax_direction"), Description("sale, sale_adjustment, purchase or purchase_adjustment; defaults from the tax code kind.")] string? TaxDirection = null);
 
     [McpServerTool(Name = "list_journals", ReadOnly = true, Idempotent = true)]
     [Description("Recent journals of a ledger: posted ones, plus your own drafts and failed saves.")]
@@ -53,7 +57,8 @@ public sealed class BooksJournalTools(PrincipalAccessor principals, JournalServi
         WriteAsync(async () =>
         {
             var request = new JournalEndpoints.JournalRequest(accounting_date,
-                lines.Select(l => new JournalEndpoints.LineRequest(l.AccountId, l.Debit, l.Credit, l.Description, l.PartyId, CurrencyAmount: l.CurrencyAmount)).ToList(), post, reference, description);
+                lines.Select(l => new JournalEndpoints.LineRequest(l.AccountId, l.Debit, l.Credit, l.Description, l.PartyId, CurrencyAmount: l.CurrencyAmount,
+                    ClassId: l.ClassId, LocationId: l.LocationId, TaxCodeId: l.TaxCodeId, TaxDirection: l.TaxDirection)).ToList(), post, reference, description);
             var draft = JournalEndpoints.ToDraft(request);
             var meta = Meta("save_journal", idempotency_key, expected_version, new { org_id, ledger_id, journal_id, request });
             var principal = await principals.GetAsync(ct);

@@ -10,7 +10,8 @@ namespace Books.Api.Mcp;
 /// <summary>Read-only tools for ledger setup data an AI needs to prepare journals: parties, tax codes, banks, items.</summary>
 [McpServerToolType]
 public sealed class BooksSetupTools(
-    PrincipalAccessor principals, PartyService parties, TaxCodeService taxCodes, BankService banks, ItemService items, BankTransferService transfers)
+    PrincipalAccessor principals, PartyService parties, TaxCodeService taxCodes, BankService banks, ItemService items, BankTransferService transfers,
+    ClassService classes, LocationService locations)
 {
     [McpServerTool(Name = "list_parties", ReadOnly = true, Idempotent = true)]
     [Description("Customers and suppliers of a ledger, with tax ID and payment terms.")]
@@ -21,6 +22,16 @@ public sealed class BooksSetupTools(
     [Description("Tax codes of a ledger: kind (vat_output, vat_input, vat_zero_rated, non_vat, withholding), rate, account and effective dates.")]
     public Task<CallToolResult> ListTaxCodes(Guid org_id, Guid ledger_id, CancellationToken ct) =>
         BooksReadTools.RunAsync(async () => await taxCodes.ListAsync(await principals.GetAsync(ct), org_id, ledger_id, ct));
+
+    [McpServerTool(Name = "list_classes", ReadOnly = true, Idempotent = true)]
+    [Description("Classes of a ledger: reporting segments carried by journal lines.")]
+    public Task<CallToolResult> ListClasses(Guid org_id, Guid ledger_id, CancellationToken ct) =>
+        BooksReadTools.RunAsync(async () => await classes.ListAsync(await principals.GetAsync(ct), org_id, ledger_id, ct));
+
+    [McpServerTool(Name = "list_locations", ReadOnly = true, Idempotent = true)]
+    [Description("Locations/branches of a ledger, including the default stock location.")]
+    public Task<CallToolResult> ListLocations(Guid org_id, Guid ledger_id, CancellationToken ct) =>
+        BooksReadTools.RunAsync(async () => await locations.ListAsync(await principals.GetAsync(ct), org_id, ledger_id, ct));
 
     [McpServerTool(Name = "list_bank_accounts", ReadOnly = true, Idempotent = true)]
     [Description("Bank accounts of a ledger and the ledger account each one posts to.")]
