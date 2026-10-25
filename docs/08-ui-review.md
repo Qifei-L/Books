@@ -63,11 +63,12 @@ people.
 
 ## Decisions worth knowing
 
-- **A sales invoice opens a trail, not a dead end.** The invoice detail has Related links to the customer
-  statement, its journal, the receipts and payments whose line names it, the credit notes that correct it,
-  and the tax return for its month. A related document opens in the same dialog with Back; closing the dialog
-  clears the trail. The "received" rows come from payment/receipt lines that carry `invoice_id`; there is no
-  allocation table, so a receipt left on the party balance does not appear against an invoice.
+- **A sales or purchase invoice opens a trail, not a dead end.** The invoice detail has Related links to the
+  customer or supplier statement, its journal, the receipts/payments whose line names it, the credit or debit
+  notes that correct it, and the tax return for its month. A related document opens in the same dialog with
+  Back; closing the dialog clears the trail. The "received"/"paid" rows come from payment/receipt lines that
+  carry `invoice_id`; there is no allocation table, so a receipt or payment left on the party balance does not
+  appear against an invoice.
 - **Bank transactions are one list for one account.** Payments, receipts and transfers answer one question —
   what moved through this bank account — so they share a page rather than three. The bank account is a
   required choice, never "all accounts": amounts, In/Out totals and the reconciliation all stay in that
@@ -134,10 +135,11 @@ people.
 - No hash routing, so a filter or a page cannot be linked or restored after a refresh.
 - Status stops at Draft / Posted / Error. Open / Paid / Partially paid need `allocated_total` and
   `open_balance` on `SalesInvoiceDto`, computed from `allocations`.
-- The drilldown starts at a sales invoice or credit note. The purchase invoice, a receipt opened from the
-  bank list, and a stock movement from an invoice line do not yet open the same trail; the detail is a dialog,
-  not a URL, so a trail cannot be linked or survive a refresh. The invoice trail loads payments, receipts and
-  credit notes whole and filters them in the browser; it needs invoice-scoped endpoints when volume grows.
+- The drilldown starts at a sales invoice, purchase invoice or their credit/debit note. A receipt or payment
+  opened from the bank list, and a stock movement from an invoice line, do not yet open the same trail; the
+  detail is a dialog, not a URL, so a trail cannot be linked or survive a refresh. The invoice trail loads
+  payments, receipts and notes whole and filters them in the browser; it needs invoice-scoped endpoints when
+  volume grows.
 - Grouping by month and a selection with an action bar exist; what is missing is the account of what a
   batch action is allowed to do, and the Open/Paid status that needs `open_balance`. Bank transactions
   hides Group by month: its type, bank and party filters already do the narrowing.
@@ -171,7 +173,7 @@ filter, sortable headers, a row count and a form from the row.
 `app.js` keeps the page registry, the dialogs and the reports, plus the Statements page
 (`renderBankStatements`), the Chart of accounts and its account form (`renderChart`, `accountForm`), the
 Tax return with its tax code section (`renderTax`), and the detail trail (`drillTo`, `trailBack`) that the
-sales invoice uses. `inventory.js` keeps the Stock on hand page, the stock
+sales and purchase invoices use. `inventory.js` keeps the Stock on hand page, the stock
 adjustment form and the item and movement dialogs; `stock.js` keeps locations, stock by location, the
 transfer and assembly forms and their detail dialogs; `payroll.js` keeps the pay run inspector and the
 Employees page (built from the pay run lines). `setup.js` keeps the settings pages, the tax code form, the
@@ -230,10 +232,10 @@ sample data.
   assemblies show Quantity, Components and Value. A row opens its detail; adjustments also offer Edit,
   while transfers and assemblies are posted on save and only delete. Items and locations stay on Stock on
   hand with their forms and stock by location.
-- Sales invoice: the row opens the invoice and its Related section. Customer statement, Journal, a settlement
-  or a credit note opens in the same dialog with a Back bar; the tax-return button closes the dialog and
-  opens that month. The credit-note detail offers Original invoice the same way. The trail is in memory only
-  and clears when the dialog closes.
+- Sales and purchase invoices: the row opens the invoice and its Related section. Customer/supplier
+  statement, Journal, a settlement or a credit/debit note opens in the same dialog with a Back bar; the
+  tax-return button closes the dialog and opens that month. The note detail offers Original invoice the same
+  way. The trail is in memory only and clears when the dialog closes.
 - Journals: the list has no tabs and a Revision column; `editWhen` hides Edit on source journals, which open
   the document instead. Pay runs show the currency and totals, with the inspector under the table; the
   inspector keeps its own employee search and paging. Depreciation runs are a period row with a Total and a
