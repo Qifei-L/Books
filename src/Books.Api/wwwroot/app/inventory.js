@@ -31,6 +31,8 @@ async function renderInventory(asOf = state.inventoryAsOf ?? today()) {
         <td class="num">${i.sales_price ?? ""}</td><td class="num">${i.purchase_price ?? ""}</td>
         <td>${i.track_inventory ? "tracked" : ""}</td><td>${i.default_account_id ? esc(accountName(i.default_account_id)) : ""}</td><td>${esc(taxName(i.default_tax_code_id))}</td></tr>`).join("")}</table>`;
     $("inventory-form").onsubmit = (e) => { e.preventDefault(); renderInventory(e.target.asOf.value); };
+    $("tab-inventory").insertAdjacentHTML("beforeend", `<div id="tab-inventory-extra"></div>`);
+    await renderStock(asOf);
     for (const tr of $("tab-inventory").querySelectorAll("tr[data-movements]")) tr.onclick = () => showMovements(tr.dataset.movements, `${asOf.slice(0, 4)}-01-01`, asOf);
     for (const tr of $("tab-inventory").querySelectorAll("tr[data-adjustment]")) {
       tr.onclick = () => showAdjustment(shown.find((a) => a.id === tr.dataset.adjustment), itemName);
