@@ -184,7 +184,9 @@ th.sorted { color: var(--ink); }
 .tabs-meta { margin-left: auto; align-self: center; font-size: 12px; color: var(--muted); padding-bottom: 4px; }
 .tabs .count { font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; margin-left: 5px; }
 .tabs button.active .count { color: var(--ink); }
-.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
+.pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 10px; }
+.pager select { padding: 2px 6px; }
+label.inline-label { flex-direction: row; align-items: center; gap: 6px; margin: 0; }
 .list { list-style: none; margin: 0 0 10px; padding: 0; }
 .list li { padding: 6px 8px; border-radius: 6px; cursor: pointer; }
 .list li:hover, .list li.selected { background: #eef2fd; }

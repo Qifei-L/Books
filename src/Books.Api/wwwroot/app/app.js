@@ -538,6 +538,7 @@ const docSort = (kind) => ((state.docSort ??= {})[kind] ??= { key: "invoice", di
 // Optional columns, off by default: the list shows one amount and the rest is detail.
 const docColumns = (kind) => ((state.docCols ??= {})[kind] ??= new Set());
 const docDensity = () => (state.density ??= "comfortable");
+const docPageSize = () => (state.pageSize ??= 50);
 const overdueDays = (d) => Math.floor((new Date(today()) - new Date(d.due_date)) / 86400000);
 
 async function renderDocList(kind) {
@@ -577,6 +578,8 @@ async function renderDocList(kind) {
       case "status": return d.status;
       case "khr": return Number(d.tax_currency?.gross_total ?? 0);
       case "amount": return Number(d[amountKey] ?? 0);
+      case "journal": return Number(d.journal_no ?? 0);
+      case "reference": return (d.reference ?? "").toLowerCase();
       default: return Number(d[sort.key] ?? 0);
     }
   };
@@ -589,16 +592,19 @@ async function renderDocList(kind) {
   const late = posted.filter((d) => d.due_date && d.due_date < today());
   const currency = state.ledger.base_currency;
   const chosen = docColumns(kind);
+  const optional = (key, label, num = false) => ({ key, label, num, sortable: true, w: num ? "112px" : "150px", opt: true });
 
   // Fixed widths for everything except the party column, which takes what is left.
   const columns = [
     { key: "invoice", label: k.side === "sale" ? "Invoice" : "Bill", sortable: true, w: "250px" },
     ...(k.third === "due" ? [{ key: "due", label: "Due", sortable: true, w: "150px" }] : [{ key: "ref", label: k.refLabel, w: "130px" }]),
     { key: "party", label: k.partyLabel, sortable: true },
-    ...k.amounts.slice(0, -1).filter((a) => chosen.has(a.key)).map((a) => ({ key: a.key, label: a.label, num: true, sortable: true, w: "110px", opt: true })),
+    ...(chosen.has("reference") ? [optional("reference", "Reference")] : []),
+    ...k.amounts.slice(0, -1).filter((a) => chosen.has(a.key)).map((a) => optional(a.key, a.label, true)),
     { key: "amount", label: `${amountLabel} (${currency})`, num: true, sortable: true, w: "132px" },
-    ...(chosen.has("khr") ? [{ key: "khr", label: "KHR", num: true, sortable: true, w: "132px", opt: true }] : []),
+    ...(chosen.has("khr") ? [optional("khr", "KHR", true)] : []),
     { key: "status", label: "Status", sortable: true, w: "116px" },
+    ...(chosen.has("journal") ? [optional("journal", "Journal")] : []),
     { key: "menu", label: "", w: "46px" },
   ];
 
@@ -608,24 +614,34 @@ async function renderDocList(kind) {
     return `<th class="${cls}" ${c.sortable ? `data-sort="${c.key}"` : ""}${c.w ? ` style="width:${c.w}"` : ""}>${c.label}${caret}</th>`;
   }).join("");
 
-  const badge = (d) => `<span class="pill ${d.status}">${d.status}</span>`;
   const cell = (d) => {
     const lateDays = d.status === "posted" && d.due_date && d.due_date < today() ? overdueDays(d) : 0;
+    const reference = chosen.has("reference") ? esc(d.reference ?? "") : "";
     return {
       invoice: `<div class="cell-main">${k.prefix} ${d.invoice_no}</div>
-        <div class="cell-sub">${d.date}${d.reference ? ` · ${esc(d.reference)}` : ""}</div>`,
+        <div class="cell-sub">${d.date}${!reference && d.reference ? ` · ${esc(d.reference)}` : ""}</div>`,
       due: d.due_date ? `${d.due_date}${lateDays > 0 ? ` <span class="late" title="${lateDays} days overdue">${lateDays}d late</span>` : ""}` : "",
       ref: d.original_invoice_id ? `${k.refPrefix} ${counterpartNo(d.original_invoice_id)}` : "",
       party: `<span class="cell-clip" title="${esc(partyName(d))}">${esc(partyName(d))}</span>`,
+      reference: `<span class="cell-clip" title="${esc(d.reference ?? "")}">${reference}</span>`,
       amount: money(d[amountKey]),
       khr: khr(d),
-      status: badge(d),
+      status: `<span class="pill ${d.status}">${d.status}</span>`,
+      journal: d.journal_no ? `No. ${d.journal_no}` : "",
       menu: `<button class="row-menu-btn" data-menu="${d.id}" title="Actions">⋯</button>`,
       ...Object.fromEntries(k.amounts.slice(0, -1).map((a) => [a.key, money(d[a.key])])),
     };
   };
 
-  const body = sorted.map((d) => {
+  // Paging keeps a long year readable; the totals row still sums every filtered document.
+  const pageSize = docPageSize();
+  state.docPage ??= {};
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const page = Math.min(state.docPage[kind] ?? 1, pageCount);
+  state.docPage[kind] = page;
+  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
+
+  const body = paged.map((d) => {
     const cells = cell(d);
     return `<tr class="click" data-id="${d.id}">${columns.map((c) => `<td class="${c.num ? "num" : ""}">${cells[c.key] ?? ""}</td>`).join("")}</tr>`;
   }).join("");
@@ -637,6 +653,16 @@ async function renderDocList(kind) {
     if (c.num) return `<td class="num">${money(sum(sorted, c.key))}</td>`;
     return `<td></td>`;
   }).join("")}</tr>`;
+
+  const pager = `<div class="pager">
+    <span class="muted small">${sorted.length ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, sorted.length)} of ${sorted.length}` : ""}</span>
+    <label class="inline-label">Rows <select id="${k.container}-pagesize">
+      ${[25, 50, 100, 1000].map((n) => `<option value="${n}" ${pageSize === n ? "selected" : ""}>${n === 1000 ? "All" : n}</option>`).join("")}
+    </select></label>
+    ${pageCount > 1 ? `<button type="button" class="secondary small" data-page="prev" ${page === 1 ? "disabled" : ""}>‹</button>
+      <span class="muted small">${page} / ${pageCount}</span>
+      <button type="button" class="secondary small" data-page="next" ${page === pageCount ? "disabled" : ""}>›</button>` : ""}
+  </div>`;
 
   // One line of facts in the tab row: the tiles that stood here repeated the totals row.
   const overdue = sum(late, amountKey);
@@ -660,8 +686,10 @@ async function renderDocList(kind) {
   const chipRow = chips || filtered ? `<div class="chips">${chips}${filtered ? `<button class="link" id="${k.container}-clear">Clear all</button>` : ""}</div>` : "";
 
   const extras = [
+    { key: "reference", label: "Reference" },
     ...k.amounts.slice(0, -1).map((a) => ({ key: a.key, label: a.label })),
     { key: "khr", label: "KHR" },
+    { key: "journal", label: "Journal No." },
   ];
   const columnsMenu = `<div class="popover hidden" id="${ids.colsMenu}">${extras.map((c) => `
     <label class="check"><input type="checkbox" data-col="${c.key}" ${chosen.has(c.key) ? "checked" : ""}> ${c.label}</label>`).join("")}
@@ -698,7 +726,7 @@ async function renderDocList(kind) {
 
     ${tab === "draft" && drafts.length ? `<p class="warning">These are not posted, so they are not in the ledger and they block filing the months they are dated in. Fix and post each one, or delete it.</p>` : ""}
     ${sorted.length
-      ? `<div class="table-scroll"><table class="list ${docDensity()}"><tr>${header}</tr>${body}${totals}</table></div>`
+      ? `<div class="table-scroll"><table class="list ${docDensity()}"><tr>${header}</tr>${body}${totals}</table></div>${pager}`
       : `<p class="muted">No ${tab === "posted" ? "posted" : "draft"} ${k.plural} in ${PRESET_LABELS[f.preset]?.toLowerCase() ?? "this period"}${f.party ? ` for ${esc(nameOf(f.party))}` : ""}${f.q ? ` matching “${esc(f.q)}”` : ""}.</p>`}`;
 
   $(`${ids.filter}-preset`).onchange = (event) => {
@@ -713,6 +741,7 @@ async function renderDocList(kind) {
       f.preset = "custom";
       f.from = form.querySelector('input[name="from"]').value;
       f.to = form.querySelector('input[name="to"]').value;
+      state.docPage[kind] = 1;
       renderDocList(kind);
     };
   }
@@ -725,6 +754,17 @@ async function renderDocList(kind) {
     };
   }
   $(ids.density).onclick = () => { state.density = docDensity() === "compact" ? "comfortable" : "compact"; renderDocList(kind); };
+  $(`${k.container}-pagesize`).onchange = (event) => {
+    state.pageSize = Number(event.target.value);
+    state.docPage[kind] = 1;
+    renderDocList(kind);
+  };
+  for (const b of $(`tab-${k.container}`).querySelectorAll("[data-page]")) {
+    b.onclick = () => {
+      state.docPage[kind] = (state.docPage[kind] ?? 1) + (b.dataset.page === "next" ? 1 : -1);
+      renderDocList(kind);
+    };
+  }
 
   const partyInput = $(ids.party);
   const partyList = $(ids.list);
@@ -738,7 +778,7 @@ async function renderDocList(kind) {
     partyList.hidden = false;
     active = -1;
   };
-  const chooseParty = (id) => { f.party = id; partyList.hidden = true; renderDocList(kind); };
+  const chooseParty = (id) => { f.party = id; partyList.hidden = true; state.docPage[kind] = 1; renderDocList(kind); };
   partyInput.onfocus = () => paintParties("");
   partyInput.oninput = () => paintParties(partyInput.value);
   partyInput.onkeydown = (event) => {
@@ -770,6 +810,7 @@ async function renderDocList(kind) {
       if (what === "party") f.party = "";
       if (what === "q") f.q = "";
       if (what === "preset") { f.preset = "this-year"; f.from = ""; f.to = ""; }
+      state.docPage[kind] = 1;
       renderDocList(kind);
     };
   }
@@ -785,6 +826,7 @@ async function renderDocList(kind) {
     typing = setTimeout(() => {
       f.q = value.trim();
       state.keepSearchFocus = true;
+      state.docPage[kind] = 1;
       renderDocList(kind);
     }, 250);
   });
@@ -796,13 +838,14 @@ async function renderDocList(kind) {
   }
 
   for (const b of $(ids.tabs).querySelectorAll("button")) {
-    b.onclick = () => { state.docTab[kind] = b.dataset.docTab; renderDocList(kind); };
+    b.onclick = () => { state.docTab[kind] = b.dataset.docTab; state.docPage[kind] = 1; renderDocList(kind); };
   }
   for (const th of $(`tab-${k.container}`).querySelectorAll("th.sortable")) {
     th.onclick = () => {
       const key = th.dataset.sort;
       if (sort.key === key) sort.dir = sort.dir === "asc" ? "desc" : "asc";
       else { sort.key = key; sort.dir = key === "invoice" ? "desc" : "asc"; }
+      state.docPage[kind] = 1;
       renderDocList(kind);
     };
   }
