@@ -1,9 +1,9 @@
 # UI review notes (2026-10-25)
 
-Where the preview app stands after the shell, Sales, Purchases, Cash and bank and the shared list work, what
-was decided on the way, and what is deliberately still missing. Branch `ui/sales-pages`, pull request #98
-against `main`. The app change is confined to `src/Books.Api/wwwroot/app`: `app.js`, `index.html`, `app.css`,
-`forms.js`, `setup.js`, `list.js`.
+Where the preview app stands after the shell, Sales, Purchases, Cash and bank, Business parties and the shared
+list work, what was decided on the way, and what is deliberately still missing. Branch `ui/sales-pages`,
+pull request #98 against `main`. The app change is confined to `src/Books.Api/wwwroot/app`: `app.js`,
+`index.html`, `app.css`, `forms.js`, `setup.js`, `list.js`.
 
 ## Shape
 
@@ -12,7 +12,8 @@ against `main`. The app change is confined to `src/Books.Api/wwwroot/app`: `app.
 | Shell | A fixed bar (organization, company, period, user), a grouped sidebar, one scrolling page with a title and a one-line purpose, and the page action at the right of that title |
 | Modules | A module opens into its own pages and stays open while one of them is shown. Sales: Invoices, Credit notes, Reports, Settings. Purchases: Invoices, Debit notes, Reports. Cash and bank: Transactions, Statements, Settings |
 | Pages | One list, one job. `PAGES` holds the title, the purpose and the render function; a page renders the first time it is opened and a save re-reads only the open page |
-| Lists | One renderer (`renderDocList`) for the five document lists; `DOC_KINDS` says the path or loader, the party, the amount columns, the extra columns, the row cells and which dialog opens |
+| Lists | Two renderers: `renderDocList` for the five document lists, and the simpler `renderSimpleList` for master data. `DOC_KINDS` says the path or loader, the party, the amount columns, the extra columns, the row cells and which dialog opens; `SIMPLE_KINDS` says the columns and the form a row opens |
+| Records | Business parties and tax codes. A business party is the one record behind both a customer and a supplier |
 
 ## List mechanics
 
@@ -34,6 +35,11 @@ single currency in its header, because a payment is in its bank's currency and a
 account's; the totals row groups them by currency. From Manager.io: sortable headers, a totals row that ends
 with the count, and a minimum of chrome.
 
+Master data is a simpler list: no period control, no tabs and no totals row. Business parties have a role
+filter, a status filter, search and sortable columns; the footer counts the records and says a row opens its
+form. The business party is the one record behind both a customer and a supplier, which is why the page is
+not called "Customers and suppliers".
+
 ## Decisions worth knowing
 
 - **Bank transactions are one list.** Payments, receipts and transfers answer one question — what moved
@@ -52,6 +58,11 @@ with the count, and a minimum of chrome.
 - **Cash and bank settings hold the bank accounts.** The old Records > Bank accounts page is gone. New bank
   account can either mark an existing Assets account as a bank or create that account in the chart in the
   same form, so setting up a bank no longer needs a detour through the API.
+- **Customers and suppliers are business parties.** One record serves both roles, because a company can be
+  both; the page, the new button and the form call it a business party, while the role checkboxes still say
+  Customer and Supplier. The list is the first user of the simple master-data variant: search, role and
+  status filters, sortable columns, a row count, and a row opens the form. There is no totals row because a
+  party is not a document.
 - **One time control.** The period preset drives the list; the report pages keep their own as-of date,
   because an aging figure and a list range answer different questions.
 - **Drafts never count.** No totals row, no overdue figure, no "showing x of y" that includes them: a draft
@@ -81,19 +92,24 @@ with the count, and a minimum of chrome.
   hides Group by month: its type, bank and party filters already do the narrowing.
 - Bank statements are imported through MCP, not a file parser or import wizard (owner decision). The
   Statements page can clear postings and post the drafts an import created, but it cannot read a bank file.
+- Business parties edit through the row's form, not by typing into table cells. The other master data
+  (accounts, groups, usages, tax codes, members) still uses its own table; the simple list is ready for them.
 
 ## Where the code lives
 
-`wwwroot/app/list.js` holds everything the document lists share: the kind definitions (`DOC_KINDS`), the
-period presets, filter state, column choice and order, sorting, paging, grouping, selection and the row menu.
-A kind can also supply a `load` (one endpoint or several), `facets` (the type and bank account filters),
-`extraColumns` and `cells` (a category, a bank account, a type), `pathOf` and `nounOf` (a merged list deletes
-and labels the right document), and `tabs: false` for a list that shows posted and draft together.
+`wwwroot/app/list.js` holds everything the lists share. `DOC_KINDS` and `renderDocList` cover the document
+lists: the period presets, filter state, column choice and order, sorting, paging, grouping, selection and the
+row menu. A kind can also supply a `load` (one endpoint or several), `facets` (the type and bank account
+filters), `extraColumns` and `cells` (a category, a bank account, a type), `pathOf` and `nounOf` (a merged
+list deletes and labels the right document), and `tabs: false` for a list that shows posted and draft
+together. `SIMPLE_KINDS` and `renderSimpleList` are the master-data variant: fixed columns, search, a role or
+status filter, sortable headers, a row count and a form from the row.
 
 `app.js` keeps the page registry, the dialogs and the reports, plus the Statements page
-(`renderBankStatements`). `setup.js` keeps the records and settings pages and the transfer and bank account
-forms. `forms.js` keeps the document forms, including the payment/receipt category picker. A new module that
-wants the same list adds one `DOC_KINDS` entry and one page entry; nothing else.
+(`renderBankStatements`). `setup.js` keeps the settings pages and the transfer and bank account forms;
+`forms.js` keeps the document forms, including the payment/receipt category picker and the business party
+form. A new document list adds one `DOC_KINDS` entry and one page entry; a new master-data list adds one
+`SIMPLE_KINDS` entry and one page entry.
 
 ## Running the tests on this machine
 
@@ -137,6 +153,9 @@ sample data.
 - The bank list: the type and bank account facets combine, the party filter still applies only to payments
   and receipts, search spans all three document kinds, and the totals row groups by currency and counts
   posted documents only. A transfer's row identity is its description; its bank cell carries both accounts.
+- Business parties: search looks in the name, tax ID, contact, email, phone and address; the role and status
+  filters combine; the header sorts; the row count is not a total. A save or delete clears the cached list
+  and re-reads the open page, like the document lists.
 - `showTab` and `PAGES.actions`: header actions are remembered per page so returning to a rendered page
   restores them without rendering again.
 - `openRowMenu`: closes on the next click elsewhere; Delete sends `If-Match` through `write`, and a merged
@@ -154,8 +173,9 @@ sample data.
 
 ## Next slices, as agreed with the owner (2026-10-25)
 
-The list component in `list.js` now covers the four sales and purchase lists and the bank transactions
-list. The owner's picks for what to convert next, and what each one needs from the component:
+The list component in `list.js` now covers the four sales and purchase lists, the bank transactions list and
+the business parties simple list. The owner's picks for what to convert next, and what each one needs from
+the component:
 
 | Module | Pages to build | What `list.js` needs first |
 | --- | --- | --- |
@@ -163,8 +183,9 @@ list. The owner's picks for what to convert next, and what each one needs from t
 | Payroll | Pay runs, plus an employees list the owner asked for | A page without tabs; a row count column |
 | Fixed assets | Depreciation runs; the asset register | No tabs; a period column |
 | Journals | Journals with drafts and posted, editable | No tabs; a revision column |
-| Master data | Accounts, groups, usages, parties, tax codes, bank accounts, members | A "simple list" variant: no tabs, no totals, inline edit |
+| Master data | Accounts, groups, usages, tax codes, members (business parties is done) | The simple list now exists; the remaining pages need their own form and, if wanted, typing in cells |
 
-Order agreed: Inventory, then the rest. Cash and bank is done: its list needed a custom loader, a category
-column, row cells that are not amount keys, and a variant without the Posted/Draft tabs, and those now exist.
-What remains for the rows below is mostly the quantity/value cells and the "simple list" variant.
+Order agreed: Business parties is done, then Inventory, then the rest. Cash and bank is done too: its list
+needed a custom loader, a category column, row cells that are not amount keys, and a variant without the
+Posted/Draft tabs, and those exist. What remains for the rows above is mostly the quantity/value cells and
+the rest of the master data.
