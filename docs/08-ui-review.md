@@ -57,6 +57,29 @@ row that ends with the count, and a minimum of chrome.
 - Grouping by month and a selection with an action bar exist; what is missing is the account of what a
   batch action is allowed to do, and the Open/Paid status that needs `open_balance`.
 
+## Where the code lives
+
+`wwwroot/app/list.js` holds everything the document lists share: the kind definitions (`DOC_KINDS`), the
+period presets, filter state, column choice and order, sorting, paging, grouping, selection and the row menu.
+`app.js` keeps the page registry, the dialogs and the reports. A new module that wants the same list adds one
+`DOC_KINDS` entry and one page entry; nothing else.
+
+## Running the tests on this machine
+
+`dotnet test` cannot run here (the test platform talks to the runner over a named pipe, which the sandbox
+refuses). Run the test executable directly instead:
+
+```
+BOOKS_TEST_POSTGRES="Host=127.0.0.1;Port=5432;Username=<user>;Database=postgres"
+Logging__EventLog__LogLevel__Default=None
+TMP=<a writable folder>   TEMP=<the same folder>
+tests/Books.Tests/bin/Debug/net10.0/Books.Tests.exe
+```
+
+`BOOKS_TEST_POSTGRES` avoids Docker; the EventLog switch stops every warning from becoming a 500; TMP/TEMP
+must be writable or the PDF and Excel tests fail with `InternalServerError` from QuestPDF. With all three:
+295 passed, 0 failed.
+
 ## Running it
 
 .NET 10 SDK and PostgreSQL 17. Without Docker, an ordinary PostgreSQL server works; point
