@@ -46,6 +46,9 @@ row that ends with the count, and a minimum of chrome.
 
 ## Not done, on purpose
 
+- The list payload carries every document with its lines on purpose (an AI reconciles against them); it is
+  large — 5.9 MB for 5000 documents — so responses are Brotli/gzip compressed at the optimal level
+  (`Program.cs`), which brings the transfer to about 630 KB.
 - Filtering is client-side. Fine for a company's invoices; it has to move to the API when a list grows and
   paging arrives, together with a `(ledger_id, date)` index.
 - No hash routing, so a filter or a page cannot be linked or restored after a refresh.

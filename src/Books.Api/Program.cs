@@ -7,6 +7,7 @@ using Books.Api.Http;
 using Books.Api.Mcp;
 using Books.Infrastructure;
 using Books.Infrastructure.Persistence;
+using Microsoft.AspNetCore.ResponseCompression;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +28,17 @@ builder.Services.ConfigureHttpJsonOptions(json =>
     json.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
     json.SerializerOptions.AllowDuplicateProperties = false;
 });
+// Lists carry every document with its lines (an AI needs them to reconcile), so answers are large:
+// the same payload measured 5.9 MB plain and 690 KB gzipped. Compress JSON as well as the defaults.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["application/json"]);
+});
+// The default level is Fastest, which left a 6.2 MB list at 1.15 MB gzipped and made Brotli larger
+// than gzip. At Optimal the same list is about 690 KB.
+builder.Services.Configure<BrotliCompressionProviderOptions>(options => options.Level = System.IO.Compression.CompressionLevel.Optimal);
+builder.Services.Configure<GzipCompressionProviderOptions>(options => options.Level = System.IO.Compression.CompressionLevel.Optimal);
 builder.AddBooksAuthentication();
 builder.Services.AddMcpServer()
     .WithHttpTransport(options => options.Stateless = true)
@@ -42,6 +54,7 @@ InvoicePdf.Configure();
 
 var app = builder.Build();
 
+app.UseResponseCompression();
 app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
