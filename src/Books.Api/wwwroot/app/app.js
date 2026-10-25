@@ -638,15 +638,16 @@ async function renderDocList(kind) {
     return `<td></td>`;
   }).join("")}</tr>`;
 
-  const figures = [
-    `<div class="figure"><span class="muted small">${tab === "posted" ? "Posted" : "Draft"} ${k.plural}</span><b>${shown.length}</b></div>`,
-    ...k.amounts.map((a) => `<div class="figure"><span class="muted small">${a.label}</span><b>${money(sum(shown, a.key))} ${currency}</b></div>`),
-    tab === "draft"
-      ? `<div class="figure"><span class="muted small">Drafts block filing the month</span><b>${drafts.length} to fix</b></div>`
-      : k.extra === "overdue"
-        ? `<div class="figure"><span class="muted small">Overdue</span><b class="${late.length ? "error" : ""}">${money(sum(late, amountKey))} ${currency}</b></div>`
-        : `<div class="figure"><span class="muted small">${kindsNoun(k)}</span><b>${new Set(shown.map((d) => d.original_invoice_id).filter(Boolean)).size}</b></div>`,
-  ].join("");
+  // One line of facts in the tab row: the tiles that stood here repeated the totals row.
+  const overdue = sum(late, amountKey);
+  const credited = new Set(shown.map((d) => d.original_invoice_id).filter(Boolean)).size;
+  const facts = tab === "draft"
+    ? `${drafts.length} ${drafts.length === 1 ? "draft" : "drafts"} to fix`
+    : k.extra === "overdue"
+      ? (Number(overdue) > 0 ? `Overdue ${money(overdue)} ${currency}` : "")
+      : credited > 0
+        ? `${credited} ${k.side === "sale" ? "invoice" : "bill"}${credited === 1 ? "" : "s"} ${k.side === "sale" ? "credited" : "debited"}`
+        : "";
 
   const chips = [
     f.preset !== "this-year"
@@ -691,10 +692,8 @@ async function renderDocList(kind) {
     <div class="tabs" id="${ids.tabs}">
       <button data-doc-tab="posted" class="${tab === "posted" ? "active" : ""}">Posted <span class="count">${posted.length}</span></button>
       <button data-doc-tab="draft" class="${tab === "draft" ? "active" : ""}">Draft <span class="count">${drafts.length}</span></button>
-      <span class="tabs-meta">showing ${rows.length} of ${inPeriod.length}</span>
+      <span class="tabs-meta">showing ${rows.length} of ${inPeriod.length}${facts ? ` · <span class="${Number(overdue) > 0 && tab === "posted" && k.extra === "overdue" ? "error" : ""}">${facts}</span>` : ""}</span>
     </div>
-
-    <div class="figures">${figures}</div>
 
     ${tab === "draft" && drafts.length ? `<p class="warning">These are not posted, so they are not in the ledger and they block filing the months they are dated in. Fix and post each one, or delete it.</p>` : ""}
     ${sorted.length
@@ -853,7 +852,7 @@ function openRowMenu(anchor, items) {
   });
   setTimeout(() => document.addEventListener("mousedown", outside), 0);
 }
-const kindsNoun = (k) => (k.dialog === "sale" ? "Invoices credited" : "Bills debited");
+
 // Who owes us or who we owe, how late, and their statements. A report, so it keeps its own as-of date
 // instead of sharing the list filters.
 async function renderAging(side) {
