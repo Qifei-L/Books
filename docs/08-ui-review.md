@@ -1,19 +1,20 @@
 # UI review notes (2026-10-25)
 
-Where the preview app stands after the shell, Sales, Purchases, Cash and bank, Business parties and the shared
-list work, what was decided on the way, and what is deliberately still missing. Branch `ui/sales-pages`,
-pull request #98 against `main`. The app change is confined to `src/Books.Api/wwwroot/app`: `app.js`,
-`index.html`, `app.css`, `forms.js`, `setup.js`, `list.js`.
+Where the preview app stands after the shell, Sales, Purchases, Cash and bank, Business parties, the chart and
+tax settings, and the shared list work, what was decided on the way, and what is deliberately still missing.
+Branch `ui/sales-pages`, pull request #98 against `main`. The app change is confined to
+`src/Books.Api/wwwroot/app`: `app.js`, `index.html`, `app.css`, `forms.js`, `setup.js`, `list.js`.
 
 ## Shape
 
 | Level | What it is |
 | --- | --- |
 | Shell | A fixed bar (organization, company, period, user), a grouped sidebar, one scrolling page with a title and a one-line purpose, and the page action at the right of that title |
-| Modules | A module opens into its own pages and stays open while one of them is shown. Sales: Invoices, Credit notes, Reports, Settings. Purchases: Invoices, Debit notes, Reports. Cash and bank: Transactions, Statements, Settings |
+| Modules | A module opens into its own pages and stays open while one of them is shown. Sales: Invoices, Credit notes, Reports, Settings. Purchases: Invoices, Debit notes, Reports. Cash and bank: Transactions, Statements |
 | Pages | One list, one job. `PAGES` holds the title, the purpose and the render function; a page renders the first time it is opened and a save re-reads only the open page |
 | Lists | Two renderers: `renderDocList` for the five document lists, and the simpler `renderSimpleList` for master data. `DOC_KINDS` says the path or loader, the party, the amount columns, the extra columns, the row cells and which dialog opens; `SIMPLE_KINDS` says the columns and the form a row opens |
-| Records | Business parties and tax codes. A business party is the one record behind both a customer and a supplier |
+| Records | Business parties. A business party is the one record behind both a customer and a supplier |
+| Books and tax | Chart of accounts holds the accounts and their bank/cash details; Tax return holds the month's return and the tax codes behind it |
 
 ## List mechanics
 
@@ -55,9 +56,13 @@ not called "Customers and suppliers".
   closing balance, book and cleared balances, pending postings that can be marked cleared, and the imported
   statements. A statement's unmatched lines are drafts to Suspense and are posted from the same page. Bank
   statements still arrive through MCP; there is no file parser or import wizard (owner decision).
-- **Cash and bank settings hold the bank accounts.** The old Records > Bank accounts page is gone. New bank
-  account can either mark an existing Assets account as a bank or create that account in the chart in the
-  same form, so setting up a bank no longer needs a detour through the API.
+- **Bank accounts are chart accounts.** The separate Cash and bank > Settings page and the old Records >
+  Bank accounts page are gone. The chart of accounts shows the bank details in a column and its account form
+  creates or edits the account and its bank details together, so a bank or cash account is set up where every
+  other account is. Only an Assets account can carry bank details.
+- **Tax codes live with the tax return.** The separate Records > Tax codes page is gone: the month's return
+  and the codes that feed it are one page, because a rate or account change is made next to the figures it
+  changes. Administrators still get New tax code and the code form from that page.
 - **Customers and suppliers are business parties.** One record serves both roles, because a company can be
   both; the page, the new button and the form call it a business party, while the role checkboxes still say
   Customer and Supplier. The list is the first user of the simple master-data variant: search, role and
@@ -73,8 +78,8 @@ not called "Customers and suppliers".
 - **Ids are per list.** Every list once reused `docs-search` and friends, so `getElementById` resolved to the
   first, hidden page and search filtered nothing.
 - **Module settings live with the module.** `Settings > Invoicing` was deleted: the seller block and number
-  series are Sales > Settings. Global Settings keeps the ledger and the organization. Cash and bank >
-  Settings keeps the bank accounts.
+  series are Sales > Settings. Global Settings keeps the ledger and the organization. Bank details are part
+  of the Chart of accounts, and tax codes are part of the Tax return.
 
 ## Not done, on purpose
 
@@ -92,8 +97,10 @@ not called "Customers and suppliers".
   hides Group by month: its type, bank and party filters already do the narrowing.
 - Bank statements are imported through MCP, not a file parser or import wizard (owner decision). The
   Statements page can clear postings and post the drafts an import created, but it cannot read a bank file.
-- Business parties edit through the row's form, not by typing into table cells. The other master data
-  (accounts, groups, usages, tax codes, members) still uses its own table; the simple list is ready for them.
+- Business parties edit through the row's form, not by typing into table cells.
+- The Chart of accounts form creates and edits accounts and their bank details, but groups and usages still
+  have no editor, and an unused account can only be deleted through the API. Tax codes keep their own form
+  inside the Tax return page.
 
 ## Where the code lives
 
@@ -106,10 +113,11 @@ together. `SIMPLE_KINDS` and `renderSimpleList` are the master-data variant: fix
 status filter, sortable headers, a row count and a form from the row.
 
 `app.js` keeps the page registry, the dialogs and the reports, plus the Statements page
-(`renderBankStatements`). `setup.js` keeps the settings pages and the transfer and bank account forms;
-`forms.js` keeps the document forms, including the payment/receipt category picker and the business party
-form. A new document list adds one `DOC_KINDS` entry and one page entry; a new master-data list adds one
-`SIMPLE_KINDS` entry and one page entry.
+(`renderBankStatements`), the Chart of accounts and its account form (`renderChart`, `accountForm`), and the
+Tax return with its tax code section (`renderTax`). `setup.js` keeps the settings pages, the transfer form
+and the tax code form; `forms.js` keeps the document forms, including the payment/receipt category picker and
+the business party form. A new document list adds one `DOC_KINDS` entry and one page entry; a new
+master-data list adds one `SIMPLE_KINDS` entry and one page entry.
 
 ## Running the tests on this machine
 
@@ -162,14 +170,17 @@ sample data.
   list takes the document's own path for the request.
 - Statements: clearing is a `POST` of the journal ids and changes no posting; the statement's own drafts are
   posted from the same page. A cleared posting cannot be changed until it is uncleared (P9).
-- Cash and bank Settings: creating a bank account can create its Assets account first; if the second write
-  fails, the unused account stays in the chart and the form says why.
+- Chart of accounts: a row opens the account form; the form creates the account and its bank details, and
+  the read-only GL button still opens the account's detail. The bank fields appear only for Assets accounts,
+  and an existing bank account's type and currency are fixed.
+- Tax return: the month control reloads the return and the tax code section together; a code row opens the
+  tax code form for administrators. A missing return still leaves the tax codes usable.
 - Sticky header and totals depend on `.page` being the only scrolling container; do not add `overflow` to
   `.page-body` or to `.table-scroll` — a scroll container there captures `position: sticky` and the header
   scrolls away.
 - A narrow window drops the wide columns (description, other tax, currency, KHR, reference) at 1300/1120/960 px
   instead of scrolling the table sideways. The bank list keeps type, party, bank, amount and status, and
-  drops category at 1120.
+  drops category at 1120. The chart drops system purpose at 1120 and narrows bank details at 960.
 
 ## Next slices, as agreed with the owner (2026-10-25)
 
@@ -183,9 +194,9 @@ the component:
 | Payroll | Pay runs, plus an employees list the owner asked for | A page without tabs; a row count column |
 | Fixed assets | Depreciation runs; the asset register | No tabs; a period column |
 | Journals | Journals with drafts and posted, editable | No tabs; a revision column |
-| Master data | Accounts, groups, usages, tax codes, members (business parties is done) | The simple list now exists; the remaining pages need their own form and, if wanted, typing in cells |
+| Master data | Groups, usages and members (accounts and bank details are in the Chart of accounts; business parties is done, tax codes are in the Tax return) | The simple list now exists; each remaining page needs its own form and, if wanted, typing in cells |
 
-Order agreed: Business parties is done, then Inventory, then the rest. Cash and bank is done too: its list
-needed a custom loader, a category column, row cells that are not amount keys, and a variant without the
-Posted/Draft tabs, and those exist. What remains for the rows above is mostly the quantity/value cells and
-the rest of the master data.
+Order agreed: Business parties is done, and so are the chart/bank and tax-return/code merges; Inventory is
+next, then the rest. Cash and bank is done too: its list needed a custom loader, a category column, row cells
+that are not amount keys, and a variant without the Posted/Draft tabs, and those exist. What remains for the
+rows above is mostly the quantity/value cells and the rest of the master data.
