@@ -632,8 +632,18 @@ async function renderDocList(kind) {
 
   const inPeriod = docs.filter((d) => d.status !== "deleted");
   const inRange = inPeriod.filter((d) => d.date >= range.from && d.date <= range.to);
+  // What the search box looks in: the number, the reference, the party, the description, and every
+  // amount on the document — both as stored ("2250.00") and as shown ("2,250.00").
+  const searchText = (d) => {
+    const amounts = [...k.amounts.map((a) => a.key), "other_tax_total"]
+      .map((key) => d[key])
+      .filter((value) => value !== undefined && value !== null && value !== "")
+      .flatMap((value) => [String(value), money(value)]);
+    return `${k.prefix} ${d.invoice_no} ${d.reference ?? ""} ${d.description ?? ""} ${partyName(d)} ${amounts.join(" ")}`.toLowerCase();
+  };
+  const needle = f.q.trim().toLowerCase();
   const rows = inRange.filter((d) => (!f.party || d[k.partyKey] === f.party)
-    && (!f.q || `${k.prefix} ${d.invoice_no} ${d.reference ?? ""} ${partyName(d)}`.toLowerCase().includes(f.q.toLowerCase())));
+    && (!needle || searchText(d).includes(needle)));
   const posted = rows.filter((d) => d.status === "posted");
   const drafts = rows.filter((d) => d.status !== "posted");
   const shown = tab === "posted" ? posted : drafts;
@@ -845,7 +855,7 @@ async function renderDocList(kind) {
           <div class="combo-list" id="${ids.list}" hidden></div>
         </span>
       </label>
-      <label class="search">Search <input id="${ids.search}" name="q" value="${esc(f.q)}" placeholder="${k.prefix}, reference, ${k.partyLabel.toLowerCase()}"></label>
+      <label class="search">Search <input id="${ids.search}" name="q" value="${esc(f.q)}" placeholder="${k.prefix}, reference, ${k.partyLabel.toLowerCase()}, description, amount"></label>
       <button type="button" class="secondary small" id="${ids.group}" title="Group by month">${grouped ? "Ungroup" : "Group by month"}</button>
       <button type="button" class="secondary small" id="${ids.cols}" title="Extra columns">Columns</button>
       <button type="button" class="secondary small" id="${ids.density}" title="Row height">${docDensity() === "compact" ? "Comfortable" : "Compact"}</button>
