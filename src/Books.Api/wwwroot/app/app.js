@@ -291,7 +291,10 @@ const NAV = [
       { id: "bank-transactions", label: "Transactions" },
       { id: "bank-statements", label: "Statements" },
     ] },
-    { id: "payroll", label: "Payroll" },
+    { id: "payroll", label: "Payroll", children: [
+      { id: "payroll-runs", label: "Pay runs" },
+      { id: "payroll-employees", label: "Employees" },
+    ] },
   ] },
   { group: "Stock and assets", items: [
     { id: "inventory", label: "Inventory", children: [
@@ -355,7 +358,8 @@ const PAGES = {
   "purchases-reports": { title: "Purchases reports", sub: "Purchases · who we owe, how late, and their statements", render: () => renderAging("purchases") },
   "bank-transactions": { title: "Bank transactions", sub: "Cash and bank · payments, receipts and transfers for one account, with money in and out", render: () => renderDocList("transaction") },
   "bank-statements": { title: "Statements", sub: "Cash and bank · the bank's balance against the books, and the lines behind it", render: () => renderBankStatements() },
-  payroll: { title: "Payroll", sub: "Pay runs received from the payroll system; Books does not calculate pay", render: () => renderDocList("pay_run") },
+  "payroll-runs": { title: "Pay runs", sub: "Payroll · results received from the payroll system; Books does not calculate pay", render: () => renderDocList("pay_run") },
+  "payroll-employees": { title: "Employees", sub: "Payroll · the people in the imported pay runs, with their pay history", render: () => renderEmployees() },
   "inventory-stock": { title: "Stock on hand", sub: "Inventory · quantities, items and locations", render: () => renderInventoryStock() },
   "inventory-adjustments": { title: "Stock adjustments", sub: "Inventory · write-offs, stock found and counts", render: () => renderDocList("stock_adjustment") },
   "inventory-transfers": { title: "Stock transfers", sub: "Inventory · quantities moved between locations", render: () => renderDocList("stock_transfer") },

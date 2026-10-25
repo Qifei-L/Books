@@ -260,7 +260,7 @@ const DOC_KINDS = {
   // Pay runs are imported, not created here: one row per run, with its employee count and the amounts the
   // payroll system reported. The inspector below the table is opened from a row.
   pay_run: {
-    path: "pay-runs", container: "payroll", noun: "pay run", plural: "pay runs", prefix: "PR",
+    path: "pay-runs", container: "payroll-runs", noun: "pay run", plural: "pay runs", prefix: "PR",
     numberKey: "pay_run_no", filterParty: false, partyLabel: "Pay run",
     hide: BANK_HIDDEN, extra: "none", tabs: false, hideGroup: true, tableClass: "payroll", searchHint: "PR, period, reference, status",
     amounts: [
