@@ -57,6 +57,7 @@ async function refreshLedger() {
   state.docSearchIndex = {};
   state.simpleData = {};
   state.simpleSearchIndex = {};
+  state.simplePage = {};
   await showTab(state.tab ?? "sales-invoices", true);
 }
 
