@@ -60,21 +60,6 @@ async function renderSettingsLedger() {
       : `<p class="muted small">No revaluation posted for this company.</p>`}`;
 }
 
-async function renderSettingsInvoicing() {
-  const s = await api(`${ledgerUrl()}/invoice-settings`);
-  $("tab-settings-invoicing").innerHTML = `
-    ${isAdmin() ? `<p><button onclick="invoiceSettingsForm()">Edit seller details</button></p>` : ""}
-    <dl class="facts">
-      <dt>Name in Khmer</dt><dd>${esc(s.name_khmer || "not set")}</dd>
-      <dt>Name in English</dt><dd>${esc(s.name_english || "not set")}</dd>
-      <dt>VATTIN</dt><dd>${esc(s.tax_id || "not set")}</dd>
-      <dt>Phone</dt><dd>${esc(s.phone || "not set")}</dd>
-      <dt>Email</dt><dd>${esc(s.email || "not set")}</dd>
-      <dt>Invoice numbers</dt><dd>${esc(s.invoice_prefix ?? "")}00001 onwards</dd>
-      <dt>Credit note numbers</dt><dd>${esc(s.credit_note_prefix ?? "")}00001 onwards</dd>
-    </dl>
-    <p class="muted small">The style follows the lines' tax codes: any VAT above 0% prints a tax invoice, only 0% or non-VAT prints a zero or non-VAT invoice, and no codes print a commercial invoice. The KHR total comes from the invoice's own rate snapshot.</p>`;
-}
 
 async function renderSettingsOrg() {
   const [org, companies, rates] = await Promise.all([

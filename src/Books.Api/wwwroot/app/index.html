@@ -34,41 +34,8 @@
     <section id="home" class="hidden">
       <p id="no-ledger" class="card muted hidden">No company you can see yet. Use <b>New demo</b> to create one with sample data.</p>
       <div id="ledger" class="workspace hidden">
-        <!-- Modules grouped by what people do: trade, stock, records, books, reports, tax, settings. -->
-        <nav class="sidenav">
-          <div class="nav-group">Business</div>
-          <button data-tab="sales" class="active">Sales</button>
-          <button data-tab="purchases">Purchases</button>
-          <button data-tab="bank">Cash and bank</button>
-          <button data-tab="payroll">Payroll</button>
-
-          <div class="nav-group">Stock and assets</div>
-          <button data-tab="inventory">Inventory</button>
-          <button data-tab="assets">Fixed assets</button>
-
-          <div class="nav-group">Records</div>
-          <button data-tab="parties">Customers and suppliers</button>
-          <button data-tab="banks">Bank accounts</button>
-          <button data-tab="taxcodes">Tax codes</button>
-
-          <div class="nav-group">Books</div>
-          <button data-tab="journals">Journals</button>
-          <button data-tab="chart">Chart of accounts</button>
-
-          <div class="nav-group">Reports</div>
-          <button data-tab="pl">Profit and loss</button>
-          <button data-tab="bs">Balance sheet</button>
-          <button data-tab="tb">Trial balance</button>
-          <button data-tab="gl">GL detail</button>
-
-          <div class="nav-group">Tax</div>
-          <button data-tab="tax">Tax return</button>
-
-          <div class="nav-group">Settings</div>
-          <button data-tab="settings-ledger">Ledger and periods</button>
-          <button data-tab="settings-invoicing">Invoicing</button>
-          <button data-tab="settings-org">Organization</button>
-        </nav>
+        <!-- Modules grouped by what people do; a module opens into its own pages (see NAV in app.js). -->
+        <nav class="sidenav" id="sidenav"></nav>
 
         <div class="page">
           <header class="page-head">
@@ -76,6 +43,7 @@
               <h1 id="page-title">Sales</h1>
               <p id="page-sub" class="page-sub"></p>
             </div>
+            <div id="page-actions" class="page-actions"></div>
           </header>
           <div class="page-body">
             <div id="tab-chart" class="tab hidden"></div>
@@ -112,9 +80,11 @@
             <div id="tab-banks" class="tab hidden"></div>
             <div id="tab-taxcodes" class="tab hidden"></div>
             <div id="tab-settings-ledger" class="tab hidden"></div>
-            <div id="tab-settings-invoicing" class="tab hidden"></div>
             <div id="tab-settings-org" class="tab hidden"></div>
-            <div id="tab-sales" class="tab"></div>
+            <div id="tab-sales-invoices" class="tab hidden"></div>
+            <div id="tab-sales-credit-notes" class="tab hidden"></div>
+            <div id="tab-sales-reports" class="tab hidden"></div>
+            <div id="tab-sales-settings" class="tab hidden"></div>
             <div id="tab-payroll" class="tab hidden"></div>
             <div id="tab-purchases" class="tab hidden"></div>
             <div id="tab-bank" class="tab hidden"></div>

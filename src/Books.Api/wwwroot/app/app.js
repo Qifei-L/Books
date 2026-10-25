@@ -116,7 +116,7 @@ async function chooseLedger(ledger) {
     + (ledger.closed_through ? `closed to ${ledger.closed_through}` : "not closed") + (ledger.effective_access === "edit" ? "" : " · read only");
   state.rendered = {};
   await loadAccounts();
-  await showTab(state.tab ?? "sales", true);
+  await showTab(state.tab ?? "sales-invoices", true);
 }
 
 // Drilldown: a report's account opens its GL detail for the same period; a GL line opens its journal.
@@ -213,10 +213,71 @@ async function showStatement(kind, partyId, asOf) {
   }
 }
 
+// The sidebar: groups of modules. A module with children opens into its own pages and stays open while
+// one of them is shown; a module without children is a page itself.
+const NAV = [
+  { group: "Business", items: [
+    { id: "sales", label: "Sales", children: [
+      { id: "sales-invoices", label: "Invoices" },
+      { id: "sales-credit-notes", label: "Credit notes" },
+      { id: "sales-reports", label: "Reports" },
+      { id: "sales-settings", label: "Settings" },
+    ] },
+    { id: "purchases", label: "Purchases" },
+    { id: "bank", label: "Cash and bank" },
+    { id: "payroll", label: "Payroll" },
+  ] },
+  { group: "Stock and assets", items: [
+    { id: "inventory", label: "Inventory" },
+    { id: "assets", label: "Fixed assets" },
+  ] },
+  { group: "Records", items: [
+    { id: "parties", label: "Customers and suppliers" },
+    { id: "banks", label: "Bank accounts" },
+    { id: "taxcodes", label: "Tax codes" },
+  ] },
+  { group: "Books", items: [
+    { id: "journals", label: "Journals" },
+    { id: "chart", label: "Chart of accounts" },
+  ] },
+  { group: "Reports", items: [
+    { id: "pl", label: "Profit and loss" },
+    { id: "bs", label: "Balance sheet" },
+    { id: "tb", label: "Trial balance" },
+    { id: "gl", label: "GL detail" },
+  ] },
+  { group: "Tax", items: [{ id: "tax", label: "Tax return" }] },
+  { group: "Settings", items: [
+    { id: "settings-ledger", label: "Ledger and periods" },
+    { id: "settings-org", label: "Organization" },
+  ] },
+];
+
+const allItems = () => NAV.flatMap((g) => g.items);
+const moduleOf = (id) => allItems().find((item) => item.id === id || item.children?.some((c) => c.id === id));
+const firstPageOf = (moduleId) => allItems().find((item) => item.id === moduleId)?.children?.[0]?.id ?? moduleId;
+
+function buildNav() {
+  const nav = $("sidenav");
+  nav.innerHTML = NAV.map((g) => `
+    <div class="nav-group">${esc(g.group)}</div>
+    ${g.items.map((item) => (item.children
+      ? `<div class="nav-module" data-module="${item.id}">
+           <button class="module" data-module="${item.id}">${esc(item.label)}</button>
+           <div class="nav-children">${item.children.map((c) => `<button data-tab="${c.id}">${esc(c.label)}</button>`).join("")}</div>
+         </div>`
+      : `<button data-tab="${item.id}">${esc(item.label)}</button>`)).join("")}`).join("");
+  for (const b of nav.querySelectorAll("button[data-tab]")) b.onclick = () => showTab(b.dataset.tab);
+  for (const b of nav.querySelectorAll("button.module")) b.onclick = () => showTab(firstPageOf(b.dataset.module));
+}
+
 // One register drives the sidebar, the page heading and what each page loads. A page renders the first
 // time it is opened, so switching companies no longer fetches every list at once.
 const PAGES = {
-  sales: { title: "Sales", sub: "Sales invoices and credit notes, and what customers owe", render: () => renderSales() },
+  "sales-invoices": { title: "Sales invoices", sub: "Sales · posted and draft invoices, and what they add up to", render: () => renderSalesDocs("invoice") },
+  "sales-credit-notes": { title: "Sales credit notes", sub: "Sales · credits issued, and the invoice each one reduces", render: () => renderSalesDocs("credit_note") },
+  "sales-reports": { title: "Sales reports", sub: "Sales · who owes us, how late, and their statements", render: () => renderSalesReports() },
+  "sales-settings": { title: "Sales settings", sub: "Sales · the seller block and the numbers printed on invoices", render: () => renderSalesSettings() },
   purchases: { title: "Purchases", sub: "Purchase invoices and debit notes, and what we owe suppliers", render: () => renderPurchases() },
   bank: { title: "Cash and bank", sub: "Payments, receipts, transfers, statements and reconciliation", render: () => renderBank() },
   payroll: { title: "Payroll", sub: "Pay runs received from the payroll system; Books does not calculate pay", render: () => renderPayroll() },
@@ -233,7 +294,6 @@ const PAGES = {
   gl: { title: "GL detail", sub: "Every line in one account, with a running balance", render: () => runReport("gl") },
   tax: { title: "Tax return", sub: "The month's return on the GDT forms, with filing", render: () => renderTax(state.taxPeriod ?? "2026-10") },
   "settings-ledger": { title: "Ledger and periods", sub: "Currency, fiscal year, close date and year-end revaluation", render: () => renderSettingsLedger() },
-  "settings-invoicing": { title: "Invoicing", sub: "Seller details and the numbers printed on invoices", render: () => renderSettingsInvoicing() },
   "settings-org": { title: "Organization", sub: "The organization, its companies and the exchange rates they share", render: () => renderSettingsOrg() },
 };
 
@@ -242,14 +302,31 @@ function runReport(id) {
   if (form) form.requestSubmit();
 }
 
+// A page puts its primary actions in the header; the body holds the data. Actions are remembered per
+// page so returning to a page that is already rendered restores them without rendering again.
+const setActions = (html) => {
+  const value = html ?? "";
+  if (state.tab && PAGES[state.tab]) PAGES[state.tab].actions = value;
+  $("page-actions").innerHTML = value;
+};
+
 async function showTab(id, force = false) {
   const page = PAGES[id];
   if (!page) return;
   state.tab = id;
-  for (const b of document.querySelectorAll(".sidenav button")) b.classList.toggle("active", b.dataset.tab === id);
+  const module = moduleOf(id);
+  const moduleId = module?.id;
+  for (const wrap of document.querySelectorAll(".nav-module")) {
+    const open = wrap.dataset.module === moduleId && !!module?.children;
+    wrap.classList.toggle("open", open);
+    wrap.querySelector("button.module")?.classList.toggle("active", open);
+  }
+  for (const b of document.querySelectorAll("#sidenav button[data-tab]")) b.classList.toggle("active", b.dataset.tab === id);
   for (const t of document.querySelectorAll(".tab")) t.classList.toggle("hidden", t.id !== `tab-${id}`);
   $("page-title").textContent = page.title;
   $("page-sub").textContent = page.sub;
+  $("page-actions").innerHTML = page.actions ?? "";
+  state.rendered ??= {};
   state.rendered ??= {};
   if (!force && state.rendered[id]) return;
   state.rendered[id] = true;
@@ -261,7 +338,7 @@ async function showTab(id, force = false) {
   }
 }
 
-for (const button of document.querySelectorAll(".sidenav button")) button.onclick = () => showTab(button.dataset.tab);
+buildNav();
 
 // Every page names accounts, so groups, accounts and purposes load once per company.
 async function loadAccounts() {
@@ -372,32 +449,150 @@ $("gl-form").addEventListener("submit", async (event) => {
   }
 });
 
-async function renderSales() {
-  const [invoices, notes, parties, aging] = await Promise.all([
-    api(`${ledgerUrl()}/sales-invoices`), api(`${ledgerUrl()}/credit-notes`), api(`${ledgerUrl()}/parties`),
-    api(`${ledgerUrl()}/reports/ar-aging?asOf=2026-10-31`),
+// The sales pages. Invoices and credit notes share one renderer: filters, figures, a Posted / Draft
+// pair of tabs, and a table. Drafts get their own tab rather than their own page: a draft is a
+// document that did not post, and a draft dated in a month blocks filing that month.
+const SALES_DOCS = {
+  invoice: { path: "sales-invoices", noun: "invoice", plural: "invoices", tab: "sales-invoices" },
+  credit_note: { path: "credit-notes", noun: "credit note", plural: "credit notes", tab: "sales-credit-notes" },
+};
+
+function salesFilters(kind) {
+  state.salesFilters ??= {};
+  state.salesFilters[kind] ??= { from: `${today().slice(0, 4)}-01-01`, to: today(), customer: "", q: "" };
+  return state.salesFilters[kind];
+}
+
+const docTab = (kind) => ((state.docTab ??= {})[kind] ??= "posted");
+const overdueDays = (d) => Math.floor((new Date(today()) - new Date(d.due_date)) / 86400000);
+
+async function renderSalesDocs(kind) {
+  const meta = SALES_DOCS[kind];
+  const f = salesFilters(kind);
+  const tab = docTab(kind);
+  const [docs, invoices, parties] = await Promise.all([
+    api(`${ledgerUrl()}/${meta.path}`), api(`${ledgerUrl()}/sales-invoices`), api(`${ledgerUrl()}/parties`),
   ]);
   const party = (id) => parties.find((p) => p.id === id)?.name ?? "";
-  const docs = [...invoices, ...notes].filter((d) => d.status !== "deleted");
+  const invoiceNo = (id) => invoices.find((i) => i.id === id)?.invoice_no ?? "";
   const khr = (d) => (d.tax_currency ? `${Number(d.tax_currency.gross_total).toLocaleString()} ៛` : "");
-  const a = aging.totals;
-  $("tab-sales").innerHTML = `
-    ${canEdit() ? `<p><button onclick="documentForm('invoice')">New invoice</button> <button class="secondary" onclick="documentForm('credit_note')">New credit note</button></p>` : ""}
-    <h3>Sales invoices and credit notes</h3>
-    <table><tr><th>No.</th><th>Date</th><th>Customer</th><th>Reference</th><th class="num">Net</th><th class="num">VAT</th><th class="num">Gross</th><th class="num">Gross KHR</th><th>Status</th></tr>
-    ${docs.map((d) => `<tr class="click" data-id="${d.id}"><td>${d.type === "credit_note" ? "CN" : "SI"} ${d.invoice_no}</td><td>${d.date}</td>
-      <td>${esc(party(d.customer_id))}</td><td>${esc(d.reference)}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td>
-      <td class="num">${d.gross_total}</td><td class="num">${khr(d)}</td>
-      <td>${d.status === "posted" ? `<span class="pill posted">posted</span> No. ${d.journal_no}` : `<span class="pill draft">${d.status}</span> ${d.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>
-    <h3 style="margin-top:16px">AR aging at ${aging.as_of}</h3>
-    <p>${aging.matches_control ? `<span class="ok">Equals the receivable balance ${aging.control_balance}</span>` : `<span class="error">Does not equal the receivable balance ${aging.control_balance}</span>`}</p>
-    <table><tr><th>Customer</th><th class="num">Not due</th><th class="num">1–30</th><th class="num">31–60</th><th class="num">61–90</th><th class="num">Over 90</th><th class="num">Total</th></tr>
-    ${[...aging.rows, a].map((r) => `<tr class="${r === a ? "total" : "click"}" ${r === a ? "" : `data-customer="${r.customer_id}"`}><td>${esc(r.customer)}</td><td class="num">${r.not_due}</td><td class="num">${r.days1_to30}</td>
-      <td class="num">${r.days31_to60}</td><td class="num">${r.days61_to90}</td><td class="num">${r.over90}</td><td class="num">${r.total}</td></tr>`).join("")}</table>`;
-  for (const tr of $("tab-sales").querySelectorAll("tr[data-id]")) {
-    tr.onclick = () => showSale(docs.find((d) => d.id === tr.dataset.id), party);
+  const rows = docs.filter((d) => d.status !== "deleted"
+    && d.date >= f.from && d.date <= f.to
+    && (!f.customer || d.customer_id === f.customer)
+    && (!f.q || `${d.invoice_no} ${d.reference ?? ""} ${party(d.customer_id)}`.toLowerCase().includes(f.q.toLowerCase())));
+  const outside = docs.filter((d) => d.status !== "deleted" && (d.date < f.from || d.date > f.to)).length;
+  const posted = rows.filter((d) => d.status === "posted");
+  const drafts = rows.filter((d) => d.status !== "posted");
+  const shown = tab === "posted" ? posted : drafts;
+  const sum = (list, key) => list.reduce((s, d) => s + Number(d[key]), 0).toFixed(2);
+  const late = posted.filter((d) => d.due_date && d.due_date < today());
+  const currency = state.ledger.base_currency;
+  const container = meta.tab;
+
+  setActions(canEdit() ? `<button onclick="documentForm('${kind}')">New ${meta.noun}</button>` : "");
+
+  $(`tab-${container}`).innerHTML = `
+    <form class="filter-bar" id="docs-filter">
+      <label>From <input type="date" name="from" value="${f.from}"></label>
+      <label>To <input type="date" name="to" value="${f.to}"></label>
+      <label>Customer <select name="customer">${options(parties.filter((p) => p.is_customer), f.customer, (p) => p.name, "All customers")}</select></label>
+      <label>Search <input name="q" value="${esc(f.q)}" placeholder="Number, reference, customer"></label>
+      <button type="submit">Apply</button>
+      <button type="button" class="secondary" id="docs-reset">Reset</button>
+    </form>
+
+    <div class="tabs" id="docs-tabs">
+      <button data-doc-tab="posted" class="${tab === "posted" ? "active" : ""}">Posted <span class="count">${posted.length}</span></button>
+      <button data-doc-tab="draft" class="${tab === "draft" ? "active" : ""}">Draft <span class="count">${drafts.length}</span></button>
+    </div>
+
+    ${outside ? `<p class="muted small">${outside} more ${outside === 1 ? meta.noun : meta.plural} dated outside this period. <button class="link" id="docs-widen">Show to end of year</button></p>` : ""}
+    <div class="figures">
+      <div class="figure"><span class="muted small">${tab === "posted" ? "Posted" : "Draft"} ${meta.plural}</span><b>${shown.length}</b></div>
+      <div class="figure"><span class="muted small">Net</span><b>${sum(shown, "net_total")} ${currency}</b></div>
+      <div class="figure"><span class="muted small">VAT</span><b>${sum(shown, "tax_total")} ${currency}</b></div>
+      <div class="figure"><span class="muted small">Gross</span><b>${sum(shown, "gross_total")} ${currency}</b></div>
+      ${tab === "draft"
+        ? `<div class="figure"><span class="muted small">Drafts block filing the month</span><b>${drafts.length} to fix</b></div>`
+        : kind === "credit_note"
+          ? `<div class="figure"><span class="muted small">Invoices credited</span><b>${new Set(shown.map((d) => d.original_invoice_id).filter(Boolean)).size}</b></div>`
+          : `<div class="figure"><span class="muted small">Overdue</span><b class="${late.length ? "error" : ""}">${sum(late, "gross_total")} ${currency}</b></div>`}
+    </div>
+
+    ${tab === "draft" && drafts.length ? `<p class="warning">These are not posted, so they are not in the ledger and they block filing the months they are dated in. Fix and post each one, or delete it.</p>` : ""}
+    ${shown.length ? `<table>
+      <tr><th>No.</th><th>Date</th>${kind === "invoice" ? "<th>Due</th>" : "<th>Credits</th>"}<th>Customer</th><th>Reference</th>
+        <th class="num">Net</th><th class="num">VAT</th><th class="num">Gross</th><th class="num">KHR</th><th>Status</th></tr>
+      ${shown.map((d) => {
+        const isLate = d.status === "posted" && d.due_date && d.due_date < today();
+        const third = kind === "invoice"
+          ? `<td>${d.due_date ?? ""}${isLate ? ` <span class="pill draft" title="${overdueDays(d)} days overdue">overdue</span>` : ""}</td>`
+          : `<td>${d.original_invoice_id ? `SI ${invoiceNo(d.original_invoice_id)}` : ""}</td>`;
+        return `<tr class="click" data-id="${d.id}"><td>${kind === "credit_note" ? "CN" : "SI"} ${d.invoice_no}</td><td>${d.date}</td>${third}
+          <td>${esc(party(d.customer_id))}</td><td>${esc(d.reference ?? "")}</td>
+          <td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td><td class="num">${d.gross_total}</td><td class="num">${khr(d)}</td>
+          <td>${d.status === "posted" ? `<span class="pill posted">posted</span> No. ${d.journal_no ?? ""}` : `<span class="pill ${d.status}">${d.status}</span> ${d.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`;
+      }).join("")}
+      <tr class="total"><td colspan="4">${shown.length} ${tab === "posted" ? "posted" : "draft"} ${shown.length === 1 ? meta.noun : meta.plural}</td>
+        <td></td><td class="num">${sum(shown, "net_total")}</td><td class="num">${sum(shown, "tax_total")}</td><td class="num">${sum(shown, "gross_total")}</td><td></td><td></td></tr></table>`
+      : `<p class="muted">No ${tab === "posted" ? "posted" : "draft"} ${meta.plural} in this period.</p>`}`;
+
+  $("docs-filter").onsubmit = (event) => {
+    event.preventDefault();
+    const form = event.target;
+    state.salesFilters[kind] = { from: form.from.value, to: form.to.value, customer: form.customer.value, q: form.q.value.trim() };
+    renderSalesDocs(kind);
+  };
+  $("docs-reset").onclick = () => { state.salesFilters[kind] = undefined; renderSalesDocs(kind); };
+  $("docs-widen")?.addEventListener("click", () => { f.to = `${today().slice(0, 4)}-12-31`; renderSalesDocs(kind); });
+  for (const b of $("docs-tabs").querySelectorAll("button")) {
+    b.onclick = () => { state.docTab[kind] = b.dataset.docTab; renderSalesDocs(kind); };
   }
-  for (const tr of $("tab-sales").querySelectorAll("tr[data-customer]")) tr.onclick = () => showStatement("customer", tr.dataset.customer, aging.as_of);
+  for (const tr of $(`tab-${container}`).querySelectorAll("tr[data-id]")) {
+    tr.onclick = () => showSale(shown.find((d) => d.id === tr.dataset.id), party);
+  }
+}
+
+// Who owes us, how late, and their statements. A report, not a document list, so it keeps its own
+// as-of date instead of sharing the list filters.
+async function renderSalesReports() {
+  const asOf = state.agingAsOf ?? today();
+  const aging = await api(`${ledgerUrl()}/reports/ar-aging?asOf=${asOf}`);
+  setActions("");
+  $("tab-sales-reports").innerHTML = `
+    <form class="filter-bar" id="aging-form">
+      <label>As of <input type="date" name="asOf" value="${asOf}"></label>
+      <button type="submit">Run</button>
+    </form>
+    <p class="muted small">${aging.matches_control ? `<span class="ok">Equals the receivable balance ${aging.control_balance} ${aging.currency}</span>` : `<span class="error">Does not equal the receivable balance ${aging.control_balance} ${aging.currency}</span>`} · click a customer for their statement</p>
+    ${aging.rows.length ? `<table><tr><th>Customer</th><th class="num">Not due</th><th class="num">1–30</th><th class="num">31–60</th><th class="num">61–90</th><th class="num">Over 90</th><th class="num">Total</th></tr>
+      ${[...aging.rows, aging.totals].map((r) => `<tr class="${r === aging.totals ? "total" : "click"}" ${r === aging.totals ? "" : `data-customer="${r.customer_id}"`}><td>${esc(r.customer)}</td>
+        <td class="num">${r.not_due}</td><td class="num">${r.days1_to30}</td><td class="num">${r.days31_to60}</td><td class="num">${r.days61_to90}</td><td class="num">${r.over90}</td><td class="num">${r.total}</td></tr>`).join("")}</table>`
+      : `<p class="muted">Nothing is owed at ${aging.as_of}.</p>`}`;
+  $("aging-form").onsubmit = (event) => { event.preventDefault(); state.agingAsOf = event.target.asOf.value; renderSalesReports(); };
+  for (const tr of $("tab-sales-reports").querySelectorAll("tr[data-customer]")) {
+    tr.onclick = () => showStatement("customer", tr.dataset.customer, aging.as_of);
+  }
+}
+
+// What the customer sees on the paper: the seller block, the number series, and the rule that decides
+// which of the three styles is printed.
+async function renderSalesSettings() {
+  const s = await api(`${ledgerUrl()}/invoice-settings`);
+  setActions(isAdmin() ? `<button onclick="invoiceSettingsForm()">Edit seller details</button>` : "");
+  $("tab-sales-settings").innerHTML = `
+    <dl class="facts">
+      <dt>Name in Khmer</dt><dd>${esc(s.name_khmer || "not set")}</dd>
+      <dt>Name in English</dt><dd>${esc(s.name_english || "not set")}</dd>
+      <dt>VATTIN</dt><dd>${esc(s.tax_id || "not set")}</dd>
+      <dt>Phone</dt><dd>${esc(s.phone || "not set")}</dd>
+      <dt>Email</dt><dd>${esc(s.email || "not set")}</dd>
+      <dt>Address</dt><dd>${esc(s.address_english || "not set")}</dd>
+      <dt>Invoice numbers</dt><dd>${esc(s.invoice_prefix ?? "")}00001 onwards</dd>
+      <dt>Credit note numbers</dt><dd>${esc(s.credit_note_prefix ?? "")}00001 onwards</dd>
+    </dl>
+    <h3>What decides the printed style</h3>
+    <p class="muted small">The lines' tax codes decide: any VAT above 0% prints a tax invoice, only 0% or non-VAT prints a zero or non-VAT invoice, and no codes print a commercial invoice. State Charge relabels the VAT line, a draft prints marked DRAFT, and the KHR total comes from the invoice's own rate snapshot rather than today's rate.</p>`;
 }
 
 function showSale(d, party) {
