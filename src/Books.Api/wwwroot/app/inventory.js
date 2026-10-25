@@ -26,8 +26,9 @@ async function renderInventory(asOf = state.inventoryAsOf ?? today()) {
         <td>${a.lines.map((l) => `${esc(itemName(l.item_id))} ${Number(l.quantity) > 0 ? "+" : ""}${l.quantity}`).join("; ")}</td><td class="num">${a.total_value}</td>
         <td>${a.status === "posted" ? `<span class="pill posted">posted</span> No. ${a.journal_no}` : `<span class="pill draft">${a.status}</span> ${a.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")}</table>
       <h3 style="margin-top:16px">Items</h3>
-      <table><tr><th>Item</th><th>Unit</th><th>Inventory</th><th>Suggests account</th><th>Suggests tax</th></tr>
-      ${items.map((i) => `<tr ${canEdit() ? `class="click" data-item="${i.id}"` : ""}><td>${esc(i.name)}${i.active ? "" : ` <span class="pill">inactive</span>`}</td><td>${esc(i.unit ?? "")}</td>
+      <table><tr><th>Code</th><th>Item</th><th>Unit</th><th class="num">Sales price</th><th class="num">Purchase price</th><th>Inventory</th><th>Suggests account</th><th>Suggests tax</th></tr>
+      ${items.map((i) => `<tr ${canEdit() ? `class="click" data-item="${i.id}"` : ""}><td>${esc(i.code ?? "")}</td><td>${esc(i.name)}${i.active ? "" : ` <span class="pill">inactive</span>`}</td><td>${esc(i.unit ?? "")}</td>
+        <td class="num">${i.sales_price ?? ""}</td><td class="num">${i.purchase_price ?? ""}</td>
         <td>${i.track_inventory ? "tracked" : ""}</td><td>${i.default_account_id ? esc(accountName(i.default_account_id)) : ""}</td><td>${esc(taxName(i.default_tax_code_id))}</td></tr>`).join("")}</table>`;
     $("inventory-form").onsubmit = (e) => { e.preventDefault(); renderInventory(e.target.asOf.value); };
     for (const tr of $("tab-inventory").querySelectorAll("tr[data-adjustment]")) {
@@ -147,12 +148,27 @@ async function itemForm(item, accounts, taxCodes) {
     const used = item?.used ?? false;
     const form = openForm(item ? `Edit ${item.name}` : "New item", `
       <div class="grid">
+        <label>Code <input name="code" value="${esc(item?.code ?? "")}" placeholder="SKU"></label>
         <label class="wide">Name <input name="name" value="${esc(item?.name ?? "")}" required></label>
         <label>Unit <input name="unit" value="${esc(item?.unit ?? "")}" placeholder="case, kg, pcs"></label>
         <label class="check"><input type="checkbox" name="track_inventory" ${item?.track_inventory ? "checked" : ""}> Track inventory</label>
         <label class="wide">Suggests account <select name="default_account_id">${options(lineAccounts, item?.default_account_id, (a) => `${a.code} ${a.name}`, "None")}</select></label>
         <label class="wide">Suggests tax <select name="default_tax_code_id">${options(vat, item?.default_tax_code_id, (t) => t.name, "None")}</select></label>
         <label class="wide">Description <input name="description" value="${esc(item?.description ?? "")}"></label>
+      </div>
+      <h4>Sales</h4>
+      <div class="grid">
+        <label>Price (${state.ledger.base_currency}) <input name="sales_price" class="num" inputmode="decimal" value="${item?.sales_price ?? ""}"></label>
+        <label class="wide">Tax <select name="sales_tax_code_id">${options(vat.filter((t) => t.kind !== "vat_input"), item?.sales_tax_code_id, (t) => t.name, "None")}</select></label>
+        <label class="wide">Text on sales <input name="sales_description" value="${esc(item?.sales_description ?? "")}"></label>
+      </div>
+      <h4>Purchases</h4>
+      <div class="grid">
+        <label>Price (${state.ledger.base_currency}) <input name="purchase_price" class="num" inputmode="decimal" value="${item?.purchase_price ?? ""}"></label>
+        <label class="wide">Tax <select name="purchase_tax_code_id">${options(vat.filter((t) => t.kind !== "vat_output"), item?.purchase_tax_code_id, (t) => t.name, "None")}</select></label>
+        <label class="wide">Text on purchases <input name="purchase_description" value="${esc(item?.purchase_description ?? "")}"></label>
+      </div>
+      <div class="grid">
         ${item ? `<label class="check"><input type="checkbox" name="active" ${item.active ? "checked" : ""}> Active</label>` : ""}
       </div>
       <div class="grid" data-inventory>
@@ -179,6 +195,8 @@ async function itemForm(item, accounts, taxCodes) {
         const body = {
           name: f.name.value.trim(), unit: text(f.unit.value), description: text(f.description.value), default_account_id: text(f.default_account_id.value),
           default_tax_code_id: text(f.default_tax_code_id.value), track_inventory: f.track_inventory.checked, active: item ? f.active.checked : true,
+          code: text(f.code.value), sales_price: text(f.sales_price.value), sales_tax_code_id: text(f.sales_tax_code_id.value), sales_description: text(f.sales_description.value),
+          purchase_price: text(f.purchase_price.value), purchase_tax_code_id: text(f.purchase_tax_code_id.value), purchase_description: text(f.purchase_description.value),
           ...(f.track_inventory.checked ? {
             inventory_account_id: text(f.inventory_account_id.value), income_account_id: text(f.income_account_id.value),
             cost_of_sales_account_id: text(f.cost_of_sales_account_id.value),

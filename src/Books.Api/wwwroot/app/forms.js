@@ -206,7 +206,7 @@ async function documentForm(kind, doc) {
 
     const columns = [
       { name: "item_id", head: "Item", cell: (l) => `<select name="item_id">${options(c.items, l?.item_id, (i) => i.name, "")}</select>`,
-        init: (tr) => { field(tr, "item_id").onchange = () => fillFromItem(tr, c.items); } },
+        init: (tr) => { field(tr, "item_id").onchange = () => fillFromItem(tr, c.items, spec.side, form.elements.currency.value === state.ledger.base_currency); } },
       { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(c.accounts, l?.account_id, (a) => `${a.code} ${a.name}`, "Choose")}</select>` },
       { name: "description", head: "Description", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },
       { name: "quantity", head: "Qty", num: true, cell: (l) => `<input name="quantity" class="num" inputmode="decimal" value="${l?.quantity ?? ""}">` },
@@ -268,12 +268,17 @@ async function documentForm(kind, doc) {
   }
 }
 
-function fillFromItem(tr, items) {
+/** Starts a line from the item: its account, and the sales or purchase tax code, text and price (prices are in the ledger's currency). */
+function fillFromItem(tr, items, side, baseCurrency) {
   const item = items.find((x) => x.id === value(tr, "item_id"));
   if (!item) return;
-  if (item.default_account_id && [...field(tr, "account_id").options].some((o) => o.value === item.default_account_id)) field(tr, "account_id").value = item.default_account_id;
-  if (item.default_tax_code_id && [...field(tr, "tax_code_id").options].some((o) => o.value === item.default_tax_code_id)) field(tr, "tax_code_id").value = item.default_tax_code_id;
-  if (!value(tr, "description")) field(tr, "description").value = item.name;
+  const sale = side === "sale";
+  const pick = (name, id) => { if (id && [...field(tr, name).options].some((o) => o.value === id)) field(tr, name).value = id; };
+  pick("account_id", (sale ? item.income_account_id : item.inventory_account_id) ?? item.default_account_id);
+  pick("tax_code_id", (sale ? item.sales_tax_code_id : item.purchase_tax_code_id) ?? item.default_tax_code_id);
+  if (!value(tr, "description")) field(tr, "description").value = (sale ? item.sales_description : item.purchase_description) ?? item.name;
+  const price = sale ? item.sales_price : item.purchase_price;
+  if (price && baseCurrency && !value(tr, "unit_price") && !value(tr, "amount")) field(tr, "unit_price").value = price;
 }
 
 /** Opens the form for a document from its dialog: side is sale or purchase, type the document's own type. */

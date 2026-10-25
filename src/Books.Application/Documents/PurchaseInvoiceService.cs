@@ -180,10 +180,18 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
                 throw BooksProblem.Invalid($"Line {i}: account_id must be an account of this ledger.");
             }
             var accountId = line.AccountId;
+            var description = line.Description;
+            var unitPrice = line.UnitPrice;
             if (line.ItemId is { } itemId)
             {
                 var item = await db.Items.AsNoTracking().SingleOrDefaultAsync(x => x.LedgerId == ledger.Id && x.Id == itemId, ct)
                     ?? throw BooksProblem.Invalid($"Line {i}: item_id must be an item of this ledger.");
+                // The line starts from the item's purchase text and price (in the ledger's currency) where it gives none.
+                description ??= item.PurchaseDescription;
+                if (unitPrice is null && line.Amount is null && (input.Currency is null || input.Currency == ledger.BaseCurrency))
+                {
+                    unitPrice = item.PurchasePrice;
+                }
                 if (item.TrackInventory)
                 {
                     // Manager.io style: an inventory item is bought into the inventory account, whatever account was given.
@@ -194,7 +202,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
                     accountId = (await Inventory.ItemAccountsAsync(db, ledger.Id, item, ct)).Inventory;
                 }
             }
-            var net = line.Amount ?? (line is { Quantity: { } q, UnitPrice: { } p }
+            var net = line.Amount ?? ((line.Quantity, unitPrice) is ({ } q, { } p)
                 ? decimal.Round(q * p, minor, MidpointRounding.AwayFromZero)
                 : throw BooksProblem.Invalid($"Line {i}: give an amount, or a quantity and a unit price."));
             LineTax? tax = null;
@@ -230,7 +238,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
                 // Withholding is calculated per line on the net amount (VAT excluded) and totalled on the invoice.
                 withholding = TaxCalculator.ForLine(net, code.Rate, minor).Amount;
             }
-            lines.Add(new PurchaseInvoiceLine(accountId, line.Description, line.ItemId, line.Quantity, line.UnitPrice, net,
+            lines.Add(new PurchaseInvoiceLine(accountId, description, line.ItemId, line.Quantity, unitPrice, net,
                 line.TaxCodeId, tax, line.ValidTaxInvoice, line.WithholdingCodeId, withholding));
         }
 
