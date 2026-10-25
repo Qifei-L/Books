@@ -140,7 +140,14 @@ const value = (tr, name) => {
   return el.value.trim() === "" ? null : el.value.trim();
 };
 const num = (v) => Number(v ?? 0) || 0;
-const money = (x, currency) => x.toLocaleString(undefined, { minimumFractionDigits: currency === "KHR" ? 0 : 2, maximumFractionDigits: currency === "KHR" ? 0 : 2 });
+// Amounts read the same everywhere: thousands separated, and as many decimals as the currency has.
+// The API sends amounts as strings ("2100.00"), so parse before formatting.
+const money = (x, currency = state.ledger?.base_currency) => {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return String(x ?? "");
+  const minor = currency === "KHR" ? 0 : 2;
+  return n.toLocaleString("en-US", { minimumFractionDigits: minor, maximumFractionDigits: minor });
+};
 const rateOf = (id, codes) => num(codes.find((t) => t.id === id)?.rate) / 100;
 const partyNames = async () => {
   const parties = await api(`${ledgerUrl()}/parties`);

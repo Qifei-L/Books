@@ -416,6 +416,7 @@ function showJournal(j) {
 
 const blank = (v) => (v === "0.00" || v === "0" ? "" : v);
 
+
 $("tb-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
@@ -562,7 +563,7 @@ async function renderDocList(kind) {
   const nameOf = (id) => parties.find((p) => p.id === id)?.name ?? "";
   const partyName = (d) => nameOf(d[k.partyKey]);
   const counterpartNo = (id) => counterparts.find((c) => c.id === id)?.invoice_no ?? "";
-  const khr = (d) => (d.tax_currency ? `${Number(d.tax_currency.gross_total).toLocaleString()} ៛` : "");
+  const khr = (d) => (d.tax_currency ? `${money(d.tax_currency.gross_total, "KHR")} ៛` : "");
   const sum = (list, key) => list.reduce((s, d) => s + Number(d[key] ?? 0), 0).toFixed(2);
   // Every list keeps its own ids: the same id twice in the DOM would make getElementById lie.
   const ids = { filter: `${k.container}-filter`, tabs: `${k.container}-tabs`, party: `${k.container}-party`, list: `${k.container}-party-list`, search: `${k.container}-search` };
@@ -596,23 +597,24 @@ async function renderDocList(kind) {
   const overdueKey = k.amounts[k.amounts.length - 1].key;
   const currency = state.ledger.base_currency;
 
+  // Fixed widths: the party column takes what is left, so numbers and dates line up page after page.
   const columns = [
-    { key: "invoice_no", label: "No.", sortable: true },
-    { key: "date", label: "Date", sortable: true },
+    { key: "invoice_no", label: "No.", sortable: true, w: "96px" },
+    { key: "date", label: "Date", sortable: true, w: "108px" },
     k.third === "due"
-      ? { key: "due", label: "Due", sortable: true }
-      : { key: "ref", label: k.refLabel, sortable: false },
+      ? { key: "due", label: "Due", sortable: true, w: "168px" }
+      : { key: "ref", label: k.refLabel, sortable: false, w: "128px" },
     { key: "party", label: k.partyLabel, sortable: true },
-    { key: "reference", label: "Reference", sortable: true },
-    ...k.amounts.map((a) => ({ key: a.key, label: a.label, sortable: true, num: true })),
-    { key: "khr", label: "KHR", num: true },
-    { key: "status", label: "Status", sortable: true },
+    { key: "reference", label: "Reference", sortable: true, w: "152px" },
+    ...k.amounts.map((a) => ({ key: a.key, label: a.label, sortable: true, num: true, w: "112px" })),
+    { key: "khr", label: "KHR", num: true, w: "140px" },
+    { key: "status", label: "Status", sortable: true, w: "200px" },
   ];
 
   const header = columns.map((c) => {
     const cls = [c.num ? "num" : "", c.sortable ? "sortable" : "", c.sortable && sort.key === c.key ? "sorted" : ""].filter(Boolean).join(" ");
     const caret = c.sortable && sort.key === c.key ? `<span class="caret">${sort.dir === "asc" ? "▲" : "▼"}</span>` : "";
-    return `<th class="${cls}" ${c.sortable ? `data-sort="${c.key}"` : ""}>${c.label}${caret}</th>`;
+    return `<th class="${cls}" ${c.sortable ? `data-sort="${c.key}"` : ""}${c.w ? ` style="width:${c.w}"` : ""}>${c.label}${caret}</th>`;
   }).join("");
 
   const cell = (d) => ({
@@ -620,13 +622,13 @@ async function renderDocList(kind) {
     date: d.date,
     due: `${d.due_date ?? ""}${d.status === "posted" && d.due_date && d.due_date < today() ? ` <span class="pill draft" title="${overdueDays(d)} days overdue">overdue</span>` : ""}`,
     ref: d.original_invoice_id ? `${k.refPrefix} ${counterpartNo(d.original_invoice_id)}` : "",
-    party: esc(partyName(d)),
-    reference: esc(d.reference ?? ""),
+    party: `<span class="cell-clip" title="${esc(partyName(d))}">${esc(partyName(d))}</span>`,
+    reference: `<span class="cell-clip" title="${esc(d.reference ?? "")}">${esc(d.reference ?? "")}</span>`,
     khr: khr(d),
     status: d.status === "posted"
       ? `<span class="pill posted">posted</span> No. ${d.journal_no ?? ""}`
       : draftStatus(d),
-    ...Object.fromEntries(k.amounts.map((a) => [a.key, d[a.key]])),
+    ...Object.fromEntries(k.amounts.map((a) => [a.key, money(d[a.key])])),
   });
 
   const body = sorted.map((d) => {
@@ -637,17 +639,17 @@ async function renderDocList(kind) {
   const totals = `<tr class="total">${columns.map((c) => {
     if (c.key === "invoice_no") return `<td>Total</td>`;
     if (c.key === "status") return `<td>${sorted.length} ${sorted.length === 1 ? k.noun : k.plural}</td>`;
-    if (c.num && c.key !== "khr") return `<td class="num">${sum(sorted, c.key)}</td>`;
+    if (c.num && c.key !== "khr") return `<td class="num">${money(sum(sorted, c.key))}</td>`;
     return `<td></td>`;
   }).join("")}</tr>`;
 
   const figures = [
     `<div class="figure"><span class="muted small">${tab === "posted" ? "Posted" : "Draft"} ${k.plural}</span><b>${shown.length}</b></div>`,
-    ...k.amounts.map((a) => `<div class="figure"><span class="muted small">${a.label}</span><b>${sum(shown, a.key)} ${currency}</b></div>`),
+    ...k.amounts.map((a) => `<div class="figure"><span class="muted small">${a.label}</span><b>${money(sum(shown, a.key))} ${currency}</b></div>`),
     tab === "draft"
       ? `<div class="figure"><span class="muted small">Drafts block filing the month</span><b>${drafts.length} to fix</b></div>`
       : k.extra === "overdue"
-        ? `<div class="figure"><span class="muted small">Overdue</span><b class="${late.length ? "error" : ""}">${sum(late, overdueKey)} ${currency}</b></div>`
+        ? `<div class="figure"><span class="muted small">Overdue</span><b class="${late.length ? "error" : ""}">${money(sum(late, overdueKey))} ${currency}</b></div>`
         : `<div class="figure"><span class="muted small">${kindsNoun(k)}</span><b>${new Set(shown.map((d) => d.original_invoice_id).filter(Boolean)).size}</b></div>`,
   ].join("");
 

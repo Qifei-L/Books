@@ -136,6 +136,9 @@ table.lines input.num { text-align: right; min-width: 70px; }
 .combo-list button:hover, .combo-list button:focus { background: #f2f5fb; }
 .combo-list[hidden] { display: none; }
 /* Manager.io-style list mechanics: sortable headers with a caret, search on the right of the toolbar. */
+/* Dates and numbers keep their place from page to page; long text in the party and reference
+   columns is clipped, with the full value on hover. */
+.cell-clip { display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--ink); }
 th.sortable .caret { font-size: 9px; margin-left: 4px; color: var(--accent); }
