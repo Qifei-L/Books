@@ -827,6 +827,10 @@ async function renderDocList(kind) {
 
   setActions("");
 
+  const previousSearch = $(ids.search);
+  const searchHadFocus = previousSearch && document.activeElement === previousSearch;
+  const searchSelection = searchHadFocus ? [previousSearch.selectionStart, previousSearch.selectionEnd] : null;
+
   $(`tab-${k.container}`).innerHTML = `
     <form class="filter-bar" id="${ids.filter}" autocomplete="off">
       ${canEdit() ? `<button type="button" class="new-doc" onclick="documentForm('${k.formKey}')">+ ${k.newLabel}</button>` : ""}
@@ -1032,22 +1036,39 @@ async function renderDocList(kind) {
     renderDocList(kind);
   });
 
-  let typing;
-  $(ids.search).addEventListener("input", (event) => {
-    const value = event.target.value;
-    clearTimeout(typing);
-    typing = setTimeout(() => {
-      f.q = value.trim();
-      state.keepSearchFocus = true;
-      state.docPage[kind] = 1;
-      renderDocList(kind);
-    }, 250);
-  });
-  if (state.keepSearchFocus) {
-    state.keepSearchFocus = false;
-    const field = $(ids.search);
-    field.focus();
-    field.setSelectionRange(field.value.length, field.value.length);
+  // Search filters as it is typed, but never while an input method is composing: replacing the field
+  // mid-composition aborts the IME and leaves the keyboard stuck.
+  // Put the old search field back in place of the fresh one, so focus, caret and an IME composition in
+  // progress all survive the redraw. Its listeners are attached once, on the first render.
+  const freshSearch = $(ids.search);
+  if (previousSearch) {
+    freshSearch.replaceWith(previousSearch);
+    if (!searchHadFocus) previousSearch.value = f.q;
+    if (searchHadFocus) {
+      previousSearch.focus();
+      if (searchSelection) previousSearch.setSelectionRange(searchSelection[0], searchSelection[1]);
+    }
+  }
+  const searchField = previousSearch ?? freshSearch;
+  if (!searchField.dataset.wired) {
+    searchField.dataset.wired = "1";
+    let typing;
+    let composing = false;
+    const schedule = (value) => {
+      clearTimeout(typing);
+      typing = setTimeout(() => {
+        if (composing) return;
+        f.q = value.trim();
+        state.docPage[kind] = 1;
+        renderDocList(kind);
+      }, 250);
+    };
+    searchField.addEventListener("compositionstart", () => { composing = true; clearTimeout(typing); });
+    searchField.addEventListener("compositionend", (event) => { composing = false; schedule(event.target.value); });
+    searchField.addEventListener("input", (event) => {
+      if (composing || event.isComposing) return;
+      schedule(event.target.value);
+    });
   }
 
   for (const b of $(ids.tabs).querySelectorAll("button")) {
