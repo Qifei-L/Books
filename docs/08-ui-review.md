@@ -111,3 +111,22 @@ sample data.
   scrolls away.
 - A narrow window drops the wide columns (description, other tax, currency, KHR, reference) at 1300/1120/960 px
   instead of scrolling the table sideways.
+
+## Next slices, as agreed with the owner (2026-10-25)
+
+The list component in `list.js` covers the four document lists. The owner's picks for what to convert next,
+and what each one needs from the component:
+
+| Module | Pages to build | What `list.js` needs first |
+| --- | --- | --- |
+| Cash and bank | **Bank transactions** (payments, receipts and transfers in one list, with a category column and a category picker when creating), **Statements and reconciliation**, **Settings** (bank accounts, plus the one extra form the owner asked for) | A `load` hook for a kind that merges several endpoints; a category column; row cells that are not amount keys; a page without the Posted/Draft tabs |
+| Inventory | Stock adjustments, Stock transfers, Assemblies (the three documents); Items, categories and locations stay master data | A page without Posted/Draft tabs; cells for quantity and value instead of net/VAT/gross |
+| Payroll | Pay runs, plus an employees list the owner asked for | A page without tabs; a row count column |
+| Fixed assets | Depreciation runs; the asset register | No tabs; a period column |
+| Journals | Journals with drafts and posted, editable | No tabs; a revision column |
+| Master data | Accounts, groups, usages, parties, tax codes, bank accounts, members | A "simple list" variant: no tabs, no totals, inline edit |
+
+Order agreed: Cash and bank, then Inventory, then the rest.
+
+The component gap is the same three things in every row: a custom loader, custom cells, and a variant
+without the Posted/Draft tabs. Doing those three first turns the rest into configuration.
