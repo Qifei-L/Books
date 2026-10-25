@@ -34,7 +34,8 @@ row that ends with the count, and a minimum of chrome.
 
 - **One time control.** The period preset drives the list; the report pages keep their own as-of date,
   because an aging figure and a list range answer different questions.
-- **Drafts are a tab, not a page.** They are the same documents, unposted; the tab says they are not in the
+- **Drafts never count.** No totals row, no overdue figure, no "showing x of y" that includes them: a draft
+  is not in the ledger, so it has no total. The draft tab lists them and says so. They are the same documents, unposted; the tab says they are not in the
   ledger and block filing. A draft outside the period is counted with a one-click widen rather than vanishing.
 - **Amounts are formatted in one place.** The API sends amounts as strings; `money()` parses before
   formatting, and uses the currency's minor units (USD 2, KHR 0).

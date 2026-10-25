@@ -735,7 +735,7 @@ async function renderDocList(kind) {
   const overdue = sum(late, amountKey);
   const credited = new Set(shown.map((d) => d.original_invoice_id).filter(Boolean)).size;
   const facts = tab === "draft"
-    ? `${drafts.length} ${drafts.length === 1 ? "draft" : "drafts"} to fix`
+    ? ""
     : k.extra === "overdue"
       ? (Number(overdue) > 0 ? `Overdue ${money(overdue)} ${currency}` : "")
       : credited > 0
@@ -796,12 +796,14 @@ async function renderDocList(kind) {
     <div class="tabs" id="${ids.tabs}">
       <button data-doc-tab="posted" class="${tab === "posted" ? "active" : ""}">Posted <span class="count">${posted.length}</span></button>
       <button data-doc-tab="draft" class="${tab === "draft" ? "active" : ""}">Draft <span class="count">${drafts.length}</span></button>
-      <span class="tabs-meta">showing ${rows.length} of ${inPeriod.length}${facts ? ` · <span class="${Number(overdue) > 0 && tab === "posted" && k.extra === "overdue" ? "error" : ""}">${facts}</span>` : ""}</span>
+      <span class="tabs-meta">${tab === "posted"
+        ? `showing ${paged.length} of ${posted.length}${facts ? ` · <span class="${Number(overdue) > 0 && k.extra === "overdue" ? "error" : ""}">${facts}</span>` : ""}`
+        : `showing ${paged.length} of ${drafts.length} ${drafts.length === 1 ? "draft" : "drafts"} · not in the books`}</span>
     </div>
 
     ${tab === "draft" && drafts.length ? `<p class="warning">These are not posted, so they are not in the ledger and they block filing the months they are dated in. Fix and post each one, or delete it.</p>` : ""}
     ${sorted.length
-      ? `<div class="table-scroll"><table class="list ${docDensity()}"><tr>${header}</tr>${body}${totals}</table></div>${pager}`
+      ? `<div class="table-scroll"><table class="list ${docDensity()}"><tr>${header}</tr>${body}${tab === "posted" ? totals : ""}</table></div>${pager}`
       : `<p class="muted">No ${tab === "posted" ? "posted" : "draft"} ${k.plural} in ${PRESET_LABELS[f.preset]?.toLowerCase() ?? "this period"}${f.party ? ` for ${esc(nameOf(f.party))}` : ""}${f.q ? ` matching “${esc(f.q)}”` : ""}.</p>`}`;
 
   $(`${ids.filter}-preset`).onchange = (event) => {
