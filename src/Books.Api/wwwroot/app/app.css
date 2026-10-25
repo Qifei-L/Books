@@ -162,8 +162,13 @@ tr:hover .row-menu-btn { visibility: visible; }
 .row-menu button { display: block; width: 100%; text-align: left; background: #fff; border: none; border-radius: 4px; color: var(--ink); padding: 6px 10px; font-size: 13.5px; }
 .row-menu button:hover { background: #f2f5fb; }
 .row-menu button.danger { color: var(--bad); }
-.popover { position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 30; background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 22px rgba(20, 30, 60, .16); padding: 10px 12px; min-width: 180px; }
-.popover label.check { display: flex; margin: 0 0 4px; }
+.popover { position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 30; background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 22px rgba(20, 30, 60, .16); padding: 10px 12px; min-width: 250px; }
+.col-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.col-row label.check { margin: 0; flex: 1; white-space: nowrap; }
+.col-move { display: inline-flex; gap: 2px; }
+.col-move button { background: #fff; border: 1px solid var(--line); color: var(--muted); border-radius: 4px; padding: 0 7px; font-size: 12px; line-height: 20px; }
+.col-move button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.col-move button:disabled { opacity: .35; }
 .filter-bar { position: relative; }
 /* Dates and numbers keep their place from page to page; long text in the party and reference
    columns is clipped, with the full value on hover. */

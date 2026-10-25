@@ -539,6 +539,14 @@ const docSort = (kind) => ((state.docSort ??= {})[kind] ??= { key: "date", dir: 
 // Columns on by default: the owner's choice on 2026-10-25. Amount is always shown and is not in the set.
 const DOC_COLUMN_DEFAULTS = ["net_total", "tax_total", "other_tax_total", "description", "fx"];
 const docColumns = (kind) => ((state.docCols ??= {})[kind] ??= new Set(DOC_COLUMN_DEFAULTS));
+// The saved column order for a list, reconciled with the columns that exist now.
+function docColumnOrder(kind, all) {
+  state.docOrder ??= {};
+  const saved = (state.docOrder[kind] ?? []).filter((key) => all.includes(key));
+  const missing = all.filter((key) => !saved.includes(key));
+  state.docOrder[kind] = [...saved, ...missing];
+  return state.docOrder[kind];
+}
 const docDensity = () => (state.density ??= "comfortable");
 const docPageSize = () => (state.pageSize ??= 50);
 const overdueDays = (d) => Math.floor((new Date(today()) - new Date(d.due_date)) / 86400000);
@@ -603,28 +611,30 @@ async function renderDocList(kind) {
   const partyOf = (d) => parties.find((p) => p.id === d[k.partyKey]);
   const fxOf = (d) => `${d.currency || currency}${d.exchange_rate ? ` @ ${d.exchange_rate}` : ""}`;
 
-  // Every column the list knows about. `always` ones cannot be turned off; `optional` ones start off
-  // unless docColumnDefaults() says otherwise.
-  const optional = (key, label, opts = {}) => ({ key, label, sortable: true, ...(key.includes("total") || key === "lines_count" || key === "party_terms" ? { num: true } : {}), w: opts.w ?? "120px", opt: true });
-
-  const columns = [
-    { key: "party", label: k.partyLabel, sortable: true },
-    { key: "due", label: "Due", sortable: true, w: "150px" },
-    ...(chosen.has("date") ? [optional("date", "Date", { w: "110px" })] : []),
-    ...(chosen.has("reference") ? [optional("reference", "Reference", { w: "150px" })] : []),
-    ...k.amounts.slice(0, -1).filter((a) => chosen.has(a.key)).map((a) => optional(a.key, a.label, { w: "104px" })),
-    ...(chosen.has("other_tax_total") ? [optional("other_tax_total", "Other tax", { w: "104px" })] : []),
-    { key: "amount", label: `${amountLabel} (${currency})`, num: true, sortable: true, w: "130px" },
-    ...(chosen.has("fx") ? [optional("fx", "Currency", { w: "130px" })] : []),
-    ...(chosen.has("khr") ? [optional("khr", "KHR", { w: "128px" })] : []),
-    { key: "status", label: "Status", sortable: true, w: "104px" },
-    ...(chosen.has("description") ? [optional("description", "Description", { w: "200px" })] : []),
-    ...(chosen.has("lines_count") ? [optional("lines_count", "Lines", { w: "74px" })] : []),
-    ...(chosen.has("party_tax_id") ? [optional("party_tax_id", "Tax ID", { w: "140px" })] : []),
-    ...(chosen.has("party_terms") ? [optional("party_terms", "Terms (days)", { w: "110px" })] : []),
-    ...(chosen.has("journal") ? [optional("journal", "Journal No.", { w: "110px" })] : []),
-    { key: "menu", label: "", w: "46px" },
-  ];
+  // Every column the list can show, with its default place. `always` ones cannot be hidden; the order
+  // of all of them can be changed, and both choices are kept per list kind for the session.
+  const META = {
+    party: { label: k.partyLabel, always: true, sortable: true },
+    due: { label: "Due", always: true, sortable: true, w: "150px" },
+    date: { label: "Date", sortable: true, w: "110px" },
+    reference: { label: "Reference", sortable: true, w: "150px" },
+    ...Object.fromEntries(k.amounts.slice(0, -1).map((a) => [a.key, { label: a.label, sortable: true, num: true, w: "104px" }])),
+    other_tax_total: { label: "Other tax", sortable: true, num: true, w: "104px" },
+    amount: { label: `${amountLabel} (${currency})`, always: true, sortable: true, num: true, w: "130px" },
+    fx: { label: "Currency", sortable: true, w: "130px" },
+    khr: { label: "KHR", sortable: true, num: true, w: "128px" },
+    status: { label: "Status", always: true, sortable: true, w: "104px" },
+    description: { label: "Description", sortable: true, w: "200px" },
+    lines_count: { label: "Lines", sortable: true, num: true, w: "74px" },
+    party_tax_id: { label: "Tax ID", sortable: true, w: "140px" },
+    party_terms: { label: "Terms (days)", sortable: true, num: true, w: "110px" },
+    journal: { label: "Journal No.", sortable: true, w: "110px" },
+  };
+  const order = docColumnOrder(kind, Object.keys(META));
+  const columns = order
+    .filter((key) => META[key] && (META[key].always || chosen.has(key)))
+    .map((key) => ({ key, ...META[key] }))
+    .concat([{ key: "menu", label: "", w: "46px" }]);
 
   const header = columns.map((c) => {
     const cls = [c.num ? "num" : "", c.sortable ? "sortable" : "", c.sortable && sort.key === c.key ? "sorted" : ""].filter(Boolean).join(" ");
@@ -711,22 +721,22 @@ async function renderDocList(kind) {
   const filtered = f.party || f.q || f.preset !== "this-year";
   const chipRow = chips || filtered ? `<div class="chips">${chips}${filtered ? `<button class="link" id="${k.container}-clear">Clear all</button>` : ""}</div>` : "";
 
-  const extras = [
-    { key: "date", label: "Date" },
-    { key: "reference", label: "Reference" },
-    ...k.amounts.slice(0, -1).map((a) => ({ key: a.key, label: a.label })),
-    { key: "other_tax_total", label: "Other tax" },
-    { key: "fx", label: "Currency" },
-    { key: "khr", label: "KHR" },
-    { key: "description", label: "Description" },
-    { key: "lines_count", label: "Lines" },
-    { key: "party_tax_id", label: "Tax ID" },
-    { key: "party_terms", label: "Terms (days)" },
-    { key: "journal", label: "Journal No." },
-  ];
-  const columnsMenu = `<div class="popover hidden" id="${ids.colsMenu}">${extras.map((c) => `
-    <label class="check"><input type="checkbox" data-col="${c.key}" ${chosen.has(c.key) ? "checked" : ""}> ${c.label}</label>`).join("")}
-    <p class="muted small" style="margin:6px 0 0">The list always shows ${amountLabel.toLowerCase()}; these are extra columns.</p></div>`;
+  // The chooser lists every column in its current order: a checkbox to show it, arrows to move it.
+  const columnRow = (key) => {
+    const meta = META[key];
+    const i = order.indexOf(key);
+    return `<div class="col-row">
+      <label class="check"><input type="checkbox" data-col="${key}" ${meta.always ? "checked disabled" : chosen.has(key) ? "checked" : ""}> ${meta.label}</label>
+      <span class="col-move">
+        <button type="button" data-move="up" data-key="${key}" ${i === 0 ? "disabled" : ""} title="Move left">↑</button>
+        <button type="button" data-move="down" data-key="${key}" ${i === order.length - 1 ? "disabled" : ""} title="Move right">↓</button>
+      </span>
+    </div>`;
+  };
+  const columnsMenu = `<div class="popover hidden" id="${ids.colsMenu}">
+    <p class="muted small" style="margin:0 0 6px">Show a column, or move it left and right</p>
+    ${order.map(columnRow).join("")}
+    <p class="muted small" style="margin:6px 0 0">${amountLabel} always shows; the arrows set the order.</p></div>`;
 
   setActions("");
 
@@ -783,6 +793,15 @@ async function renderDocList(kind) {
     box.onchange = () => {
       if (box.checked) chosen.add(box.dataset.col);
       else chosen.delete(box.dataset.col);
+      renderDocList(kind);
+    };
+  }
+  for (const button of $(ids.colsMenu).querySelectorAll("button[data-move]")) {
+    button.onclick = () => {
+      const i = order.indexOf(button.dataset.key);
+      const j = button.dataset.move === "up" ? i - 1 : i + 1;
+      if (j < 0 || j >= order.length) return;
+      [order[i], order[j]] = [order[j], order[i]];
       renderDocList(kind);
     };
   }
