@@ -55,5 +55,16 @@ public sealed class ReportDeliverySettingsTests(TestHost host)
         Assert.True((await response.Content.ReadAsByteArrayAsync(Ct)).Length > 1000);
     }
 
+    [Fact]
+    public async Task Report_filters_reject_ids_from_outside_the_ledger()
+    {
+        var books = await JournalBooks.CreateAsync(host);
+
+        var response = await books.Admin.GetAsync(
+            $"/api/v1/organizations/{books.OrgId}/ledgers/{books.LedgerId}/reports/trial-balance?from=2026-01-01&to=2026-10-31&classId={Guid.NewGuid()}", Ct);
+
+        await response.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
+    }
+
     private static string Text(JsonElement element, string property) => element.GetProperty(property).GetString()!;
 }

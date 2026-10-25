@@ -47,6 +47,7 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
         reads.SnapshotAsync(principal, orgId, async scope =>
         {
             var ledger = await LedgerForReportAsync(scope, ledgerId, from, to, ct);
+            await ValidateDimensionsAsync(ledgerId, classId, locationId, ct);
             var fyStart = FiscalYearStart(from, ledger.FyStartMonth);
             var movements = await db.Database.SqlQuery<Movement>($"""
                 SELECT a.id AS account_id,
@@ -116,6 +117,7 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
         reads.SnapshotAsync(principal, orgId, async scope =>
         {
             var ledger = await LedgerForReportAsync(scope, ledgerId, from, to, ct);
+            await ValidateDimensionsAsync(ledgerId, classId, locationId, ct);
             var account = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(a => a.LedgerId == ledgerId && a.Id == accountId, ct)
                 ?? throw BooksProblem.NotFound();
             var fyStart = FiscalYearStart(from, ledger.FyStartMonth);
@@ -163,6 +165,18 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
     /// <summary>The first day of the fiscal year that contains the date.</summary>
     public static DateOnly FiscalYearStart(DateOnly date, int startMonth) =>
         new(date.Month >= startMonth ? date.Year : date.Year - 1, startMonth, 1);
+
+    private async Task ValidateDimensionsAsync(Guid ledgerId, Guid? classId, Guid? locationId, CancellationToken ct)
+    {
+        if (classId is { } cid && !await db.Classes.AnyAsync(c => c.LedgerId == ledgerId && c.Id == cid, ct))
+        {
+            throw BooksProblem.Invalid("class_id must be a class of this ledger.");
+        }
+        if (locationId is { } lid && !await db.Locations.AnyAsync(l => l.LedgerId == ledgerId && l.Id == lid, ct))
+        {
+            throw BooksProblem.Invalid("location_id must be a location of this ledger.");
+        }
+    }
 
     private async Task<Ledger> LedgerForReportAsync(OrgScope scope, Guid ledgerId, DateOnly from, DateOnly to, CancellationToken ct)
     {

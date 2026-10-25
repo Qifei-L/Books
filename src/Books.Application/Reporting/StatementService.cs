@@ -38,6 +38,7 @@ public sealed class StatementService(IBooksDb db, ReadRunner reads)
         reads.SnapshotAsync(principal, orgId, async scope =>
         {
             var ledger = await LedgerAsync(scope, ledgerId, from, to, ct);
+            await ValidateDimensionsAsync(ledgerId, classId, locationId, ct);
             var chart = await Chart.LoadAsync(db, ledgerId, ct);
             var sums = await SumsAsync(ledgerId, from, to, classId, locationId, ct);
             var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
@@ -54,6 +55,7 @@ public sealed class StatementService(IBooksDb db, ReadRunner reads)
         reads.SnapshotAsync(principal, orgId, async scope =>
         {
             var ledger = await LedgerAsync(scope, ledgerId, DateOnly.MinValue, asOf, ct);
+            await ValidateDimensionsAsync(ledgerId, classId, locationId, ct);
             var (chart, sums) = await FoldRevaluationAsync(ledgerId, await Chart.LoadAsync(db, ledgerId, ct),
                 await SumsAsync(ledgerId, DateOnly.MinValue, asOf, classId, locationId, ct), ct);
             var fyStart = ReportService.FiscalYearStart(asOf, ledger.FyStartMonth);
@@ -120,6 +122,18 @@ public sealed class StatementService(IBooksDb db, ReadRunner reads)
     }
 
     /// <summary>Signed sum (debit positive) of effective postings per account, dates inclusive.</summary>
+    private async Task ValidateDimensionsAsync(Guid ledgerId, Guid? classId, Guid? locationId, CancellationToken ct)
+    {
+        if (classId is { } cid && !await db.Classes.AnyAsync(c => c.LedgerId == ledgerId && c.Id == cid, ct))
+        {
+            throw BooksProblem.Invalid("class_id must be a class of this ledger.");
+        }
+        if (locationId is { } lid && !await db.Locations.AnyAsync(l => l.LedgerId == ledgerId && l.Id == lid, ct))
+        {
+            throw BooksProblem.Invalid("location_id must be a location of this ledger.");
+        }
+    }
+
     private async Task<IReadOnlyDictionary<Guid, decimal>> SumsAsync(Guid ledgerId, DateOnly from, DateOnly to, Guid? classId, Guid? locationId, CancellationToken ct) =>
         (await db.Database.SqlQuery<Sum>($"""
             SELECT l.account_id AS account_id, SUM(l.amount) AS amount
