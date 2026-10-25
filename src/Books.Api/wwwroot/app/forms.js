@@ -49,8 +49,11 @@ const options = (rows, selected, label, empty) =>
   (empty === undefined ? "" : `<option value="">${esc(empty)}</option>`)
   + rows.map((r) => `<option value="${r.id}" ${r.id === selected ? "selected" : ""}>${esc(label(r))}</option>`).join("");
 
+// Re-read the open page after a save. Other pages load again when they are opened, so a single
+// document no longer pulls every list in the company.
 async function refreshLedger() {
-  await Promise.all([renderSales(), renderPurchases(), renderBank(), renderInventory(), renderAssets(), renderSetup(), renderJournals()]);
+  state.rendered = {};
+  await showTab(state.tab ?? "sales", true);
 }
 
 // ---- Customers and suppliers ----
