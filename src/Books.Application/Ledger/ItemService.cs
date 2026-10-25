@@ -13,7 +13,11 @@ public sealed record ItemDto(
     Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool Active, bool Used, string Version, bool TrackInventory = false,
     Guid? InventoryAccountId = null, Guid? IncomeAccountId = null, Guid? CostOfSalesAccountId = null,
     string? Code = null, string? SalesPrice = null, string? SalesDescription = null, Guid? SalesTaxCodeId = null,
-    string? PurchasePrice = null, string? PurchaseDescription = null, Guid? PurchaseTaxCodeId = null, IReadOnlyList<ItemUnitDto>? Units = null);
+    string? PurchasePrice = null, string? PurchaseDescription = null, Guid? PurchaseTaxCodeId = null, IReadOnlyList<ItemUnitDto>? Units = null,
+    IReadOnlyList<ItemComponentDto>? Components = null);
+
+/// <param name="Quantity">Base units of the component in one base unit of the item.</param>
+public sealed record ItemComponentDto(Guid ItemId, string Quantity);
 
 /// <param name="Factor">Base units in one of this unit, as a decimal string.</param>
 public sealed record ItemUnitDto(string Name, string Factor);
@@ -28,7 +32,8 @@ public sealed record ItemUnitDto(string Name, string Factor);
 public sealed record ItemInput(string Name, string? Description, string? Unit, Guid? CategoryId, Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool Active = true,
     bool TrackInventory = false, Guid? InventoryAccountId = null, Guid? IncomeAccountId = null, Guid? CostOfSalesAccountId = null,
     string? Code = null, decimal? SalesPrice = null, string? SalesDescription = null, Guid? SalesTaxCodeId = null,
-    decimal? PurchasePrice = null, string? PurchaseDescription = null, Guid? PurchaseTaxCodeId = null, IReadOnlyList<(string Name, decimal Factor)>? Units = null);
+    decimal? PurchasePrice = null, string? PurchaseDescription = null, Guid? PurchaseTaxCodeId = null, IReadOnlyList<(string Name, decimal Factor)>? Units = null,
+    IReadOnlyList<(Guid ItemId, decimal Quantity)>? Components = null);
 
 /// <summary>Item categories and items of a ledger. Reading needs read access; changes need edit access.</summary>
 public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner reads)
@@ -75,7 +80,7 @@ public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner read
         writes.RunAsync(principal, new WriteRequest("item.update", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
-            var item = await db.Items.Include(i => i.Units).SingleOrDefaultAsync(i => i.LedgerId == ledgerId && i.Id == itemId, ct) ?? throw BooksProblem.NotFound();
+            var item = await db.Items.Include(i => i.Units).Include(i => i.Components).SingleOrDefaultAsync(i => i.LedgerId == ledgerId && i.Id == itemId, ct) ?? throw BooksProblem.NotFound();
             scope.CheckVersion(item.Version);
             var before = (await LoadAsync(ledgerId, item.Id, ct)).Single();
             await SetAsync(item, ledgerId, input, isNew: false, ct);
@@ -135,6 +140,16 @@ public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner read
             item.Set(input.Name, input.Description, input.Unit, category, account, taxCode, input.Active, isNew, input.TrackInventory,
                 inventory, await AccountAsync(input.IncomeAccountId, "income_account_id"), await AccountAsync(input.CostOfSalesAccountId, "cost_of_sales_account_id"));
             item.SetTrading(input.Code, input.SalesPrice, input.SalesDescription, salesTax, input.PurchasePrice, input.PurchaseDescription, purchaseTax);
+            if (input.Components is { } components)
+            {
+                var ids = components.Select(c => c.ItemId).ToList();
+                if (await db.Items.CountAsync(x => x.LedgerId == ledgerId && x.TrackInventory && ids.Contains(x.Id), ct) != ids.Distinct().Count() || !input.TrackInventory)
+                {
+                    throw BooksProblem.Invalid("A bill of materials is for an inventory item, and its components must be inventory items of this ledger.");
+                }
+                db.ItemComponents.RemoveRange(item.Components);
+                item.SetComponents(components);
+            }
             if (input.Units is { } units)
             {
                 db.ItemUnits.RemoveRange(item.Units);
@@ -157,13 +172,14 @@ public sealed class ItemService(IBooksDb db, WriteRunner writes, ReadRunner read
     private static string? P(decimal? price) => price?.ToString("0.00##", System.Globalization.CultureInfo.InvariantCulture);
 
     private async Task<IReadOnlyList<ItemDto>> LoadAsync(Guid ledgerId, Guid? itemId, CancellationToken ct) =>
-        (await db.Items.AsNoTracking().Include(i => i.Units).Where(i => i.LedgerId == ledgerId && (itemId == null || i.Id == itemId))
+        (await db.Items.AsNoTracking().Include(i => i.Units).Include(i => i.Components).Where(i => i.LedgerId == ledgerId && (itemId == null || i.Id == itemId))
             .OrderBy(i => i.Code ?? i.Name).ThenBy(i => i.Name).ThenBy(i => i.Id)
             .Select(i => new { i, Used = db.JournalLines.Any(l => l.ItemId == i.Id) })
             .ToListAsync(ct))
         .Select(x => new ItemDto(x.i.Id, x.i.CategoryId, x.i.Name, x.i.Description, x.i.Unit, x.i.DefaultAccountId, x.i.DefaultTaxCodeId, x.i.Active, x.Used, x.i.Version.ToString(), x.i.TrackInventory,
             x.i.InventoryAccountId, x.i.IncomeAccountId, x.i.CostOfSalesAccountId, x.i.Code, P(x.i.SalesPrice), x.i.SalesDescription, x.i.SalesTaxCodeId,
             P(x.i.PurchasePrice), x.i.PurchaseDescription, x.i.PurchaseTaxCodeId,
-            x.i.Units.OrderBy(u => u.Factor).Select(u => new ItemUnitDto(u.Name, u.Factor.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))).ToList()))
+            x.i.Units.OrderBy(u => u.Factor).Select(u => new ItemUnitDto(u.Name, u.Factor.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))).ToList(),
+            x.i.Components.Select(c => new ItemComponentDto(c.ComponentId, c.Quantity.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))).ToList()))
         .ToList();
 }

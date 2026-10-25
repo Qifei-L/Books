@@ -578,6 +578,43 @@ internal sealed class StockTransferLineConfiguration : IEntityTypeConfiguration<
     }
 }
 
+internal sealed class AssemblyConfiguration : IEntityTypeConfiguration<Assembly>
+{
+    public void Configure(EntityTypeBuilder<Assembly> b)
+    {
+        b.ToTable("assemblies", t => t.HasCheckConstraint("ck_assemblies_status", "status IN ('draft', 'posted', 'deleted') AND (status <> 'posted' OR journal_id IS NOT NULL)"));
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Ignore(x => x.Value);
+        b.Property(x => x.Quantity).HasPrecision(20, 4);
+        b.Property(x => x.LabourAmount).HasPrecision(20, 4);
+        b.Property(x => x.Reference).HasMaxLength(200);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.HasIndex(x => new { x.LedgerId, x.AssemblyNo }).IsUnique();
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.AssemblyId).OnDelete(DeleteBehavior.Restrict);
+        b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Journal>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.JournalId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class AssemblyLineConfiguration : IEntityTypeConfiguration<AssemblyLine>
+{
+    public void Configure(EntityTypeBuilder<AssemblyLine> b)
+    {
+        b.ToTable("assembly_lines");
+        b.HasKey(x => new { x.AssemblyId, x.LineNo });
+        b.Property(x => x.Quantity).HasPrecision(20, 4);
+        b.Property(x => x.Value).HasPrecision(20, 4);
+        b.HasOne<Item>().WithMany().HasForeignKey(x => x.ComponentId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 internal sealed class FixedAssetConfiguration : IEntityTypeConfiguration<FixedAsset>
 {
     public void Configure(EntityTypeBuilder<FixedAsset> b)

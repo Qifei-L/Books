@@ -31,6 +31,9 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<ItemCategory> ItemCategories => Set<ItemCategory>();
     public DbSet<Item> Items => Set<Item>();
     public DbSet<ItemUnit> ItemUnits => Set<ItemUnit>();
+    public DbSet<ItemComponent> ItemComponents => Set<ItemComponent>();
+    public DbSet<Assembly> Assemblies => Set<Assembly>();
+    public DbSet<AssemblyLine> AssemblyLines => Set<AssemblyLine>();
     public DbSet<Location> Locations => Set<Location>();
     public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
     public DbSet<StockTransferLine> StockTransferLines => Set<StockTransferLine>();

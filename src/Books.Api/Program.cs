@@ -78,6 +78,7 @@ api.MapPayRunEndpoints();
 api.MapFixedAssetEndpoints();
 api.MapStockAdjustmentEndpoints();
 api.MapLocationEndpoints();
+api.MapAssemblyEndpoints();
 api.MapFxRevaluationEndpoints();
 api.MapTaxReturnEndpoints();
 api.MapJournalEndpoints();

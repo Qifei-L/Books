@@ -37,6 +37,7 @@ public sealed class ItemCategory
 public sealed class Item
 {
     private readonly List<ItemUnit> _units = [];
+    private readonly List<ItemComponent> _components = [];
 
     private Item() { }
 
@@ -61,6 +62,20 @@ public sealed class Item
 
     /// <summary>Other units the item is bought or sold in, each a number of base units, for example a box of 24 (M10.8).</summary>
     public IReadOnlyList<ItemUnit> Units => _units;
+
+    /// <summary>The bill of materials: what one base unit of this item is assembled from (M10.10).</summary>
+    public IReadOnlyList<ItemComponent> Components => _components;
+
+    public void SetComponents(IEnumerable<(Guid ComponentId, decimal Quantity)> components)
+    {
+        var list = components.ToList();
+        if (list.Any(c => c.Quantity <= 0 || c.ComponentId == Id) || list.GroupBy(c => c.ComponentId).Any(g => g.Count() > 1))
+        {
+            throw new DomainException("Each component appears once, is another item, and has a quantity above zero.");
+        }
+        _components.Clear();
+        _components.AddRange(list.Select(c => new ItemComponent(Id, c.ComponentId, c.Quantity)));
+    }
 
     /// <summary>Base units in one of the given unit: 1 for the base unit (or none), the unit's factor otherwise.</summary>
     public decimal? FactorOf(string? unit) =>
@@ -202,4 +217,21 @@ public sealed class ItemUnit
     public Guid ItemId { get; private set; }
     public string Name { get; private set; } = "";
     public decimal Factor { get; private set; }
+}
+
+/// <summary>One component of an item's bill of materials: how much of another item goes into one unit of it.</summary>
+public sealed class ItemComponent
+{
+    private ItemComponent() { }
+
+    public ItemComponent(Guid itemId, Guid componentId, decimal quantity)
+    {
+        ItemId = itemId;
+        ComponentId = componentId;
+        Quantity = quantity;
+    }
+
+    public Guid ItemId { get; private set; }
+    public Guid ComponentId { get; private set; }
+    public decimal Quantity { get; private set; }
 }

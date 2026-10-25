@@ -209,6 +209,17 @@ internal sealed class ItemCategoryConfiguration : IEntityTypeConfiguration<ItemC
     }
 }
 
+internal sealed class ItemComponentConfiguration : IEntityTypeConfiguration<ItemComponent>
+{
+    public void Configure(EntityTypeBuilder<ItemComponent> b)
+    {
+        b.ToTable("item_components", t => t.HasCheckConstraint("ck_item_components_quantity", "quantity > 0 AND component_id <> item_id"));
+        b.HasKey(x => new { x.ItemId, x.ComponentId });
+        b.Property(x => x.Quantity).HasPrecision(20, 4);
+        b.HasOne<Item>().WithMany().HasForeignKey(x => x.ComponentId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 internal sealed class ItemUnitConfiguration : IEntityTypeConfiguration<ItemUnit>
 {
     public void Configure(EntityTypeBuilder<ItemUnit> b)
@@ -236,6 +247,8 @@ internal sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
         b.Property(x => x.PurchaseDescription).HasMaxLength(1000);
         b.HasIndex(x => new { x.LedgerId, x.Code }).IsUnique().HasFilter("code IS NOT NULL");
         b.HasMany(x => x.Units).WithOne().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Cascade);
+        b.HasMany(x => x.Components).WithOne().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Cascade);
+        b.Navigation(x => x.Components).UsePropertyAccessMode(PropertyAccessMode.Field);
         b.Navigation(x => x.Units).UsePropertyAccessMode(PropertyAccessMode.Field);
         b.HasAlternateKey(x => new { x.LedgerId, x.Id });
         b.HasOne<Ledger>().WithMany()

@@ -96,6 +96,8 @@ public static class Inventory
             .Where(i => i.LedgerId == ledgerId && i.Status == DocumentStatus.Posted && i.Date <= to).ToListAsync(ct);
         var adjustments = await db.StockAdjustments.AsNoTracking().Include(a => a.Lines)
             .Where(a => a.LedgerId == ledgerId && a.Status == DocumentStatus.Posted && a.Date <= to).ToListAsync(ct);
+        var assemblies = await db.Assemblies.AsNoTracking().Include(a => a.Lines)
+            .Where(a => a.LedgerId == ledgerId && a.Status == DocumentStatus.Posted && a.Date <= to).ToListAsync(ct);
         var transfers = await db.StockTransfers.AsNoTracking().Include(t => t.Lines)
             .Where(t => t.LedgerId == ledgerId && t.Status == DocumentStatus.Posted && t.Date <= to).ToListAsync(ct);
         return purchases.SelectMany(p => p.Lines.Where(l => l.ItemId is { } id && tracked.Contains(id))
@@ -106,6 +108,9 @@ public static class Inventory
                     s.IsCreditNote ? "credit_note" : "sales_invoice", s.InvoiceNo, s.Reference, s.CustomerId, l.LocationId))))
             .Concat(adjustments.SelectMany(a => a.Lines.Select(l => new StockMovement(l.ItemId, a.Date, a.Id, l.Quantity, l.Value,
                 StockAdjustment.Kind, a.AdjustmentNo, a.Reference, LocationId: l.LocationId))))
+            .Concat(assemblies.SelectMany(a => a.Lines.Select(l => new StockMovement(l.ComponentId, a.Date, a.Id, -l.Quantity, -l.Value, Assembly.Kind, a.AssemblyNo, a.Reference,
+                    LocationId: a.LocationId))
+                .Append(new StockMovement(a.ItemId, a.Date, a.Id, a.Quantity, a.Value, Assembly.Kind, a.AssemblyNo, a.Reference, LocationId: a.LocationId))))
             // Transfers move quantities between locations and no value (one average cost across locations).
             .Concat(transfers.SelectMany(t => t.Lines.SelectMany(l => new[]
             {
