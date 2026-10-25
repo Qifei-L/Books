@@ -11,7 +11,7 @@ app change is confined to `src/Books.Api/wwwroot/app`: `app.js`, `index.html`, `
 | Level | What it is |
 | --- | --- |
 | Shell | A fixed bar (organization, company, period, user), a grouped sidebar, one scrolling page with a title and a one-line purpose, and the page action at the right of that title |
-| Modules | A module opens into its own pages and stays open while one of them is shown. Sales: Invoices, Credit notes, Reports, Settings. Purchases: Invoices, Debit notes, Reports. Cash and bank: Transactions, Statements. Inventory: Stock on hand, Adjustments, Transfers, Assemblies. Fixed assets: Assets, Depreciation runs |
+| Modules | A module opens into its own pages and stays open while one of them is shown. Sales: Invoices, Credit notes, Reports, Settings. Purchases: Invoices, Debit notes, Reports. Cash and bank: Transactions, Statements. Inventory: Stock on hand, Adjustments, Transfers, Assemblies. Fixed assets: Assets, Depreciation runs. Payroll: Pay runs, Employees |
 | Pages | One list, one job. `PAGES` holds the title, the purpose and the render function; a page renders the first time it is opened and a save re-reads only the open page |
 | Lists | Two renderers: `renderDocList` for the eleven document lists, and the simpler `renderSimpleList` for master data. `DOC_KINDS` says the path or loader, the party, the amount columns, the extra columns, the row cells and which dialog opens; `SIMPLE_KINDS` says the columns and the form a row opens |
 | Records | Business parties. A business party is the one record behind both a customer and a supplier |
@@ -56,6 +56,11 @@ employee count, currency and payroll totals, and open an inspector below the tab
 search and paging. Depreciation runs are one row per month with a Total; the asset register stays on Assets
 and the run opens its detail.
 
+Payroll also has an Employees page. There is no separate employee master: the page groups the employee lines
+of every imported pay run by code, shows the latest period, gross, net and currency, and opens that person's
+pay history. Search filters by code or name; there is no New employee because the payroll system owns the
+people.
+
 ## Decisions worth knowing
 
 - **Bank transactions are one list for one account.** Payments, receipts and transfers answer one question —
@@ -90,7 +95,9 @@ and the run opens its detail.
   A journal created by a document opens that document and does not offer Edit; a manual journal does.
 - **Pay runs are imported, not entered here.** The list shows the employee count, currency and the payroll
   totals; the inspector below it opens from a row with the employee lines, search and paging. There is no New
-  pay run button because the payroll system owns that entry.
+  pay run button because the payroll system owns that entry. The Employees page is built from those imported
+  lines, one row per code, with the last period and pay and the full history; it is not a separate editable
+  master.
 - **Depreciation runs have their own page.** The asset register stays on Assets; Depreciation runs lists one
   posted journal per month, with a Total and a detail of the assets it depreciated.
 - **Customers and suppliers are business parties.** One record serves both roles, because a company can be
@@ -134,9 +141,9 @@ and the run opens its detail.
 - Inventory items, categories and locations are still on the Stock on hand page, not separate master-data
   pages; an item's category has no editor yet. A bill of materials is still set through the API or AI (the
   handoff's open question); assemblies can be made but not edited, and deleting one removes its journal.
-- Pay runs have an inspector with the employee lines, but not the separate employees list the owner asked
-  for. The Fixed asset register is still its own plain table (the asset form edits an asset); only the
-  depreciation runs moved to the list component.
+- Payroll employees are read from the imported pay run lines; there is no employee master record to create
+  or edit in Books, and a person with no pay run does not appear. The Fixed asset register is still its own
+  plain table (the asset form edits an asset); only the depreciation runs moved to the list component.
 - Groups, usages and members still have no form/list page; business parties, tax codes, items and locations
   are edited where they are shown.
 
@@ -156,11 +163,11 @@ filter, sortable headers, a row count and a form from the row.
 (`renderBankStatements`), the Chart of accounts and its account form (`renderChart`, `accountForm`), and the
 Tax return with its tax code section (`renderTax`). `inventory.js` keeps the Stock on hand page, the stock
 adjustment form and the item and movement dialogs; `stock.js` keeps locations, stock by location, the
-transfer and assembly forms and their detail dialogs; `payroll.js` keeps the pay run inspector under the
-list. `setup.js` keeps the settings pages, the tax code form, the fixed asset register and the depreciation
-run form/detail. `forms.js` keeps the document forms, including the payment/receipt category picker and the
-business party form. A new document list adds one `DOC_KINDS` entry and one page entry; a new master-data
-list adds one `SIMPLE_KINDS` entry and one page entry.
+transfer and assembly forms and their detail dialogs; `payroll.js` keeps the pay run inspector and the
+Employees page (built from the pay run lines). `setup.js` keeps the settings pages, the tax code form, the
+fixed asset register and the depreciation run form/detail. `forms.js` keeps the document forms, including the
+payment/receipt category picker and the business party form. A new document list adds one `DOC_KINDS` entry
+and one page entry; a new master-data list adds one `SIMPLE_KINDS` entry and one page entry.
 
 ## Running the tests on this machine
 
@@ -216,7 +223,8 @@ sample data.
 - Journals: the list has no tabs and a Revision column; `editWhen` hides Edit on source journals, which open
   the document instead. Pay runs show the currency and totals, with the inspector under the table; the
   inspector keeps its own employee search and paging. Depreciation runs are a period row with a Total and a
-  detail; the register stays on Assets.
+  detail; the register stays on Assets. Employees loads the pay run lines once, groups by code, and filters
+  the rendered rows in place so typing does not re-fetch or lose focus.
 - `showTab` and `PAGES.actions`: header actions are remembered per page so returning to a rendered page
   restores them without rendering again.
 - `openRowMenu`: closes on the next click elsewhere; Delete sends `If-Match` through `write`, and a merged
@@ -240,13 +248,11 @@ sample data.
 
 The list component in `list.js` now covers every document list: the sales and purchase lists, bank
 transactions, the three inventory documents, journals, pay runs and depreciation runs — plus the business
-parties simple list. What is left is master data, not documents:
+parties simple list and the Payroll Employees page. What is left is master data, not documents:
 
 | Module | Pages to build | What `list.js` needs first |
 | --- | --- | --- |
-| Payroll | An employees list (the pay runs are done) | The simple list, with a row count (already there) |
 | Master data | Groups, usages and members (accounts and bank details are in the Chart of accounts; business parties and tax codes are done) | The simple list now exists; each remaining page needs its own form and, if wanted, typing in cells |
 
-Order agreed: Cash and bank, Business parties, Inventory, the chart/bank and tax merges, and the remaining
-document lists are done. What remains is the employees list and the rest of the master data; the quantity
-and value cells from the inventory slice now exist.
+Order agreed: Cash and bank, Business parties, Inventory, the chart/bank and tax merges, the remaining
+document lists and the Payroll employees list are done. What remains is groups, usages and members.
