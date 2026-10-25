@@ -125,6 +125,36 @@ const PRESET_LABELS = {
   "this-year": "This year", "last-year": "Last year", custom: "Custom…",
 };
 
+// Master data: a simple list has no period, no tabs and no totals. It is for records that are read and
+// edited, not documents that post. Columns are fixed and the row count is a footer, not a total row.
+const partyRoles = (p) => [p.is_customer ? "Customer" : null, p.is_supplier ? "Supplier" : null].filter(Boolean).join(", ");
+const SIMPLE_KINDS = {
+  party: {
+    container: "parties", noun: "business party", plural: "business parties",
+    newLabel: "New business party", newAction: "partyForm()",
+    searchHint: "name, tax ID, contact, email, phone",
+    columns: [
+      { key: "name", label: "Business party", sortable: true },
+      { key: "roles", label: "Roles", sortable: true, w: "150px" },
+      { key: "tax_id", label: "Tax ID", sortable: true, w: "128px" },
+      { key: "terms", label: "Terms (days)", sortable: true, num: true, w: "100px" },
+      { key: "status", label: "Status", sortable: true, w: "86px" },
+    ],
+    load: async () => api(`${ledgerUrl()}/parties`),
+    // The second line is how to reach the person: their contact, or the party's email or phone.
+    cells: (p) => ({
+      name: `<div class="cell-main"><span class="cell-clip" title="${esc(p.name)}">${esc(p.name)}</span></div>
+        <div class="cell-sub">${esc([p.contact_name, p.email || p.phone].filter(Boolean).join(" · "))}</div>`,
+      roles: esc(partyRoles(p)),
+      tax_id: `<span class="cell-clip" title="${esc(p.tax_id ?? "")}">${esc(p.tax_id ?? "")}</span>`,
+      terms: p.payment_terms_days ?? "",
+      status: `<span class="pill ${p.active ? "posted" : ""}">${p.active ? "active" : "inactive"}</span>`,
+    }),
+    searchText: (p) => `${partyRoles(p)} ${p.tax_id ?? ""} ${p.contact_name ?? ""} ${p.email ?? ""} ${p.phone ?? ""} ${p.address ?? ""} ${p.active ? "active" : "inactive"}`,
+    open: (p) => partyForm(p),
+  },
+};
+
 function docFilters(kind) {
   state.docFilters ??= {};
   state.docFilters[kind] ??= { preset: "this-year", from: "", to: "", party: "", facets: {}, q: "" };
@@ -863,6 +893,170 @@ async function renderDocList(kind) {
         }] : []),
       ]);
     };
+  }
+}
+
+// A master-data list: search, a role or status filter, sortable columns, no period, no tabs and no totals.
+// Clicking a row opens its form; the footer counts the records, it does not add up money.
+const SIMPLE_PAGE_SIZE = 50;
+
+async function renderSimpleList(kind) {
+  const k = SIMPLE_KINDS[kind];
+  if (!k) return;
+  state.simpleData ??= {};
+  if (!state.simpleData[kind]) state.simpleData[kind] = await k.load();
+  const data = state.simpleData[kind];
+  state.simpleFilters ??= {};
+  const f = state.simpleFilters[kind] ??= { q: "", role: "", status: "" };
+  state.simpleSort ??= {};
+  const sort = state.simpleSort[kind] ??= { key: k.columns[0].key, dir: "asc" };
+  const searchIndex = (state.simpleSearchIndex ??= {});
+  if (!searchIndex[kind]) {
+    searchIndex[kind] = new Map(data.map((p) => [p.id, `${p.name} ${k.searchText(p)}`.toLowerCase()]));
+  }
+  const needle = f.q.trim().toLowerCase();
+  const roleMatch = (p) => !f.role
+    || (f.role === "both" ? p.is_customer && p.is_supplier : f.role === "customer" ? p.is_customer : p.is_supplier);
+  const rows = data.filter((p) => roleMatch(p)
+    && (!f.status || (f.status === "active" ? p.active : !p.active))
+    && (!needle || searchIndex[kind].get(p.id)?.includes(needle)));
+  const sortValue = (p) => {
+    switch (sort.key) {
+      case "name": return p.name.toLowerCase();
+      case "roles": return partyRoles(p).toLowerCase();
+      case "tax_id": return (p.tax_id ?? "").toLowerCase();
+      case "terms": return Number(p.payment_terms_days ?? 0);
+      case "status": return p.active ? 1 : 0;
+      default: return "";
+    }
+  };
+  const sorted = [...rows].sort((a, b) => {
+    const va = sortValue(a), vb = sortValue(b);
+    const cmp = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb));
+    return sort.dir === "desc" ? -cmp : cmp;
+  });
+  const pageCount = Math.max(1, Math.ceil(sorted.length / SIMPLE_PAGE_SIZE));
+  state.simplePage ??= {};
+  const page = Math.min(state.simplePage[kind] ?? 1, pageCount);
+  state.simplePage[kind] = page;
+  const paged = sorted.slice((page - 1) * SIMPLE_PAGE_SIZE, page * SIMPLE_PAGE_SIZE);
+
+  const previousSearch = $(`${k.container}-search`);
+  const searchHadFocus = previousSearch && document.activeElement === previousSearch;
+  const searchSelection = searchHadFocus ? [previousSearch.selectionStart, previousSearch.selectionEnd] : null;
+  setActions("");
+
+  const header = k.columns.map((c) => {
+    const cls = [c.num ? "num" : "", c.sortable ? "sortable" : "", c.sortable && sort.key === c.key ? "sorted" : ""].filter(Boolean).join(" ");
+    const caret = c.sortable && sort.key === c.key ? `<span class="caret">${sort.dir === "asc" ? "▲" : "▼"}</span>` : "";
+    return `<th class="${cls} col-${c.key}" ${c.sortable ? `data-sort="${c.key}"` : ""}${c.w ? ` style="width:${c.w}"` : ""}>${c.label}${caret}</th>`;
+  }).join("");
+  const body = paged.map((p) => {
+    const values = k.cells(p);
+    return `<tr ${canEdit() ? `class="click" data-party="${p.id}"` : ""}>${k.columns.map((c) => `<td class="${c.num ? "num" : ""} col-${c.key}">${values[c.key] ?? ""}</td>`).join("")}</tr>`;
+  }).join("");
+  const from = sorted.length ? (page - 1) * SIMPLE_PAGE_SIZE + 1 : 0;
+  const to = Math.min(page * SIMPLE_PAGE_SIZE, sorted.length);
+  const pager = `<div class="simple-meta">
+    <span class="muted small">${sorted.length ? `${from}–${to} of ${sorted.length} ${sorted.length === 1 ? k.noun : k.plural}` : `0 ${k.plural}`}</span>
+    <span class="spacer"></span>
+    <span class="muted small">${canEdit() ? "Click a row to edit" : "Read only"}</span>
+    ${pageCount > 1 ? `<button type="button" class="secondary small" data-page="prev" ${page === 1 ? "disabled" : ""}>‹</button>
+      <span class="muted small">${page} / ${pageCount}</span>
+      <button type="button" class="secondary small" data-page="next" ${page === pageCount ? "disabled" : ""}>›</button>` : ""}
+  </div>`;
+
+  const newButton = canEdit() && k.newAction ? `<button type="button" class="new-doc" onclick="${k.newAction}">+ ${esc(k.newLabel)}</button>` : "";
+  const clear = f.q || f.role || f.status ? `<button type="button" class="link" id="${k.container}-simple-clear">Clear</button>` : "";
+  const empty = `<p class="muted">No ${k.plural}${f.role ? " with that role" : ""}${f.status ? ` that are ${f.status}` : ""}${f.q ? ` matching “${esc(f.q)}”` : ""}.</p>`;
+
+  $(`tab-${k.container}`).innerHTML = `
+    <form class="filter-bar" id="${k.container}-simple-filter" autocomplete="off">
+      ${newButton}
+      <label>Role <select id="${k.container}-role">
+        <option value="">All roles</option>
+        <option value="customer" ${f.role === "customer" ? "selected" : ""}>Customers</option>
+        <option value="supplier" ${f.role === "supplier" ? "selected" : ""}>Suppliers</option>
+        <option value="both" ${f.role === "both" ? "selected" : ""}>Customers and suppliers</option>
+      </select></label>
+      <label>Status <select id="${k.container}-status">
+        <option value="">All statuses</option>
+        <option value="active" ${f.status === "active" ? "selected" : ""}>Active</option>
+        <option value="inactive" ${f.status === "inactive" ? "selected" : ""}>Inactive</option>
+      </select></label>
+      <label class="search">Search <input id="${k.container}-search" name="q" value="${esc(f.q)}" placeholder="${esc(k.searchHint)}"></label>
+      ${clear}
+    </form>
+    ${sorted.length ? `<div class="table-scroll"><table class="list simple"><tr>${header}</tr>${body}</table></div>${pager}` : empty}`;
+
+  $(`${k.container}-role`).onchange = (event) => {
+    f.role = event.target.value;
+    state.simplePage[kind] = 1;
+    renderSimpleList(kind);
+  };
+  $(`${k.container}-status`).onchange = (event) => {
+    f.status = event.target.value;
+    state.simplePage[kind] = 1;
+    renderSimpleList(kind);
+  };
+  $(`${k.container}-simple-clear`)?.addEventListener("click", () => {
+    f.q = "";
+    f.role = "";
+    f.status = "";
+    state.simplePage[kind] = 1;
+    renderSimpleList(kind);
+  });
+
+  // Keep the search field itself across redraws, as the document lists do, so focus, caret and an IME
+  // composition survive a keystroke.
+  const freshSearch = $(`${k.container}-search`);
+  if (previousSearch) {
+    freshSearch.replaceWith(previousSearch);
+    if (!searchHadFocus) previousSearch.value = f.q;
+    if (searchHadFocus) {
+      previousSearch.focus();
+      if (searchSelection) previousSearch.setSelectionRange(searchSelection[0], searchSelection[1]);
+    }
+  }
+  const searchField = previousSearch ?? freshSearch;
+  if (!searchField.dataset.wired) {
+    searchField.dataset.wired = "1";
+    let typing;
+    let composing = false;
+    const schedule = (value) => {
+      clearTimeout(typing);
+      typing = setTimeout(() => {
+        if (composing) return;
+        f.q = value.trim();
+        state.simplePage[kind] = 1;
+        renderSimpleList(kind);
+      }, 250);
+    };
+    searchField.addEventListener("compositionstart", () => { composing = true; clearTimeout(typing); });
+    searchField.addEventListener("compositionend", (event) => { composing = false; schedule(event.target.value); });
+    searchField.addEventListener("input", (event) => {
+      if (composing || event.isComposing) return;
+      schedule(event.target.value);
+    });
+  }
+
+  for (const th of $(`tab-${k.container}`).querySelectorAll("th.sortable")) {
+    th.onclick = () => {
+      const key = th.dataset.sort;
+      if (sort.key === key) sort.dir = sort.dir === "asc" ? "desc" : "asc";
+      else { sort.key = key; sort.dir = "asc"; }
+      state.simplePage[kind] = 1;
+      renderSimpleList(kind);
+    };
+  }
+  for (const b of $(`tab-${k.container}`).querySelectorAll("[data-page]")) {
+    b.onclick = () => {
+      state.simplePage[kind] = (state.simplePage[kind] ?? 1) + (b.dataset.page === "next" ? 1 : -1);
+      renderSimpleList(kind);
+    };
+  }
+  for (const tr of $(`tab-${k.container}`).querySelectorAll("tr[data-party]")) {
+    tr.onclick = () => k.open(data.find((p) => p.id === tr.dataset.party));
   }
 }
 

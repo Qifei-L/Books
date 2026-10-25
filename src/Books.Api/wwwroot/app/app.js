@@ -149,6 +149,9 @@ async function chooseLedger(ledger) {
   state.docData = {};
   state.docSearchIndex = {};
   state.banks = null;
+  state.simpleData = {};
+  state.simpleSearchIndex = {};
+  state.simplePage = {};
   await loadAccounts();
   await showTab(state.tab ?? "sales-invoices", true);
 }
@@ -296,7 +299,7 @@ const NAV = [
     { id: "assets", label: "Fixed assets" },
   ] },
   { group: "Records", items: [
-    { id: "parties", label: "Customers and suppliers" },
+    { id: "parties", label: "Business parties" },
     { id: "taxcodes", label: "Tax codes" },
   ] },
   { group: "Books", items: [
@@ -350,7 +353,7 @@ const PAGES = {
   payroll: { title: "Payroll", sub: "Pay runs received from the payroll system; Books does not calculate pay", render: () => renderPayroll() },
   inventory: { title: "Inventory", sub: "Stock on hand, adjustments, locations, transfers and assemblies", render: () => renderInventory() },
   assets: { title: "Fixed assets", sub: "The register and monthly depreciation", render: () => renderAssets() },
-  parties: { title: "Customers and suppliers", sub: "One record for each party, with tax ID and payment terms", render: () => renderParties() },
+  parties: { title: "Business parties", sub: "Records · customers and suppliers are one business party, with tax ID and payment terms", render: () => renderSimpleList("party") },
   taxcodes: { title: "Tax codes", sub: "Rates, tax accounts and the return category each code feeds", render: () => renderTaxCodes() },
   journals: { title: "Journals", sub: "Every posting, with its revision and its source document", render: () => renderJournals() },
   chart: { title: "Chart of accounts", sub: "Groups are headings that never take postings; accounts carry the balances", render: () => renderChart() },

@@ -1,18 +1,7 @@
-// Records (customers and suppliers, bank accounts, tax codes), the settings pages, and the fixed asset
-// register. Administrator-only changes are offered to administrators only.
+// Records (tax codes), the settings pages, and the fixed asset register. Administrator-only changes are
+// offered to administrators only.
 
 const isAdmin = () => state.role === "admin";
-
-async function renderParties() {
-  const parties = await api(`${ledgerUrl()}/parties`);
-  const roles = (p) => [p.is_customer ? "customer" : null, p.is_supplier ? "supplier" : null].filter(Boolean).join(", ");
-  $("tab-parties").innerHTML = `
-    ${canEdit() ? `<p><button onclick="partyForm()">New party</button></p>` : ""}
-    ${parties.length ? `<table><tr><th>Name</th><th>Role</th><th>Tax ID</th><th>Contact</th><th class="num">Terms (days)</th></tr>
-      ${parties.map((p) => `<tr ${canEdit() ? `class="click" onclick="editParty('${p.id}')"` : ""}><td>${esc(p.name)}${p.active ? "" : ` <span class="pill">inactive</span>`}</td>
-        <td>${roles(p)}</td><td>${esc(p.tax_id)}</td><td>${esc(p.contact_name)}</td><td class="num">${p.payment_terms_days ?? ""}</td></tr>`).join("")}</table>`
-      : `<p class="muted small">No customers or suppliers yet. A party is one record for both, so an invoice and a payment point at the same name.</p>`}`;
-}
 
 async function renderBanks() {
   const banks = await api(`${ledgerUrl()}/bank-accounts`);

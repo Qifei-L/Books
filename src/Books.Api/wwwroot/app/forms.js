@@ -55,14 +55,16 @@ async function refreshLedger() {
   state.rendered = {};
   state.docData = {};
   state.docSearchIndex = {};
+  state.simpleData = {};
+  state.simpleSearchIndex = {};
   await showTab(state.tab ?? "sales-invoices", true);
 }
 
-// ---- Customers and suppliers ----
+// ---- Business parties (customers and suppliers) ----
 
 function partyForm(p) {
   const v = (field) => esc(p?.[field] ?? "");
-  const form = openForm(p ? `Edit ${p.name}` : "New customer or supplier", `
+  const form = openForm(p ? `Edit ${p.name}` : "New business party", `
     <div class="grid">
       <label class="wide">Name <input name="name" value="${v("name")}" required></label>
       <label>VATTIN <input name="tax_id" value="${v("tax_id")}"></label>
@@ -104,11 +106,6 @@ function partyForm(p) {
     $("form-dialog").close();
     await refreshLedger();
   }));
-}
-
-async function editParty(id) {
-  const p = (await api(`${ledgerUrl()}/parties`)).find((x) => x.id === id);
-  if (p) partyForm(p);
 }
 
 // ---- Line grid shared by documents, payments and journals ----
