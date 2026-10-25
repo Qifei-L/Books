@@ -24,7 +24,9 @@ public sealed class BooksPurchaseTools(PrincipalAccessor principals, PurchaseInv
         [property: JsonPropertyName("tax_code_id"), Description("Input VAT, VAT 0% or Non-VAT code from list_tax_codes.")] Guid? TaxCodeId,
         [property: JsonPropertyName("valid_tax_invoice"), Description("True only when a valid VAT tax invoice was received; otherwise VAT is non-deductible.")] bool ValidTaxInvoice,
         [property: JsonPropertyName("withholding_code_id"), Description("WHT code when tax must be withheld from this line.")] Guid? WithholdingCodeId = null,
-        [property: JsonPropertyName("item_id")] Guid? ItemId = null);
+        [property: JsonPropertyName("item_id")] Guid? ItemId = null,
+        [property: JsonPropertyName("quantity"), Description("Required for inventory items, as a decimal string.")] string? Quantity = null,
+        [property: JsonPropertyName("unit"), Description("One of the item's units (list_items), for example box; omit for its base unit.")] string? Unit = null);
 
     [McpServerTool(Name = "list_purchase_invoices", ReadOnly = true, Idempotent = true)]
     [Description("Purchase invoices of a ledger with status (draft, posted, deleted), reasons a draft is not posted, and totals.")]
@@ -67,7 +69,7 @@ public sealed class BooksPurchaseTools(PrincipalAccessor principals, PurchaseInv
 
     private static PurchaseInvoiceInput Input(PurchaseDocument d) =>
         PurchaseEndpoints.Input(new PurchaseEndpoints.InvoiceRequest(d.SupplierId, null, d.Date, d.DueDate, d.Reference, d.Description,
-            (d.Lines ?? []).Select(l => new PurchaseEndpoints.LineRequest(l.AccountId, l.Description, l.ItemId, null, null, l.Amount, l.TaxCodeId, null, null, l.ValidTaxInvoice, l.WithholdingCodeId)).ToList(),
+            (d.Lines ?? []).Select(l => new PurchaseEndpoints.LineRequest(l.AccountId, l.Description, l.ItemId, l.Quantity, null, l.Amount, l.TaxCodeId, null, null, l.ValidTaxInvoice, l.WithholdingCodeId, l.Unit)).ToList(),
             Post: false, d.OriginalInvoiceId, d.TaxCurrencyRate, d.TaxCurrencyReason));
 
     [McpServerTool(Name = "get_ap_aging", ReadOnly = true, Idempotent = true)]

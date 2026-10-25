@@ -36,6 +36,8 @@ public sealed class ItemCategory
 /// </summary>
 public sealed class Item
 {
+    private readonly List<ItemUnit> _units = [];
+
     private Item() { }
 
     public Item(Guid id, Ledger ledger, string name, DateTimeOffset createdAt)
@@ -54,8 +56,36 @@ public sealed class Item
     public string Name { get; private set; } = "";
     public string? Description { get; private set; }
 
-    /// <summary>Unit shown on documents, for example "pcs", "litre" or "hour".</summary>
+    /// <summary>Unit shown on documents, for example "pcs", "litre" or "hour"; the base unit stock is counted in.</summary>
     public string? Unit { get; private set; }
+
+    /// <summary>Other units the item is bought or sold in, each a number of base units, for example a box of 24 (M10.8).</summary>
+    public IReadOnlyList<ItemUnit> Units => _units;
+
+    /// <summary>Base units in one of the given unit: 1 for the base unit (or none), the unit's factor otherwise.</summary>
+    public decimal? FactorOf(string? unit) =>
+        string.IsNullOrWhiteSpace(unit) || string.Equals(unit.Trim(), Unit, StringComparison.OrdinalIgnoreCase) ? 1
+        : _units.FirstOrDefault(u => string.Equals(u.Name, unit.Trim(), StringComparison.OrdinalIgnoreCase))?.Factor;
+
+    /// <summary>Replaces the other units. Names are unique ignoring case and differ from the base unit; factors are more than zero.</summary>
+    public void SetUnits(IEnumerable<(string Name, decimal Factor)> units)
+    {
+        var list = units.Select(u => (Name: u.Name?.Trim() ?? "", u.Factor)).ToList();
+        if (list.Count > 0 && Unit is null)
+        {
+            throw new DomainException("Set the base unit before adding other units.");
+        }
+        if (list.Any(u => u.Name.Length is 0 or > 20 || u.Factor <= 0 || decimal.Round(u.Factor, 4) != u.Factor))
+        {
+            throw new DomainException("Each unit needs a name of up to 20 characters and a factor above zero with at most 4 decimals.");
+        }
+        if (list.GroupBy(u => u.Name.ToLowerInvariant()).Any(g => g.Count() > 1) || list.Any(u => string.Equals(u.Name, Unit, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new DomainException("Unit names must differ from each other and from the base unit.");
+        }
+        _units.Clear();
+        _units.AddRange(list.Select(u => new ItemUnit(Id, u.Name, u.Factor)));
+    }
 
     public Guid? DefaultAccountId { get; private set; }
     public Guid? DefaultTaxCodeId { get; private set; }
@@ -155,4 +185,21 @@ public sealed class Item
             Version++;
         }
     }
+}
+
+/// <summary>A unit an item is bought or sold in, as a number of its base unit (box = 24 bottles).</summary>
+public sealed class ItemUnit
+{
+    private ItemUnit() { }
+
+    public ItemUnit(Guid itemId, string name, decimal factor)
+    {
+        ItemId = itemId;
+        Name = name;
+        Factor = factor;
+    }
+
+    public Guid ItemId { get; private set; }
+    public string Name { get; private set; } = "";
+    public decimal Factor { get; private set; }
 }

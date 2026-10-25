@@ -209,6 +209,17 @@ internal sealed class ItemCategoryConfiguration : IEntityTypeConfiguration<ItemC
     }
 }
 
+internal sealed class ItemUnitConfiguration : IEntityTypeConfiguration<ItemUnit>
+{
+    public void Configure(EntityTypeBuilder<ItemUnit> b)
+    {
+        b.ToTable("item_units", t => t.HasCheckConstraint("ck_item_units_factor", "factor > 0"));
+        b.HasKey(x => new { x.ItemId, x.Name });
+        b.Property(x => x.Name).HasMaxLength(20);
+        b.Property(x => x.Factor).HasPrecision(20, 4);
+    }
+}
+
 internal sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
 {
     public void Configure(EntityTypeBuilder<Item> b)
@@ -224,6 +235,8 @@ internal sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
         b.Property(x => x.SalesDescription).HasMaxLength(1000);
         b.Property(x => x.PurchaseDescription).HasMaxLength(1000);
         b.HasIndex(x => new { x.LedgerId, x.Code }).IsUnique().HasFilter("code IS NOT NULL");
+        b.HasMany(x => x.Units).WithOne().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Cascade);
+        b.Navigation(x => x.Units).UsePropertyAccessMode(PropertyAccessMode.Field);
         b.HasAlternateKey(x => new { x.LedgerId, x.Id });
         b.HasOne<Ledger>().WithMany()
             .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })

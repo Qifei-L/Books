@@ -30,6 +30,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
     public DbSet<ItemCategory> ItemCategories => Set<ItemCategory>();
     public DbSet<Item> Items => Set<Item>();
+    public DbSet<ItemUnit> ItemUnits => Set<ItemUnit>();
     public DbSet<BankTransfer> BankTransfers => Set<BankTransfer>();
     public DbSet<PurchaseInvoice> PurchaseInvoices => Set<PurchaseInvoice>();
     public DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines => Set<PurchaseInvoiceLine>();

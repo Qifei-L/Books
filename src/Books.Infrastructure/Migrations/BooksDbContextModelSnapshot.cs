@@ -1900,6 +1900,18 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("tax_reason");
 
+                    b.Property<string>("Unit")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("unit");
+
+                    b.Property<decimal>("UnitFactor")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasDefaultValue(1m)
+                        .HasColumnName("unit_factor");
+
                     b.Property<decimal?>("UnitPrice")
                         .HasPrecision(20, 4)
                         .HasColumnType("numeric(20,4)")
@@ -2221,6 +2233,18 @@ namespace Books.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
                         .HasColumnName("tax_reason");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("unit");
+
+                    b.Property<decimal>("UnitFactor")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasDefaultValue(1m)
+                        .HasColumnName("unit_factor");
 
                     b.Property<decimal?>("UnitPrice")
                         .HasPrecision(20, 4)
@@ -3209,6 +3233,31 @@ namespace Books.Infrastructure.Migrations
                         .HasDatabaseName("ix_item_categories_org_id_ledger_id");
 
                     b.ToTable("item_categories", (string)null);
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.ItemUnit", b =>
+                {
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("name");
+
+                    b.Property<decimal>("Factor")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("factor");
+
+                    b.HasKey("ItemId", "Name")
+                        .HasName("pk_item_units");
+
+                    b.ToTable("item_units", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_item_units_factor", "factor > 0");
+                        });
                 });
 
             modelBuilder.Entity("Books.Domain.Ledgers.Ledger", b =>
@@ -4447,6 +4496,16 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_item_categories_ledgers_org_id_ledger_id");
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.ItemUnit", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Item", null)
+                        .WithMany("Units")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_units_items_item_id");
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.Ledger", b =>
                 {
                     b.HasOne("Books.Domain.Ledgers.Company", null)
@@ -4534,6 +4593,11 @@ namespace Books.Infrastructure.Migrations
                     b.Navigation("Entries");
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.Item", b =>
+                {
+                    b.Navigation("Units");
                 });
 #pragma warning restore 612, 618
         }

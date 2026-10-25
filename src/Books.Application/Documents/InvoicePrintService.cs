@@ -68,7 +68,7 @@ public sealed class InvoicePrintService(IBooksDb db, ReadRunner reads, TaxCurren
             string F(decimal v) => v.ToString("N" + minor, CultureInfo.InvariantCulture);
             static string? Q(decimal? v) => v?.ToString("#,0.####", CultureInfo.InvariantCulture);
             string? P(decimal? v) => v?.ToString("#,0.00##", CultureInfo.InvariantCulture);
-            var lines = invoice.Lines.OrderBy(l => l.LineNo).Select((l, i) => new PrintLine(i + 1, l.Description, Q(l.Quantity), P(l.UnitPrice), F(l.NetAmount),
+            var lines = invoice.Lines.OrderBy(l => l.LineNo).Select((l, i) => new PrintLine(i + 1, l.Description, l.Unit is null ? Q(l.Quantity) : $"{Q(l.Quantity)} {l.Unit}", P(l.UnitPrice), F(l.NetAmount),
                 l.TaxCodeId is { } t && codes.TryGetValue(t, out var code) ? code.Name : null)).ToList();
             var otherTaxes = invoice.Lines.Where(l => l.OtherTaxCodeId is not null && l.OtherTaxAmount != 0)
                 .GroupBy(l => codes.TryGetValue(l.OtherTaxCodeId!.Value, out var c) ? c.Name : "Other tax")
