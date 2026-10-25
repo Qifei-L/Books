@@ -252,7 +252,7 @@ async function openDocument(kind, id) {
     const doc = docs.find((d) => d.id === id);
     if (!doc) return;
     if (kind.startsWith("sales")) await showSale(doc, party);
-    else if (kind.startsWith("purchase")) showPurchase(doc, party);
+    else if (kind.startsWith("purchase")) await showPurchase(doc, party);
     else if (kind === "payment" || kind === "receipt") showPayment(doc, party);
     else if (kind === "pay_run") {
       $("journal-dialog").close();
@@ -1047,8 +1047,45 @@ async function renderTax(period) {
   for (const tr of $("tab-tax").querySelectorAll("tr[data-tax]")) tr.onclick = () => taxCodeForm(taxCodes.find((t) => t.id === tr.dataset.tax));
 }
 
-function showPurchase(d, party) {
-  $("journal-body").innerHTML = `<h3>${d.type === "debit_note" ? "Debit note" : "Purchase invoice"} ${d.invoice_no} <span class="pill ${d.status}">${d.status}</span></h3>
+// The purchase side mirrors the sales trail: the supplier, the journal, the payments that settle the invoice,
+// the debit notes that correct it, and the month's tax return.
+async function showPurchase(d, party) {
+  const title = d.type === "debit_note" ? "Debit note" : "Purchase invoice";
+  state.trailLabel ??= `${title} ${d.invoice_no}`;
+  const month = d.date.slice(0, 7);
+  let payments = [], debitNotes = [], relatedError = null;
+  try {
+    [payments, debitNotes] = await Promise.all([api(`${ledgerUrl()}/payments`), api(`${ledgerUrl()}/debit-notes`)]);
+  } catch (error) {
+    relatedError = error.message;
+  }
+  const settled = [];
+  for (const doc of payments) {
+    if (doc.status === "deleted") continue;
+    for (const line of doc.lines ?? []) if (line.invoice_id === d.id) settled.push({ doc, line });
+  }
+  settled.sort((a, b) => a.doc.date.localeCompare(b.doc.date));
+  const notes = d.type === "debit_note" ? [] : debitNotes.filter((c) => c.original_invoice_id === d.id && c.status !== "deleted");
+  const related = `
+    <h4>Related</h4>
+    <div class="trail-links">
+      <button type="button" class="secondary small" onclick="drillTo('Supplier statement', () => showStatement('supplier', '${d.supplier_id}', today()))">Supplier statement</button>
+      ${d.journal_id ? `<button type="button" class="secondary small" onclick="drillTo('Journal ${d.journal_no ?? ""}', () => openJournal('${d.journal_id}'))">Journal ${d.journal_no ?? ""}</button>` : ""}
+      ${d.original_invoice_id ? `<button type="button" class="secondary small" onclick="drillTo('Original invoice', () => openDocument('purchase_invoice', '${d.original_invoice_id}'))">Original invoice</button>` : ""}
+      <button type="button" class="secondary small" onclick="openTaxPeriod('${month}')">Tax return ${month}</button>
+    </div>
+    ${relatedError ? `<p class="muted small">Related documents could not be loaded: ${esc(relatedError)}</p>` : ""}
+    ${d.type === "debit_note" ? "" : settled.length
+      ? `<h4>Paid against this invoice</h4><table><tr><th>Document</th><th>Date</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr>
+        ${settled.map(({ doc, line }) => `<tr class="click" onclick="drillTo('Payment ${doc.payment_no ?? ""}', () => openDocument('payment', '${doc.id}'))">
+          <td>Payment ${doc.payment_no ?? ""}</td><td>${doc.date}</td><td>${esc(doc.reference ?? "")}</td>
+          <td class="num">${money(Number(line.total ?? line.amount), doc.currency)}</td><td><span class="pill ${doc.status}">${doc.status}</span></td></tr>`).join("")}</table>`
+      : `<p class="muted small">No payment references this invoice yet.</p>`}
+    ${notes.length ? `<h4>Debit notes</h4><table><tr><th>Number</th><th>Date</th><th class="num">Gross</th><th>Status</th></tr>
+      ${notes.map((c) => `<tr class="click" onclick="drillTo('Debit note ${c.invoice_no}', () => openDocument('purchase_debit_note', '${c.id}'))">
+        <td>Debit note ${c.invoice_no}</td><td>${c.date}</td><td class="num">${money(Number(c.gross_total), c.currency)}</td><td><span class="pill ${c.status}">${c.status}</span></td></tr>`).join("")}</table>` : ""}`;
+
+  $("journal-body").innerHTML = `<h3>${title} ${d.invoice_no} <span class="pill ${d.status}">${d.status}</span></h3>
     <p class="muted">${esc(party(d.supplier_id))} · ${d.date} · due ${d.due_date} · ${esc(d.reference ?? "")}</p>
     <table><tr><th>Account</th><th>Description</th><th class="num">Net</th><th class="num">VAT</th><th>Tax invoice</th><th class="num">WHT</th></tr>
     ${d.lines.map((l) => `<tr><td>${esc(accountName(l.account_id))}</td><td>${esc(l.description)}</td><td class="num">${l.net_amount}</td>
@@ -1057,7 +1094,8 @@ function showPurchase(d, party) {
     <tr class="total"><td colspan="2">Totals · gross ${d.gross_total} · payable ${d.payable_total}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td><td></td><td class="num">${d.withholding_total}</td></tr></table>
     ${d.tax_currency ? `<p class="muted">${d.tax_currency.currency} at ${d.tax_currency.rate} (${esc(d.tax_currency.rate_source)}, ${d.tax_currency.rate_date})${d.tax_currency.reason ? ` · ${esc(d.tax_currency.reason)}` : ""}:
       gross ${d.tax_currency.gross_total} · VAT ${d.tax_currency.tax_total}</p>` : ""}
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}${journalButton(d)}
+    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}
+    ${related}
     ${canEdit() ? `<p><button class="secondary" onclick="editDocument('purchase', '${d.type}', '${d.id}')">Edit</button></p>` : ""}`;
   showDialog();
 }
