@@ -31,6 +31,7 @@ public interface IBooksDb
     DbSet<ExchangeRate> ExchangeRates { get; }
     DbSet<ItemCategory> ItemCategories { get; }
     DbSet<Item> Items { get; }
+    DbSet<ItemUnit> ItemUnits { get; }
     DbSet<BankTransfer> BankTransfers { get; }
     DbSet<PurchaseInvoice> PurchaseInvoices { get; }
     DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines { get; }

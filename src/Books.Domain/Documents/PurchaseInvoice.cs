@@ -217,6 +217,21 @@ public sealed class PurchaseInvoiceLine
     public decimal? Quantity { get; private set; }
     public decimal? UnitPrice { get; private set; }
     public decimal NetAmount { get; private set; }
+
+    /// <summary>The unit the quantity and price are in, when not the item's base unit; null otherwise.</summary>
+    public string? Unit { get; private set; }
+
+    /// <summary>Base units in one of <see cref="Unit"/>: stock moves by quantity × factor (M10.8).</summary>
+    public decimal UnitFactor { get; private set; } = 1;
+
+    /// <summary>The quantity in the item's base unit.</summary>
+    public decimal? BaseQuantity => Quantity * UnitFactor;
+
+    public void InUnit(string? unit, decimal factor)
+    {
+        Unit = string.IsNullOrWhiteSpace(unit) ? null : unit.Trim();
+        UnitFactor = factor;
+    }
     public Guid? TaxCodeId { get; private set; }
     public decimal TaxCalculated { get; private set; }
     public decimal TaxAmount { get; private set; }

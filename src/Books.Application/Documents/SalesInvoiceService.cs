@@ -16,7 +16,7 @@ namespace Books.Application.Documents;
 /// <param name="OtherTaxCodeId">A specific, accommodation or public lighting tax charged on the line, on top of VAT.</param>
 public sealed record SalesLineInput(
     Guid AccountId, string? Description, Guid? ItemId, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
-    Guid? TaxCodeId, decimal? TaxOverride, string? TaxReason, Guid? OtherTaxCodeId = null);
+    Guid? TaxCodeId, decimal? TaxOverride, string? TaxReason, Guid? OtherTaxCodeId = null, string? Unit = null);
 
 /// <param name="ReceivableAccountId">Omit to use the ledger's only Receivable account.</param>
 /// <param name="DueDate">Omit for invoice date + the customer's payment terms.</param>
@@ -27,7 +27,8 @@ public sealed record SalesInvoiceInput(
 
 public sealed record SalesLineDto(
     Guid LineId, Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string NetAmount,
-    Guid? TaxCodeId, string TaxCalculated, string TaxAmount, bool TaxAdjusted, string? TaxReason, Guid? OtherTaxCodeId, string OtherTaxAmount);
+    Guid? TaxCodeId, string TaxCalculated, string TaxAmount, bool TaxAdjusted, string? TaxReason, Guid? OtherTaxCodeId, string OtherTaxAmount,
+    string? Unit = null);
 
 public sealed record SalesInvoiceDto(
     Guid Id, Guid LedgerId, string Type, long InvoiceNo, Guid? OriginalInvoiceId, Guid CustomerId, Guid ReceivableAccountId, DateOnly Date, DateOnly DueDate,
@@ -183,15 +184,24 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             var accountId = line.AccountId;
             var description = line.Description;
             var unitPrice = line.UnitPrice;
+            var factor = 1m;
+            string? unit = null;
+            if (line.Unit is not null && line.ItemId is null)
+            {
+                throw BooksProblem.Invalid($"Line {i}: unit applies to lines naming an item.");
+            }
             if (line.ItemId is { } itemId)
             {
-                var item = await db.Items.AsNoTracking().SingleOrDefaultAsync(x => x.LedgerId == ledger.Id && x.Id == itemId, ct)
+                var item = await db.Items.AsNoTracking().Include(x => x.Units).SingleOrDefaultAsync(x => x.LedgerId == ledger.Id && x.Id == itemId, ct)
                     ?? throw BooksProblem.Invalid($"Line {i}: item_id must be an item of this ledger.");
+                // A line may be in one of the item's units; stock moves in base units (quantity × factor).
+                factor = item.FactorOf(line.Unit) ?? throw BooksProblem.Invalid($"Line {i}: {item.Name} has no unit {line.Unit}; its units are {string.Join(", ", new[] { item.Unit ?? "(base)" }.Concat(item.Units.Select(u => u.Name)))}.");
+                unit = factor == 1 ? null : line.Unit!.Trim();
                 // The line starts from the item's sales text and price (in the ledger's currency) where it gives none.
                 description ??= item.SalesDescription;
                 if (unitPrice is null && line.Amount is null && (input.Currency is null || input.Currency == ledger.BaseCurrency))
                 {
-                    unitPrice = item.SalesPrice;
+                    unitPrice = item.SalesPrice * factor;
                 }
                 if (item.TrackInventory)
                 {
@@ -242,13 +252,14 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             }
             var salesLine = new SalesInvoiceLine(accountId, description, line.ItemId, line.Quantity, unitPrice, net, line.TaxCodeId, tax,
                 line.OtherTaxCodeId, otherTax);
+            salesLine.InUnit(unit, factor);
             if (trackedItem is not null)
             {
                 // Average cost (owner default, Manager.io style) of the stock before this document, on its date, into
                 // the item's cost of sales account and out of its inventory account.
                 var average = await Inventory.AverageCostAsync(db, ledger.Id, line.ItemId!.Value, input.Date, invoice.Id, ct);
                 var (inventoryAccount, costOfSales) = await Inventory.ItemAccountsAsync(db, ledger.Id, trackedItem, ct);
-                salesLine.Costed(Math.Round(line.Quantity!.Value * average, Currencies.Require(ledger.BaseCurrency).MinorUnits, MidpointRounding.AwayFromZero),
+                salesLine.Costed(Math.Round(line.Quantity!.Value * factor * average, Currencies.Require(ledger.BaseCurrency).MinorUnits, MidpointRounding.AwayFromZero),
                     inventoryAccount, costOfSales);
             }
             lines.Add(salesLine);
@@ -320,7 +331,7 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             x.i.Id, x.i.LedgerId, x.i.IsCreditNote ? "credit_note" : "invoice", x.i.InvoiceNo, x.i.OriginalInvoiceId, x.i.CustomerId, x.i.ReceivableAccountId,
             x.i.Date, x.i.DueDate, x.i.Reference, x.i.Description,
             x.i.Lines.OrderBy(l => l.LineNo).Select(l => new SalesLineDto(l.LineId, l.AccountId, l.Description, l.ItemId, Q(l.Quantity), Q(l.UnitPrice),
-                F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason, l.OtherTaxCodeId, F(l.OtherTaxAmount))).ToList(),
+                F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason, l.OtherTaxCodeId, F(l.OtherTaxAmount), l.Unit)).ToList(),
             F(x.i.NetTotal), F(x.i.OtherTaxTotal), F(x.i.TaxTotal), F(x.i.GrossTotal), taxCurrencies.GetValueOrDefault(x.i.Id),
             Text.Of(x.i.Status), x.i.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.i.Issues, BooksJson.Options)!,
             x.i.JournalId, x.JournalNo, x.i.Version.ToString(), x.i.Currency, x.i.ExchangeRate?.ToString("0.##########", CultureInfo.InvariantCulture),

@@ -90,6 +90,9 @@ internal sealed class PurchaseInvoiceLineConfiguration : IEntityTypeConfiguratio
 {
     public void Configure(EntityTypeBuilder<PurchaseInvoiceLine> b)
     {
+        b.Property(x => x.Unit).HasMaxLength(20);
+        b.Property(x => x.UnitFactor).HasPrecision(20, 4).HasDefaultValue(1m);
+        b.Ignore(x => x.BaseQuantity);
         b.ToTable("purchase_invoice_lines");
         b.HasKey(x => new { x.InvoiceId, x.LineNo });
         b.Ignore(x => x.TaxAdjusted);
@@ -190,6 +193,9 @@ internal sealed class SalesInvoiceLineConfiguration : IEntityTypeConfiguration<S
 {
     public void Configure(EntityTypeBuilder<SalesInvoiceLine> b)
     {
+        b.Property(x => x.Unit).HasMaxLength(20);
+        b.Property(x => x.UnitFactor).HasPrecision(20, 4).HasDefaultValue(1m);
+        b.Ignore(x => x.BaseQuantity);
         b.ToTable("sales_invoice_lines");
         b.HasKey(x => new { x.InvoiceId, x.LineNo });
         b.Ignore(x => x.TaxAdjusted);

@@ -93,10 +93,10 @@ public static class Inventory
         var adjustments = await db.StockAdjustments.AsNoTracking().Include(a => a.Lines)
             .Where(a => a.LedgerId == ledgerId && a.Status == DocumentStatus.Posted && a.Date <= to).ToListAsync(ct);
         return purchases.SelectMany(p => p.Lines.Where(l => l.ItemId is { } id && tracked.Contains(id))
-                .Select(l => new StockMovement(l.ItemId!.Value, p.Date, p.Id, (p.IsDebitNote ? -1 : 1) * (l.Quantity ?? 0), (p.IsDebitNote ? -1 : 1) * p.ToBase(l.NetAmount, minor),
+                .Select(l => new StockMovement(l.ItemId!.Value, p.Date, p.Id, (p.IsDebitNote ? -1 : 1) * (l.BaseQuantity ?? 0), (p.IsDebitNote ? -1 : 1) * p.ToBase(l.NetAmount, minor),
                     p.IsDebitNote ? "debit_note" : "purchase_invoice", p.InvoiceNo, p.Reference, p.SupplierId)))
             .Concat(sales.SelectMany(s => s.Lines.Where(l => l.ItemId is { } id && tracked.Contains(id))
-                .Select(l => new StockMovement(l.ItemId!.Value, s.Date, s.Id, (s.IsCreditNote ? 1 : -1) * (l.Quantity ?? 0), (s.IsCreditNote ? 1 : -1) * l.CostAmount,
+                .Select(l => new StockMovement(l.ItemId!.Value, s.Date, s.Id, (s.IsCreditNote ? 1 : -1) * (l.BaseQuantity ?? 0), (s.IsCreditNote ? 1 : -1) * l.CostAmount,
                     s.IsCreditNote ? "credit_note" : "sales_invoice", s.InvoiceNo, s.Reference, s.CustomerId))))
             .Concat(adjustments.SelectMany(a => a.Lines.Select(l => new StockMovement(l.ItemId, a.Date, a.Id, l.Quantity, l.Value,
                 StockAdjustment.Kind, a.AdjustmentNo, a.Reference))))

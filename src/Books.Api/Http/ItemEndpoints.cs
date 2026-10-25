@@ -10,7 +10,10 @@ public static class ItemEndpoints
     public sealed record ItemRequest(string Name, string? Description, string? Unit, Guid? CategoryId, Guid? DefaultAccountId, Guid? DefaultTaxCodeId, bool? Active,
         bool? TrackInventory = null, Guid? InventoryAccountId = null, Guid? IncomeAccountId = null, Guid? CostOfSalesAccountId = null,
         string? Code = null, string? SalesPrice = null, string? SalesDescription = null, Guid? SalesTaxCodeId = null,
-        string? PurchasePrice = null, string? PurchaseDescription = null, Guid? PurchaseTaxCodeId = null);
+        string? PurchasePrice = null, string? PurchaseDescription = null, Guid? PurchaseTaxCodeId = null, IReadOnlyList<UnitRequest>? Units = null);
+
+    /// <param name="Factor">Base units in one of this unit, for example "24" for a box of 24.</param>
+    public sealed record UnitRequest(string Name, string Factor);
 
     public static void MapItemEndpoints(this RouteGroupBuilder api)
     {
@@ -41,5 +44,6 @@ public static class ItemEndpoints
         new(body.Name, body.Description, body.Unit, body.CategoryId, body.DefaultAccountId, body.DefaultTaxCodeId, body.Active ?? true, body.TrackInventory ?? false,
             body.InventoryAccountId, body.IncomeAccountId, body.CostOfSalesAccountId, body.Code,
             Price(body.SalesPrice, "sales_price"), body.SalesDescription, body.SalesTaxCodeId,
-            Price(body.PurchasePrice, "purchase_price"), body.PurchaseDescription, body.PurchaseTaxCodeId);
+            Price(body.PurchasePrice, "purchase_price"), body.PurchaseDescription, body.PurchaseTaxCodeId,
+            body.Units?.Select(u => (u.Name, Price(u.Factor, "units.factor") ?? 0)).ToList());
 }

@@ -210,6 +210,7 @@ async function documentForm(kind, doc) {
       { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(c.accounts, l?.account_id, (a) => `${a.code} ${a.name}`, "Choose")}</select>` },
       { name: "description", head: "Description", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },
       { name: "quantity", head: "Qty", num: true, cell: (l) => `<input name="quantity" class="num" inputmode="decimal" value="${l?.quantity ?? ""}">` },
+      { name: "unit", head: "Unit", cell: (l) => `<select name="unit">${unitOptions(c.items.find((i) => i.id === l?.item_id), l?.unit)}</select>` },
       { name: "unit_price", head: "Unit price", num: true, cell: (l) => `<input name="unit_price" class="num" inputmode="decimal" value="${l?.unit_price ?? ""}">` },
       { name: "amount", head: "Amount", num: true, cell: (l) => `<input name="amount" class="num" inputmode="decimal" value="${l && !l.quantity ? l.net_amount : ""}" placeholder="qty × price">` },
       { name: "tax_code_id", head: "VAT", cell: (l) => `<select name="tax_code_id">${options(c.vat, l?.tax_code_id, (t) => t.name, "None")}</select>` },
@@ -269,8 +270,16 @@ async function documentForm(kind, doc) {
 }
 
 /** Starts a line from the item: its account, and the sales or purchase tax code, text and price (prices are in the ledger's currency). */
+/** The item's base unit (empty value) and its other units; the line's quantity and price are in the one chosen. */
+function unitOptions(item, selected) {
+  if (!item) return `<option value=""></option>`;
+  return `<option value="">${esc(item.unit ?? "")}</option>`
+    + (item.units ?? []).map((u) => `<option value="${esc(u.name)}" ${u.name === selected ? "selected" : ""}>${esc(u.name)} (${u.factor} ${esc(item.unit ?? "")})</option>`).join("");
+}
+
 function fillFromItem(tr, items, side, baseCurrency) {
   const item = items.find((x) => x.id === value(tr, "item_id"));
+  if (field(tr, "unit")) field(tr, "unit").innerHTML = unitOptions(item);
   if (!item) return;
   const sale = side === "sale";
   const pick = (name, id) => { if (id && [...field(tr, name).options].some((o) => o.value === id)) field(tr, name).value = id; };
@@ -279,6 +288,11 @@ function fillFromItem(tr, items, side, baseCurrency) {
   if (!value(tr, "description")) field(tr, "description").value = (sale ? item.sales_description : item.purchase_description) ?? item.name;
   const price = sale ? item.sales_price : item.purchase_price;
   if (price && baseCurrency && !value(tr, "unit_price") && !value(tr, "amount")) field(tr, "unit_price").value = price;
+  // A price per base unit becomes a price per box when the unit changes.
+  if (field(tr, "unit")) field(tr, "unit").onchange = () => {
+    const factor = Number((item.units ?? []).find((u) => u.name === value(tr, "unit"))?.factor ?? 1);
+    if (price && baseCurrency && !value(tr, "amount")) field(tr, "unit_price").value = String(Math.round(Number(price) * factor * 10000) / 10000);
+  };
 }
 
 /** Opens the form for a document from its dialog: side is sale or purchase, type the document's own type. */

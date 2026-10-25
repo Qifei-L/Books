@@ -204,7 +204,8 @@ async function itemForm(item, accounts, taxCodes) {
       <div class="grid">
         <label>Code <input name="code" value="${esc(item?.code ?? "")}" placeholder="SKU"></label>
         <label class="wide">Name <input name="name" value="${esc(item?.name ?? "")}" required></label>
-        <label>Unit <input name="unit" value="${esc(item?.unit ?? "")}" placeholder="case, kg, pcs"></label>
+        <label>Base unit <input name="unit" value="${esc(item?.unit ?? "")}" placeholder="bottle, kg, pcs"></label>
+        <label class="wide">Other units <input name="units" value="${esc((item?.units ?? []).map((u) => `${u.name}=${u.factor}`).join(", "))}" placeholder="box=24, pack=6 (base units in one)"></label>
         <label class="check"><input type="checkbox" name="track_inventory" ${item?.track_inventory ? "checked" : ""}> Track inventory</label>
         <label class="wide">Suggests account <select name="default_account_id">${options(lineAccounts, item?.default_account_id, (a) => `${a.code} ${a.name}`, "None")}</select></label>
         <label class="wide">Suggests tax <select name="default_tax_code_id">${options(vat, item?.default_tax_code_id, (t) => t.name, "None")}</select></label>
@@ -249,7 +250,12 @@ async function itemForm(item, accounts, taxCodes) {
         const body = {
           name: f.name.value.trim(), unit: text(f.unit.value), description: text(f.description.value), default_account_id: text(f.default_account_id.value),
           default_tax_code_id: text(f.default_tax_code_id.value), track_inventory: f.track_inventory.checked, active: item ? f.active.checked : true,
-          code: text(f.code.value), sales_price: text(f.sales_price.value), sales_tax_code_id: text(f.sales_tax_code_id.value), sales_description: text(f.sales_description.value),
+          code: text(f.code.value),
+          units: f.units.value.split(",").map((u) => u.trim()).filter(Boolean).map((u) => {
+            const [name, factor] = u.split("=").map((x) => x.trim());
+            if (!name || !factor) throw new Error(`Write other units as name=factor, for example box=24 (not "${u}").`);
+            return { name, factor };
+          }), sales_price: text(f.sales_price.value), sales_tax_code_id: text(f.sales_tax_code_id.value), sales_description: text(f.sales_description.value),
           purchase_price: text(f.purchase_price.value), purchase_tax_code_id: text(f.purchase_tax_code_id.value), purchase_description: text(f.purchase_description.value),
           ...(f.track_inventory.checked ? {
             inventory_account_id: text(f.inventory_account_id.value), income_account_id: text(f.income_account_id.value),
