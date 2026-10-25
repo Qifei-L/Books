@@ -224,6 +224,105 @@ const DOC_KINDS = {
     open: (d, c) => showAssembly(d, c.itemName),
     noEdit: true,
   },
+  // Journals: one row per posting, with its revision and source. No tabs: drafts and errors carry their
+  // status in the row; a journal created by a document is opened there, not edited here.
+  journal: {
+    path: "journals", container: "journals", noun: "journal", plural: "journals", prefix: "J",
+    numberKey: "journal_no", newLabel: "New journal", newAction: "journalForm()",
+    filterParty: false, partyLabel: "Journal",
+    hide: BANK_HIDDEN, extra: "none", tabs: false, hideGroup: true, searchHint: "reference, description, account, status",
+    amounts: [{ key: "total", label: "Amount" }],
+    columnOrder: ["party", "date", "reference", "revision", "amount", "status", "description"],
+    columnDefaults: [],
+    extraColumns: {
+      revision: { label: "Revision", num: true, always: true, sortable: true, noTotal: true, w: "90px", value: (d) => d.revision_no },
+    },
+    cells: {
+      party: (d, c) => {
+        const name = d.description || d.reference || `Journal v${d.revision_no}`;
+        const reference = !c.chosen.has("reference") && d.reference ? ` · ${esc(d.reference)}` : "";
+        return `<div class="cell-main"><span class="cell-clip" title="${esc(name)}">${esc(name)}</span></div>
+          <div class="cell-sub">${d.accounting_date}${reference}</div>`;
+      },
+      revision: (d) => `v${d.revision_no}`,
+    },
+    load: async () => {
+      const docs = await api(`${ledgerUrl()}/journals`);
+      return {
+        docs: docs.map((d) => ({ ...d, date: d.accounting_date, total: d.lines.reduce((s, l) => s + Number(l.debit), 0).toFixed(2) })),
+      };
+    },
+    searchText: (d) => [d.reference, d.description, d.status, ...(d.lines ?? []).map((l) => accountName(l.account_id))].join(" "),
+    open: (d) => showJournal(d),
+    edit: (d) => editJournal(d.id),
+    editWhen: (d) => !d.source_kind,
+  },
+  // Pay runs are imported, not created here: one row per run, with its employee count and the amounts the
+  // payroll system reported. The inspector below the table is opened from a row.
+  pay_run: {
+    path: "pay-runs", container: "payroll", noun: "pay run", plural: "pay runs", prefix: "PR",
+    numberKey: "pay_run_no", filterParty: false, partyLabel: "Pay run",
+    hide: BANK_HIDDEN, extra: "none", tabs: false, hideGroup: true, tableClass: "payroll", searchHint: "PR, period, reference, status",
+    amounts: [
+      { key: "gross", label: "Gross" }, { key: "tax", label: "Tax on salary" }, { key: "nssf", label: "NSSF" }, { key: "net", label: "Net" },
+    ],
+    amountWidth: "110px",
+    columnOrder: ["party", "date", "reference", "currency", "employees", "gross", "tax", "nssf", "amount", "status", "description"],
+    columnDefaults: ["gross", "tax", "nssf", "description"],
+    extraColumns: {
+      currency: { label: "Currency", always: true, sortable: true, w: "80px", value: (d) => d.currency ?? "" },
+      employees: { label: "Employees", num: true, always: true, sortable: true, noTotal: true, w: "96px", value: (d) => d.employees },
+    },
+    cells: {
+      party: (d, c) => {
+        const reference = !c.chosen.has("reference") && d.reference ? ` · ${esc(d.reference)}` : "";
+        return `<div class="cell-main"><span class="cell-clip" title="${esc(d.period)}">${esc(d.period)}</span></div>
+          <div class="cell-sub">${d.date}${reference}</div>`;
+      },
+      employees: (d) => Number(d.employees).toLocaleString(),
+      currency: (d) => esc(d.currency ?? ""),
+    },
+    load: async () => {
+      const docs = await api(`${ledgerUrl()}/pay-runs`);
+      return {
+        docs: docs.map((d) => ({
+          ...d,
+          employees: d.totals.employees,
+          gross: d.totals.gross,
+          tax: (Number(d.totals.salary_tax) + Number(d.totals.fringe_benefit_tax)).toFixed(2),
+          nssf: (Number(d.totals.nssf_employee) + Number(d.totals.nssf_employer)).toFixed(2),
+          net: d.totals.net,
+        })),
+      };
+    },
+    currencyOf: (d) => d.currency || state.ledger.base_currency,
+    searchText: (d) => [d.period, d.reference, d.description, d.status, d.currency].join(" "),
+    open: (d) => showPayRun(d),
+    noEdit: true,
+    after: `<div id="payroll-run"></div>`,
+  },
+  // Depreciation runs are one posted journal for a month. The period is the row's identity; the date field
+  // is the first of the month, for the period filter and sort.
+  depreciation_run: {
+    path: "depreciation-runs", container: "assets-runs", noun: "depreciation run", plural: "depreciation runs", prefix: "",
+    numberKey: "period", newLabel: "Post depreciation", newAction: "depreciationForm()",
+    filterParty: false, partyLabel: "Depreciation",
+    hide: BANK_HIDDEN, extra: "none", tabs: false, hideGroup: true, searchHint: "period, status",
+    amounts: [{ key: "total", label: "Total" }],
+    columnOrder: ["party", "date", "amount", "status"],
+    columnDefaults: [],
+    cells: {
+      party: (d) => `<div class="cell-main"><span class="cell-clip" title="${esc(d.period)}">${esc(d.period)}</span></div>
+        <div class="cell-sub">${d.lines.length} ${d.lines.length === 1 ? "asset" : "assets"}</div>`,
+    },
+    load: async () => {
+      const docs = await api(`${ledgerUrl()}/depreciation-runs`);
+      return { docs: docs.map((d) => ({ ...d, date: `${d.period}-01` })) };
+    },
+    searchText: (d) => [d.period, d.status].join(" "),
+    open: (d) => showDepreciationRun(d),
+    noEdit: true,
+  },
 };
 
 const DOC_PRESETS = ["this-month", "last-month", "this-quarter", "this-year", "last-year", "custom"];
@@ -788,7 +887,8 @@ async function renderDocList(kind) {
     ${(tab === "draft" && drafts.length) || (k.tabs === false && drafts.length) ? `<p class="warning">These are not posted, so they are not in the ledger and they block filing the months they are dated in. Fix and post each one, or delete it.</p>` : ""}
     ${sorted.length
       ? `<div class="table-scroll"><table class="list ${docDensity()} ${k.tableClass ?? ""}"><tr>${header}</tr>${body}${(withTabs ? tab === "posted" : counted.length > 0) ? totals : ""}</table></div>${grouped ? "" : pager}`
-      : (k.noData?.(ctx) ? `<p class="muted">${esc(k.noData(ctx))}</p>` : `<p class="muted">No ${withTabs && tab === "draft" ? "draft" : "posted"} ${k.plural} in ${PRESET_LABELS[f.preset]?.toLowerCase() ?? "this period"}${f.party ? ` for ${esc(nameOf(f.party))}` : ""}${activeFacets.map((def) => ` on ${esc(facetLabel(def, facets[def.key]))}`).join("")}${f.q ? ` matching “${esc(f.q)}”` : ""}.</p>`)}`;
+      : (k.noData?.(ctx) ? `<p class="muted">${esc(k.noData(ctx))}</p>` : `<p class="muted">No ${withTabs && tab === "draft" ? "draft" : "posted"} ${k.plural} in ${PRESET_LABELS[f.preset]?.toLowerCase() ?? "this period"}${f.party ? ` for ${esc(nameOf(f.party))}` : ""}${activeFacets.map((def) => ` on ${esc(facetLabel(def, facets[def.key]))}`).join("")}${f.q ? ` matching “${esc(f.q)}”` : ""}.</p>`)}
+    ${k.after ?? ""}`;
 
   $(`${ids.filter}-preset`).onchange = (event) => {
     f.preset = event.target.value;
@@ -1035,7 +1135,7 @@ async function renderDocList(kind) {
       openRowMenu(button, [
         { label: "Open", run: () => openDoc(doc) },
         ...((k.canPrint ?? k.side === "sale") ? [{ label: "Print PDF", run: () => openPdf(`${k.path}/${doc.id}/pdf`) }] : []),
-        ...(canEdit() && !k.noEdit ? [{ label: "Edit", run: () => (k.edit ? k.edit(doc, ctx) : editDocument(k.side, doc.type, doc.id)) }] : []),
+        ...(canEdit() && !k.noEdit && (!k.editWhen || k.editWhen(doc)) ? [{ label: "Edit", run: () => (k.edit ? k.edit(doc, ctx) : editDocument(k.side, doc.type, doc.id)) }] : []),
         ...(canEdit() ? [{
           label: "Delete", danger: true, run: async () => {
             if (!confirm(`Delete ${nounOf(doc)} ${numberOf(doc)}?${doc.status === "posted" ? " Its journal is removed too." : ""}`)) return;

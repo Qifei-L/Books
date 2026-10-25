@@ -185,9 +185,9 @@ function rateForm() {
 async function renderAssets(asOf = state.assetsAsOf ?? today()) {
   state.assetsAsOf = asOf;
   try {
-    const [register, runs] = await Promise.all([api(`${ledgerUrl()}/fixed-assets?asOf=${asOf}`), api(`${ledgerUrl()}/depreciation-runs`)]);
-    $("tab-assets").innerHTML = `
-      ${canEdit() ? `<p><button onclick="assetForm()">New asset</button> <button class="secondary" onclick="depreciationForm()">Post depreciation</button></p>` : ""}
+    const register = await api(`${ledgerUrl()}/fixed-assets?asOf=${asOf}`);
+    $("tab-assets-register").innerHTML = `
+      ${canEdit() ? `<p><button onclick="assetForm()">New asset</button></p>` : ""}
       <form class="inline" id="assets-form"><label>As of <input type="date" name="asOf" value="${asOf}"></label><button type="submit">Run</button></form>
       <p>${register.matches_control ? `<span class="ok">Equals the asset accounts</span>` : `<span class="error">Does not equal the asset accounts (cost ${register.asset_accounts_balance}, accumulated ${register.accumulated_accounts_balance})</span>`}</p>
       <table><tr><th>Code</th><th>Asset</th><th>Acquired</th><th class="num">Cost</th><th class="num">Months</th><th class="num">Monthly</th><th class="num">Accumulated</th><th class="num">Net book value</th><th>Status</th></tr>
@@ -195,15 +195,11 @@ async function renderAssets(asOf = state.assetsAsOf ?? today()) {
         <td class="num">${a.useful_life_months}</td><td class="num">${a.monthly}</td><td class="num">${a.accumulated}</td><td class="num">${a.net_book_value}</td>
         <td>${a.disposed_on ? `disposed ${a.disposed_on}` : ""}</td></tr>`).join("")}
       <tr class="total"><td colspan="3">Total ${register.currency}</td><td class="num">${register.cost}</td><td></td><td></td><td class="num">${register.accumulated}</td><td class="num">${register.net_book_value}</td><td></td></tr></table>
-      <h3 style="margin-top:16px">Depreciation runs</h3>
-      <table><tr><th>Period</th><th class="num">Total</th><th>Status</th><th></th></tr>
-      ${runs.filter((r) => r.status !== "deleted").map((r) => `<tr><td>${r.period}</td><td class="num">${r.total}</td><td><span class="pill ${r.status}">${r.status}</span></td>
-        <td>${r.journal_id ? `<button class="secondary small" onclick="openJournal('${r.journal_id}')">Journal</button>` : ""}
-        ${canEdit() ? `<button class="secondary small" onclick="deleteRun('${r.id}', '${r.period}')">Delete</button>` : ""}</td></tr>`).join("")}</table>`;
+      <p class="muted small">Straight line by month, starting the month after acquisition. Depreciation runs are under Fixed assets → Depreciation runs.</p>`;
     $("assets-form").onsubmit = (e) => { e.preventDefault(); renderAssets(e.target.asOf.value); };
-    for (const tr of $("tab-assets").querySelectorAll("tr[data-asset]")) tr.onclick = () => assetForm(register.assets.find((a) => a.id === tr.dataset.asset));
+    for (const tr of $("tab-assets-register").querySelectorAll("tr[data-asset]")) tr.onclick = () => assetForm(register.assets.find((a) => a.id === tr.dataset.asset));
   } catch (error) {
-    $("tab-assets").innerHTML = `<p class="muted">${esc(error.message)}</p>`;
+    $("tab-assets-register").innerHTML = `<p class="muted">${esc(error.message)}</p>`;
   }
 }
 
@@ -253,10 +249,22 @@ function depreciationForm() {
     `<p class="muted small">Posts one journal for the month's depreciation of every asset, dated the month end.</p>`);
 }
 
+function showDepreciationRun(r) {
+  $("journal-body").innerHTML = `<h3>Depreciation ${r.period} <span class="pill ${r.status}">${r.status}</span></h3>
+    <p class="muted">${r.lines.length} ${r.lines.length === 1 ? "asset" : "assets"} · total ${r.total}</p>
+    <table><tr><th>Asset</th><th>Code</th><th class="num">Amount</th></tr>
+    ${r.lines.map((l) => `<tr><td>${esc(l.name)}</td><td>${esc(l.code)}</td><td class="num">${l.amount}</td></tr>`).join("")}
+    <tr class="total"><td colspan="2">Total</td><td class="num">${r.total}</td></tr></table>
+    ${r.journal_id ? journalButton(r) : ""}
+    ${canEdit() ? `<p><button class="danger" onclick="deleteRun('${r.id}', '${r.period}')">Delete</button></p>` : ""}`;
+  $("journal-dialog").showModal();
+}
+
 async function deleteRun(id, period) {
   if (!confirm(`Delete the depreciation run for ${period}? Its journal is removed too.`)) return;
   try {
     await write("DELETE", `${ledgerUrl()}/depreciation-runs/${id}`);
+    if ($("journal-dialog").open) $("journal-dialog").close();
     await refreshLedger();
   } catch (error) {
     showError(error);

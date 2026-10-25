@@ -300,7 +300,10 @@ const NAV = [
       { id: "inventory-transfers", label: "Transfers" },
       { id: "inventory-assemblies", label: "Assemblies" },
     ] },
-    { id: "assets", label: "Fixed assets" },
+    { id: "assets", label: "Fixed assets", children: [
+      { id: "assets-register", label: "Assets" },
+      { id: "assets-runs", label: "Depreciation runs" },
+    ] },
   ] },
   { group: "Records", items: [
     { id: "parties", label: "Business parties" },
@@ -352,14 +355,15 @@ const PAGES = {
   "purchases-reports": { title: "Purchases reports", sub: "Purchases · who we owe, how late, and their statements", render: () => renderAging("purchases") },
   "bank-transactions": { title: "Bank transactions", sub: "Cash and bank · payments, receipts and transfers for one account, with money in and out", render: () => renderDocList("transaction") },
   "bank-statements": { title: "Statements", sub: "Cash and bank · the bank's balance against the books, and the lines behind it", render: () => renderBankStatements() },
-  payroll: { title: "Payroll", sub: "Pay runs received from the payroll system; Books does not calculate pay", render: () => renderPayroll() },
+  payroll: { title: "Payroll", sub: "Pay runs received from the payroll system; Books does not calculate pay", render: () => renderDocList("pay_run") },
   "inventory-stock": { title: "Stock on hand", sub: "Inventory · quantities, items and locations", render: () => renderInventoryStock() },
   "inventory-adjustments": { title: "Stock adjustments", sub: "Inventory · write-offs, stock found and counts", render: () => renderDocList("stock_adjustment") },
   "inventory-transfers": { title: "Stock transfers", sub: "Inventory · quantities moved between locations", render: () => renderDocList("stock_transfer") },
   "inventory-assemblies": { title: "Assemblies", sub: "Inventory · items made from a bill of materials", render: () => renderDocList("assembly") },
-  assets: { title: "Fixed assets", sub: "The register and monthly depreciation", render: () => renderAssets() },
+  "assets-register": { title: "Fixed asset register", sub: "Fixed assets · cost, accumulated depreciation and net book value", render: () => renderAssets() },
+  "assets-runs": { title: "Depreciation runs", sub: "Fixed assets · one posted journal for each month's depreciation", render: () => renderDocList("depreciation_run") },
   parties: { title: "Business parties", sub: "Records · customers and suppliers are one business party, with tax ID and payment terms", render: () => renderSimpleList("party") },
-  journals: { title: "Journals", sub: "Every posting, with its revision and its source document", render: () => renderJournals() },
+  journals: { title: "Journals", sub: "Every posting, with its revision and its source document", render: () => renderDocList("journal") },
   chart: { title: "Chart of accounts", sub: "Accounts carry the balances; a bank or cash account is an Assets account with bank details", render: () => renderChart() },
   pl: { title: "Profit and loss", sub: "Income and cost and expense over a period", render: () => runReport("pl") },
   bs: { title: "Balance sheet", sub: "Assets, liabilities and equity at a date", render: () => runReport("bs") },
@@ -599,17 +603,6 @@ const accountName = (id) => {
   const a = state.accounts.find((x) => x.id === id);
   return a ? `${a.code} ${a.name}` : id;
 };
-
-async function renderJournals() {
-  const journals = (await api(`${ledgerUrl()}/journals`)).filter((j) => j.status !== "deleted");
-  $("tab-journals").innerHTML = `${canEdit() ? `<p><button onclick="journalForm()">New journal</button></p>` : ""}
-    <p class="muted small">Posted journals, plus your own drafts. Click a row for its lines.</p>
-    <table><tr><th>No.</th><th>Date</th><th>Reference</th><th>Description</th><th>Status</th><th class="num">Amount</th></tr>
-    ${journals.map((j) => `<tr class="click" data-id="${j.id}"><td>${j.journal_no}</td><td>${j.accounting_date}</td><td>${esc(j.reference)}</td>
-      <td>${esc(j.description)}</td><td><span class="pill ${j.status}">${j.status}</span></td>
-      <td class="num">${j.lines.reduce((s, l) => s + Number(l.debit), 0).toFixed(2)}</td></tr>`).join("")}</table>`;
-  for (const tr of $("tab-journals").querySelectorAll("tr[data-id]")) tr.onclick = () => showJournal(journals.find((j) => j.id === tr.dataset.id));
-}
 
 function showJournal(j) {
   $("journal-body").innerHTML = `<h3>Journal ${j.journal_no} <span class="pill ${j.status}">${j.status}</span></h3>

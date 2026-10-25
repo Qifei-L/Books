@@ -1,28 +1,8 @@
-// Payroll tab (read only): pay runs imported from the payroll system, their totals, and the employees, a page at a
-// time with search, since a pay run may have thousands. Entry is through the API and MCP (AI drafts, people post).
+// Payroll (read only): the pay run list is a document list in list.js; this file holds the inspector under it,
+// with the employees a page at a time and search, since a pay run may have thousands. Entry is through the API
+// and MCP (AI drafts, people post).
 
 const PAGE = 100;
-
-async function renderPayroll() {
-  try {
-    const runs = (await api(`${ledgerUrl()}/pay-runs`)).filter((r) => r.status !== "deleted");
-    const nssf = (t) => (Number(t.nssf_employee) + Number(t.nssf_employer)).toFixed(2);
-    $("tab-payroll").innerHTML = `
-      <p class="muted small">Payroll results imported from the payroll system: one summary journal per pay run; the employee lines feed form TOS 01 on the tax return.</p>
-      <table><tr><th>No.</th><th>Period</th><th>Date</th><th>Reference</th><th class="num">Employees</th><th>Currency</th>
-        <th class="num">Gross</th><th class="num">Tax on salary</th><th class="num">NSSF</th><th class="num">Net pay</th><th>Status</th></tr>
-      ${runs.map((r) => `<tr class="click" data-run="${r.id}"><td>PR ${r.pay_run_no}</td><td>${r.period}</td><td>${r.date}</td><td>${esc(r.reference ?? "")}</td>
-        <td class="num">${r.totals.employees.toLocaleString()}</td><td>${r.currency}${r.rate ? ` <span class="muted small">at ${r.rate}</span>` : ""}</td>
-        <td class="num">${money(Number(r.totals.gross), r.currency)}</td><td class="num">${money(Number(r.totals.salary_tax) + Number(r.totals.fringe_benefit_tax), r.currency)}</td>
-        <td class="num">${money(Number(nssf(r.totals)), r.currency)}</td><td class="num">${money(Number(r.totals.net), r.currency)}</td>
-        <td>${r.status === "posted" ? `<span class="pill posted">posted</span> No. ${r.journal_no}` : `<span class="pill draft">${r.status}</span> ${r.issues.map((i) => esc(i.message)).join(" ")}`}</td></tr>`).join("")
-        || `<tr><td colspan="11" class="muted">No pay runs yet.</td></tr>`}</table>
-      <div id="payroll-run"></div>`;
-    for (const tr of $("tab-payroll").querySelectorAll("tr[data-run]")) tr.onclick = () => showPayRun(runs.find((r) => r.id === tr.dataset.run));
-  } catch (error) {
-    $("tab-payroll").innerHTML = `<p class="muted">${esc(error.message)}</p>`;
-  }
-}
 
 function showPayRun(r) {
   const t = r.totals;

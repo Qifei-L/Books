@@ -203,6 +203,9 @@ table.list td, table.list th { overflow: hidden; }
   table.list .col-description, table.list .col-other_tax_total { display: none; }
   table.list.bank .col-category { display: none; }
 }
+@media (max-width: 1200px) {
+  table.list.payroll .col-tax, table.list.payroll .col-nssf { display: none; }
+}
 @media (max-width: 1120px) {
   table.list .col-fx { display: none; }
   table.list.chart .col-purpose { display: none; }
