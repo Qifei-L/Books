@@ -95,6 +95,7 @@
 | 2026-10-25 | Report delivery: organization branding (legal names, VATTIN, address, color, footer, signatories) is admin-only; language, comparative, paper, orientation, watermark, pack sections and share days are per-ledger output defaults. Default output language is English. |
 | 2026-10-25 | Stimulsoft Reports.Web is the chosen report engine. Tax workpapers come before official GDT form facsimiles; official T7 01/WT 03/TOS 01 layouts need samples before they are claimed. The first Stimulsoft output is the monthly tax workpaper PDF; it is explicitly marked as not an official GDT form. |
 | 2026-10-25 | Stimulsoft runs with NLS globalization and a trial licence until a key is configured. The PDF carries the trial watermark until then. |
+| 2026-10-25 | The first client pack is a fixed-layout Stimulsoft PDF: cover, P&L, balance sheet, trial balance, AR/AP aging summary and signature block. It uses the same snapshot and class/location filters as the API. Templates/versioning and share links are next. |
 
 
 ## Proposed defaults (accept or change)

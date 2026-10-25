@@ -25,6 +25,7 @@ async function renderReportSettings() {
     : '<div class="card"><h3>Organization branding</h3><p class="muted">Only an organization administrator can change branding.</p></div>';
 
   page.innerHTML = '<p class="muted small">These settings feed client report packs, tax workpapers and print layouts. Ledger settings override the organization defaults for output only.</p>' +
+    '<p><a class="button" href="#" id="client-pack-pdf">Client pack PDF</a> <span class="muted small">Current year to date · P&L, balance sheet, trial balance and aging</span></p>' +
     brand +
     '<form id="report-output-form" class="card"><h3>Ledger output</h3><div class="grid">' +
     '<label>Language <select name="language">' + ["en", "km", "bilingual"].map((x) => '<option ' + (settings.language === x ? "selected" : "") + '>' + x + '</option>').join("") + '</select></label>' +
@@ -52,6 +53,12 @@ async function renderReportSettings() {
       await write("PUT", "/api/v1/organizations/" + state.org + "/branding", body, branding.version !== "0" ? branding.version : undefined);
       await refreshLedger();
     });
+  };
+
+  $("client-pack-pdf").onclick = (event) => {
+    event.preventDefault();
+    const to = today();
+    download(ledgerUrl() + "/reports/client-pack.pdf?from=" + to.slice(0, 4) + "-01-01&to=" + to, "client-pack-" + to + ".pdf");
   };
 
   $("report-output-form").onsubmit = (event) => {

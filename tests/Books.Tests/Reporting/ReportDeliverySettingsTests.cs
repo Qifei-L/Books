@@ -42,5 +42,18 @@ public sealed class ReportDeliverySettingsTests(TestHost host)
         await (await reader.WriteAsync(HttpMethod.Put, settingsUrl, new { language = "en" })).AssertProblemAsync(HttpStatusCode.Forbidden, "FORBIDDEN");
     }
 
+    [Fact]
+    public async Task A_client_pack_pdf_is_generated()
+    {
+        var books = await JournalBooks.CreateAsync(host);
+
+        var response = await books.Admin.GetAsync(
+            $"/api/v1/organizations/{books.OrgId}/ledgers/{books.LedgerId}/reports/client-pack.pdf?from=2026-01-01&to=2026-10-31", Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
+        Assert.True((await response.Content.ReadAsByteArrayAsync(Ct)).Length > 1000);
+    }
+
     private static string Text(JsonElement element, string property) => element.GetProperty(property).GetString()!;
 }

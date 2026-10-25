@@ -45,6 +45,24 @@ public static class ReportEndpoints
         reports.MapGet("/inventory", async (Guid orgId, Guid ledgerId, DateOnly asOf, PrincipalAccessor principals, Books.Application.Documents.InventoryReportService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.ReportAsync(await principals.GetAsync(ct), orgId, ledgerId, asOf, ct)));
 
+        reports.MapGet("/client-pack.pdf", async (Guid orgId, Guid ledgerId, DateOnly from, DateOnly to,
+            PrincipalAccessor principals, StatementService statements, ReportService reportsService, PayablesReportService payables,
+            ReceivablesReportService receivables, Books.Application.Reporting.ReportDeliverySettingsService settings,
+            Books.Application.Ledgers.CompanyService companies, CancellationToken ct, Guid? classId = null, Guid? locationId = null) =>
+        {
+            var principal = await principals.GetAsync(ct);
+            var pl = await statements.ProfitAndLossAsync(principal, orgId, ledgerId, from, to, ct, classId, locationId);
+            var bs = await statements.BalanceSheetAsync(principal, orgId, ledgerId, to, ct, classId, locationId);
+            var tb = await reportsService.TrialBalanceAsync(principal, orgId, ledgerId, from, to, ct, classId, locationId);
+            var ar = await receivables.AgingAsync(principal, orgId, ledgerId, to, ct);
+            var ap = await payables.AgingAsync(principal, orgId, ledgerId, to, ct);
+            var company = (await companies.GetLedgerAsync(principal, orgId, ledgerId, ct)).CompanyName;
+            var branding = await settings.GetBrandingAsync(principal, orgId, ct);
+            var output = await settings.GetLedgerSettingsAsync(principal, orgId, ledgerId, ct);
+            var pdf = Books.Api.Reporting.StimulsoftReportRenderer.RenderClientPack(pl, bs, tb, ar, ap, branding, output, company);
+            return Results.File(pdf, "application/pdf", $"client-pack-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}.pdf");
+        });
+
         // Excel versions of the same reports (owner decision: Excel is the only export format for now).
         reports.MapGet("/trial-balance.xlsx", async (Guid orgId, Guid ledgerId, DateOnly from, DateOnly to, PrincipalAccessor principals, ReportService service, CompanyService ledgers, CancellationToken ct,
             Guid? classId = null, Guid? locationId = null) =>
