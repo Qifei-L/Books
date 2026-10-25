@@ -54,7 +54,6 @@ internal sealed class JournalLineConfiguration : IEntityTypeConfiguration<Journa
 {
     public void Configure(EntityTypeBuilder<JournalLine> b)
     {
-        b.ToTable("journal_lines", t => t.HasCheckConstraint("ck_journal_lines_amount", "amount <> 0"));
         b.HasKey(x => new { x.RevisionId, x.LineNo });
         b.Property(x => x.Amount).HasPrecision(20, 4);
         b.Property(x => x.CurrencyAmount).HasPrecision(20, 4);
@@ -74,6 +73,24 @@ internal sealed class JournalLineConfiguration : IEntityTypeConfiguration<Journa
         b.Property(x => x.Quantity).HasPrecision(20, 4);
         b.HasOne<Item>().WithMany()
             .HasForeignKey(x => new { x.LedgerId, x.ItemId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<AccountClass>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.ClassId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Location>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.LocationId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasIndex(x => new { x.LedgerId, x.ClassId });
+        b.HasIndex(x => new { x.LedgerId, x.LocationId });
+        b.Property(x => x.TaxAmount).HasPrecision(20, 4);
+        b.Property(x => x.TaxCalculated).HasPrecision(20, 4);
+        b.ToTable("journal_lines", t =>
+        {
+            t.HasCheckConstraint("ck_journal_lines_amount", "amount <> 0");
+            t.HasCheckConstraint("ck_journal_lines_tax_direction", "tax_direction IS NULL OR tax_direction IN ('sale', 'sale_adjustment', 'purchase', 'purchase_adjustment')");
+        });
+        b.HasOne<TaxCode>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.TaxCodeId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

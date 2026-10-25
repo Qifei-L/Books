@@ -56,7 +56,7 @@ public sealed class PartyTests(TestHost host)
     }
 
     [Fact]
-    public void Document_lines_on_control_accounts_need_a_party_and_manual_journals_cannot_use_them()
+    public void Control_accounts_need_a_party_in_documents_and_manual_journals()
     {
         var receivable = Guid.NewGuid();
         var sales = Guid.NewGuid();
@@ -67,7 +67,8 @@ public sealed class PartyTests(TestHost host)
         string[] Codes(JournalDraft draft, bool fromDocument) =>
             JournalValidator.Validate(draft, new JournalContext(2, null, accounts, null, parties, fromDocument)).Select(i => i.Code).ToArray();
 
-        Assert.Equal(["CONTROL_ACCOUNT"], Codes(Draft(party), fromDocument: false));
+        Assert.Empty(Codes(Draft(party), fromDocument: false));
+        Assert.Equal(["PARTY_REQUIRED"], Codes(Draft(null), fromDocument: false));
         Assert.Equal(["PARTY_REQUIRED"], Codes(Draft(null), fromDocument: true));
         Assert.Empty(Codes(Draft(party), fromDocument: true));
     }

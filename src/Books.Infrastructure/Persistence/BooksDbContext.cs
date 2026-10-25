@@ -34,6 +34,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<ItemComponent> ItemComponents => Set<ItemComponent>();
     public DbSet<Assembly> Assemblies => Set<Assembly>();
     public DbSet<AssemblyLine> AssemblyLines => Set<AssemblyLine>();
+    public DbSet<AccountClass> Classes => Set<AccountClass>();
     public DbSet<Location> Locations => Set<Location>();
     public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
     public DbSet<StockTransferLine> StockTransferLines => Set<StockTransferLine>();
@@ -82,6 +83,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
         configurationBuilder.Properties<RevisionStatus>().HaveConversion<LowerCaseEnumConverter<RevisionStatus>>().HaveMaxLength(20);
         configurationBuilder.Properties<SystemPurpose>().HaveConversion<LowerCaseEnumConverter<SystemPurpose>>().HaveMaxLength(40);
         configurationBuilder.Properties<TaxKind>().HaveConversion<LowerCaseEnumConverter<TaxKind>>().HaveMaxLength(40);
+        configurationBuilder.Properties<TaxDirection>().HaveConversion<LowerCaseEnumConverter<TaxDirection>>().HaveMaxLength(30);
         configurationBuilder.Properties<Books.Domain.Documents.DocumentStatus>().HaveConversion<LowerCaseEnumConverter<Books.Domain.Documents.DocumentStatus>>().HaveMaxLength(20);
         configurationBuilder.Properties<Books.Domain.Documents.DefinitionStatus>().HaveConversion<LowerCaseEnumConverter<Books.Domain.Documents.DefinitionStatus>>().HaveMaxLength(20);
         configurationBuilder.Properties<Books.Domain.Documents.PaymentLineKind>().HaveConversion<LowerCaseEnumConverter<Books.Domain.Documents.PaymentLineKind>>().HaveMaxLength(20);

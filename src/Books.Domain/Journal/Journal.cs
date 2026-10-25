@@ -1,3 +1,5 @@
+using Books.Domain.Ledgers;
+
 namespace Books.Domain.Journals;
 
 public enum JournalKind { Manual, Opening }
@@ -138,7 +140,8 @@ public sealed class JournalLine
     private JournalLine() { }
 
     public JournalLine(JournalRevision revision, int lineNo, Guid lineId, Guid accountId, string? description, decimal amount, Guid? partyId = null, Guid? itemId = null, decimal? quantity = null,
-        decimal? currencyAmount = null)
+        decimal? currencyAmount = null, Guid? classId = null, Guid? locationId = null, Guid? taxCodeId = null, decimal? taxAmount = null,
+        decimal? taxCalculated = null, TaxDirection? taxDirection = null)
     {
         CurrencyAmount = currencyAmount;
         RevisionId = revision.Id;
@@ -152,6 +155,12 @@ public sealed class JournalLine
         PartyId = partyId;
         ItemId = itemId;
         Quantity = quantity;
+        ClassId = classId;
+        LocationId = locationId;
+        TaxCodeId = taxCodeId;
+        TaxAmount = taxAmount;
+        TaxCalculated = taxCalculated;
+        TaxDirection = taxDirection;
     }
 
     public Guid RevisionId { get; private set; }
@@ -174,4 +183,16 @@ public sealed class JournalLine
 
     /// <summary>On a bank account in another currency: the movement in that currency; null otherwise (M12.2).</summary>
     public decimal? CurrencyAmount { get; private set; }
+
+    /// <summary>Optional reporting class (segment) of this line.</summary>
+    public Guid? ClassId { get; private set; }
+
+    /// <summary>Optional accounting location/branch of this line; stock uses the same location table.</summary>
+    public Guid? LocationId { get; private set; }
+
+    /// <summary>The tax code whose tax was split out of this line's gross amount; null when the line carries no tax.</summary>
+    public Guid? TaxCodeId { get; private set; }
+    public decimal? TaxAmount { get; private set; }
+    public decimal? TaxCalculated { get; private set; }
+    public TaxDirection? TaxDirection { get; private set; }
 }

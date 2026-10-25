@@ -35,6 +35,7 @@ public interface IBooksDb
     DbSet<ItemComponent> ItemComponents { get; }
     DbSet<Assembly> Assemblies { get; }
     DbSet<AssemblyLine> AssemblyLines { get; }
+    DbSet<AccountClass> Classes { get; }
     DbSet<Location> Locations { get; }
     DbSet<StockTransfer> StockTransfers { get; }
     DbSet<StockTransferLine> StockTransferLines { get; }

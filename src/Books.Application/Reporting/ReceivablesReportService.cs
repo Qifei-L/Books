@@ -81,7 +81,8 @@ public sealed class ReceivablesReportService(IBooksDb db, ReadRunner reads)
             .Select(i => new Charge(i.Id, i.CustomerId, i.Date, i.DueDate, "invoice", i.InvoiceNo, i.Reference, i.BaseTotal, i.ExchangeRate is null ? null : i.Currency, i.ExchangeRate)).ToList();
         var credits = documents.Where(i => i.IsCreditNote)
             .Select(i => new Credit(i.CustomerId, i.Date, "credit_note", i.InvoiceNo, i.Reference, i.OriginalInvoiceId, i.BaseTotal))
-            .Concat(OpenItems.PaymentCredits(receipts, receivables.ToHashSet(), receiptsReduce: true)).ToList();
+            .Concat(OpenItems.PaymentCredits(receipts, receivables.ToHashSet(), receiptsReduce: true))
+            .Concat(await OpenItems.ManualJournalCreditsAsync(db, ledgerId, "receivable", to, -1, ct)).ToList();
         return (charges, credits);
     }
 }

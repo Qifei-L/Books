@@ -440,7 +440,13 @@ async function editPayment(type, id) {
 /** A journal entered by hand. Journals made by documents change only through their document. */
 async function journalForm(j) {
   try {
-    const [accounts, parties] = await Promise.all([api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/parties`)]);
+    const [accounts, parties, classes, locations, taxCodes] = await Promise.all([
+      api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/parties`), api(`${ledgerUrl()}/classes`),
+      api(`${ledgerUrl()}/locations`), api(`${ledgerUrl()}/tax-codes`),
+    ]);
+    const activeClasses = classes.filter((c) => c.active);
+    const activeLocations = locations.filter((l) => l.active);
+    const manualTaxCodes = taxCodes.filter((t) => t.active && ["vat_output", "vat_input", "vat_input_non_deductible", "other_tax"].includes(t.kind));
     const postable = accounts.filter((a) => a.postable && a.active);
     const form = openForm(j ? `Edit journal ${j.journal_no}` : "New journal", `
       <div class="grid">
@@ -449,6 +455,7 @@ async function journalForm(j) {
         <label class="wide">Description <input name="doc_description" value="${esc(j?.description ?? "")}"></label>
       </div>
       <table class="lines"></table>
+      <p class="muted small">Debit and credit include tax when a tax code is chosen: the server posts the net to this account and the tax to the code's tax account. Class, location and party are optional dimensions; a control account needs a party.</p>
       <p><button type="button" class="secondary" data-add>Add line</button></p>
       <p id="form-totals" class="totals"></p>
       <p class="actions">
@@ -459,12 +466,21 @@ async function journalForm(j) {
         <button type="submit" data-post="true">Save and post</button>
       </p>`);
     const amount = (v) => (v && Number(v) !== 0 ? v : "");
+    // A tax-bearing line is entered gross; the API splits it into net + tax. On edit the line comes back net, so add
+    // the signed tax back before showing debit/credit.
+    const grossOf = (l) => (Number(l?.debit ?? 0) - Number(l?.credit ?? 0)) + Number(l?.tax_amount ?? 0);
+    const debitOf = (l) => { const g = grossOf(l); return g > 0 ? g : ""; };
+    const creditOf = (l) => { const g = grossOf(l); return g < 0 ? -g : ""; };
     const columns = [
       { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(postable, l?.account_id, (a) => `${a.code} ${a.name}`, "Choose")}</select>` },
       { name: "description", head: "Description", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },
-      { name: "debit", head: "Debit", num: true, cell: (l) => `<input name="debit" class="num" inputmode="decimal" value="${amount(l?.debit)}">` },
-      { name: "credit", head: "Credit", num: true, cell: (l) => `<input name="credit" class="num" inputmode="decimal" value="${amount(l?.credit)}">` },
-      { name: "party_id", head: "Party", cell: (l) => `<select name="party_id">${options(parties, l?.party_id, (p) => p.name, "")}</select>` },
+      { name: "debit", head: "Debit", num: true, cell: (l) => `<input name="debit" class="num" inputmode="decimal" value="${amount(debitOf(l))}" title="Gross when a tax code is chosen">` },
+      { name: "credit", head: "Credit", num: true, cell: (l) => `<input name="credit" class="num" inputmode="decimal" value="${amount(creditOf(l))}" title="Gross when a tax code is chosen">` },
+      { name: "party_id", head: "Party", cell: (l) => `<select name="party_id">${options(parties.filter((p) => p.active), l?.party_id, (p) => p.name, "")}</select>` },
+      { name: "class_id", head: "Class", cell: (l) => `<select name="class_id">${options(activeClasses, l?.class_id, (c) => c.name, "")}</select>` },
+      { name: "location_id", head: "Location", cell: (l) => `<select name="location_id">${options(activeLocations, l?.location_id, (l2) => l2.name, "")}</select>` },
+      { name: "tax_code_id", head: "Tax", cell: (l) => `<select name="tax_code_id">${options(manualTaxCodes, l?.tax_code_id, (t) => `${t.name} ${t.rate}%`, "")}</select>` },
+      { name: "tax_direction", head: "Tax direction", cell: (l) => `<select name="tax_direction">${options([{ id: "sale", label: "Sale" }, { id: "sale_adjustment", label: "Sale adjustment" }, { id: "purchase", label: "Purchase" }, { id: "purchase_adjustment", label: "Purchase adjustment" }], l?.tax_direction, (d) => d.label, "Auto")}</select>` },
       { name: "currency_amount", head: "Bank currency", num: true, cell: (l) => `<input name="currency_amount" class="num" inputmode="decimal" value="${l?.currency_amount ? String(Math.abs(Number(l.currency_amount))) : ""}" title="Lines on a bank account in another currency: the amount in that currency">` },
     ];
     const totals = () => {

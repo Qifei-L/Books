@@ -370,6 +370,7 @@ const NAV = [
   { group: "Books", items: [
     { id: "journals", label: "Journals" },
     { id: "chart", label: "Chart of accounts" },
+    { id: "classes", label: "Classes" },
   ] },
   { group: "Reports", items: [
     { id: "pl", label: "Profit and loss" },
@@ -425,6 +426,7 @@ const PAGES = {
   parties: { title: "Business parties", sub: "Records · customers and suppliers are one business party, with tax ID and payment terms", render: () => renderSimpleList("party") },
   journals: { title: "Journals", sub: "Every posting, with its revision and its source document", render: () => renderDocList("journal") },
   chart: { title: "Chart of accounts", sub: "Accounts carry the balances; a bank or cash account is an Assets account with bank details", render: () => renderChart() },
+  classes: { title: "Classes", sub: "Books · reporting segments carried by journal lines, separately from accounts", render: () => renderClasses() },
   pl: { title: "Profit and loss", sub: "Income and cost and expense over a period", render: () => runReport("pl") },
   bs: { title: "Balance sheet", sub: "Assets, liabilities and equity at a date", render: () => runReport("bs") },
   tb: { title: "Trial balance", sub: "Opening, period and closing balances by account", render: () => runReport("tb") },
@@ -705,13 +707,18 @@ $("gl-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const f = event.target;
-    const gl = await api(`${ledgerUrl()}/reports/gl-detail?accountId=${f.account.value}&from=${f.from.value}&to=${f.to.value}`);
+    const [gl, classes, locations, parties] = await Promise.all([
+      api(`${ledgerUrl()}/reports/gl-detail?accountId=${f.account.value}&from=${f.from.value}&to=${f.to.value}`),
+      api(`${ledgerUrl()}/classes`), api(`${ledgerUrl()}/locations`), api(`${ledgerUrl()}/parties`),
+    ]);
+    const nameOf = (rows, id) => rows.find((r) => r.id === id)?.name ?? "";
     $("gl-out").innerHTML = `<h3>${esc(gl.code)} ${esc(gl.name)}</h3>
-      <table><tr><th>Date</th><th>No.</th><th>Reference</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr>
-      <tr><td colspan="6" class="muted">Opening balance</td><td class="num">${gl.opening_balance}</td></tr>
+      <table><tr><th>Date</th><th>No.</th><th>Reference</th><th>Description</th><th>Class</th><th>Location</th><th>Party</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr>
+      <tr><td colspan="9" class="muted">Opening balance</td><td class="num">${gl.opening_balance}</td></tr>
       ${gl.lines.map((l) => `<tr class="click" data-journal="${l.journal_id}"><td>${l.date}</td><td>${l.journal_no}</td><td>${esc(l.reference)}</td><td>${esc(l.description)}</td>
+        <td>${esc(nameOf(classes, l.class_id))}</td><td>${esc(nameOf(locations, l.location_id))}</td><td>${esc(nameOf(parties, l.party_id))}</td>
         <td class="num">${blank(l.debit)}</td><td class="num">${blank(l.credit)}</td><td class="num">${l.balance}</td></tr>`).join("")}
-      <tr class="total"><td colspan="4">Period totals / closing</td><td class="num">${gl.period_debit}</td><td class="num">${gl.period_credit}</td><td class="num">${gl.closing_balance}</td></tr></table>
+      <tr class="total"><td colspan="7">Period totals / closing</td><td class="num">${gl.period_debit}</td><td class="num">${gl.period_credit}</td><td class="num">${gl.closing_balance}</td></tr></table>
       <p class="muted small">Click a line for its journal.</p>`;
     for (const tr of $("gl-out").querySelectorAll("tr[data-journal]")) tr.onclick = () => openJournal(tr.dataset.journal);
   } catch (error) {

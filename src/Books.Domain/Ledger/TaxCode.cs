@@ -9,6 +9,9 @@ namespace Books.Domain.Ledgers;
 /// </summary>
 public enum TaxKind { VatOutput, VatInput, VatInputNonDeductible, VatZeroRated, NonVat, Withholding, OtherTax }
 
+/// <summary>How a manual journal's tax line is reported on the monthly return.</summary>
+public enum TaxDirection { Sale, SaleAdjustment, Purchase, PurchaseAdjustment }
+
 /// <summary>
 /// A tax a person chooses on a document line (rule 34). Owned by the ledger and maintained by administrators.
 /// Effective dates let a rate apply only for a period, for example 4% VAT on fuel from March 2026.
@@ -133,5 +136,15 @@ public static class TaxCalculator
             throw new DomainException($"The tax amount allows {minorUnits} decimal places.");
         }
         return new LineTax(calculated, entered, string.IsNullOrWhiteSpace(reason) ? null : reason.Trim());
+    }
+
+    /// <summary>
+    /// Tax included in a gross amount: gross × rate / (100 + rate), rounded per line. Used by manual journals, whose
+    /// line amount is the gross the user enters; documents calculate tax on the net instead.
+    /// </summary>
+    public static LineTax ForGross(decimal gross, decimal ratePercent, int minorUnits)
+    {
+        var calculated = decimal.Round(gross * ratePercent / (100m + ratePercent), minorUnits, MidpointRounding.AwayFromZero);
+        return new LineTax(calculated, calculated, null);
     }
 }

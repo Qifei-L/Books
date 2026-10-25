@@ -85,6 +85,9 @@
 | 2026-10-24 | Year-end revaluation (M12.2b): the revaluation reverses on the next day, so settling later realizes the full difference from the invoice's rate and nothing counts twice; closing past a fiscal year-end with balances in another currency not revalued warns but still closes. |
 | 2026-10-24 | Inventory locations: stock recorded before any location existed belongs to the default location (warehouse). A location is only a stock place for now; branch- or location-level company books are planned later. |
 | 2026-10-25 | Input VAT deductibility is a tax code, not a line flag. `vat_input` is creditable; `vat_input_non_deductible` posts to the non-deductible VAT account. `valid_tax_invoice` and the per-code non-deductible account are removed; the migration clones existing non-deductible input VAT codes and repoints lines saved with `valid_tax_invoice = false`. |
+| 2026-10-25 | Manual journals may post to AR/AP control accounts when each control line names an active party. Open items and statements read these posted manual lines; aging still equals the control balance. Manual journals do not control inventory, fixed assets or payroll. |
+| 2026-10-25 | Journal lines carry optional class and location dimensions. Class is a ledger-scoped reporting segment; location is the existing location/branch dimension (stock continues to use the same table). They are dimensions only: class and location never change the account or the subledger. Document lines gain the same dimensions in a later phase. |
+| 2026-10-25 | A manual journal line may carry a VAT or other tax code. Its amount is gross; the server posts the net to the line's account, the tax to the code's tax account, and keeps the code, tax amount and sale/purchase direction on the net line for GL and return drilldown. Withholding on manual journals remains unsupported; use a payment or payroll document. |
 
 ## Proposed defaults (accept or change)
 

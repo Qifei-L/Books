@@ -76,11 +76,11 @@ public sealed class JournalRuleTests
     }
 
     [Fact]
-    public void Lines_need_known_active_non_control_accounts()
+    public void Lines_need_known_active_accounts_and_control_accounts_need_a_party()
     {
         var codes = Codes(Draft((Guid.NewGuid(), 1m), (Inactive, 1m), (Receivable, -2m)), Usd());
 
-        Assert.Equal(["UNKNOWN_ACCOUNT", "INACTIVE_ACCOUNT", "CONTROL_ACCOUNT"], codes);
+        Assert.Equal(["UNKNOWN_ACCOUNT", "INACTIVE_ACCOUNT", "PARTY_REQUIRED"], codes);
     }
 
     [Fact]

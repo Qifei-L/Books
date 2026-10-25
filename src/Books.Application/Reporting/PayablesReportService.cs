@@ -87,7 +87,8 @@ public sealed class PayablesReportService(IBooksDb db, ReadRunner reads)
             .Select(i => new Charge(i.Id, i.SupplierId, i.Date, i.DueDate, "invoice", i.InvoiceNo, i.Reference, i.BaseTotal, i.ExchangeRate is null ? null : i.Currency, i.ExchangeRate)).ToList();
         var credits = documents.Where(i => i.IsDebitNote)
             .Select(i => new Credit(i.SupplierId, i.Date, "debit_note", i.InvoiceNo, i.Reference, i.OriginalInvoiceId, i.BaseTotal))
-            .Concat(OpenItems.PaymentCredits(payments, payables.ToHashSet(), receiptsReduce: false)).ToList();
+            .Concat(OpenItems.PaymentCredits(payments, payables.ToHashSet(), receiptsReduce: false))
+            .Concat(await OpenItems.ManualJournalCreditsAsync(db, ledgerId, "payable", to, 1, ct)).ToList();
         return (charges, credits);
     }
 
@@ -184,6 +185,28 @@ internal static class OpenItems
     /// payment reduces what is owed to a supplier and a receipt what a customer owes; the other direction (a refund)
     /// adds to it.
     /// </summary>
+    private sealed record ManualJournalLine(Guid PartyId, DateOnly Date, long JournalNo, string? Reference, decimal Amount);
+
+    /// <summary>
+    /// Posted manual journals on a control account, as credits of the party on each line. A manual journal has no
+    /// document, so it is on-account: it reduces the oldest open items like any other credit. Sign is +1 for payables
+    /// (a debit reduces what is owed) and -1 for receivables (a credit reduces what is owed).
+    /// </summary>
+    public static async Task<List<Credit>> ManualJournalCreditsAsync(IBooksDb db, Guid ledgerId, string usage, DateOnly to, int sign, CancellationToken ct)
+    {
+        var rows = await db.Database.SqlQuery<ManualJournalLine>($"""
+            SELECT l.party_id AS party_id, r.accounting_date AS date, j.journal_no AS journal_no,
+                   r.reference AS reference, l.amount AS amount
+            FROM journals j
+            JOIN journal_revisions r ON r.id = j.effective_revision_id
+            JOIN journal_lines l ON l.revision_id = r.id
+            JOIN account_usages u ON u.account_id = l.account_id AND u.usage = {usage}
+            WHERE j.ledger_id = {ledgerId} AND r.accounting_date <= {to}
+              AND j.source_kind IS NULL AND l.party_id IS NOT NULL AND l.amount <> 0
+            """).ToListAsync(ct);
+        return rows.Select(r => new Credit(r.PartyId, r.Date, "journal", r.JournalNo, r.Reference, null, sign * r.Amount)).ToList();
+    }
+
     public static IEnumerable<Credit> PaymentCredits(IEnumerable<Payment> payments, IReadOnlySet<Guid> controlAccounts, bool receiptsReduce) =>
         payments.SelectMany(p => p.Lines.Where(l => l.Kind != PaymentLineKind.Account && controlAccounts.Contains(l.ControlAccountId!.Value))
             .Select(l => new Credit(p.PartyId!.Value, p.Date, p.IsReceipt ? "receipt" : "payment", p.PaymentNo, p.Reference, l.InvoiceId,

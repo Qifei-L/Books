@@ -2826,6 +2826,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("numeric(20,4)")
                         .HasColumnName("amount");
 
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("class_id");
+
                     b.Property<decimal?>("CurrencyAmount")
                         .HasPrecision(20, 4)
                         .HasColumnType("numeric(20,4)")
@@ -2848,6 +2852,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("line_id");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid")
                         .HasColumnName("org_id");
@@ -2861,6 +2869,25 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("numeric(20,4)")
                         .HasColumnName("quantity");
 
+                    b.Property<decimal?>("TaxAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("tax_amount");
+
+                    b.Property<decimal?>("TaxCalculated")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("tax_calculated");
+
+                    b.Property<Guid?>("TaxCodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tax_code_id");
+
+                    b.Property<string>("TaxDirection")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("tax_direction");
+
                     b.HasKey("RevisionId", "LineNo")
                         .HasName("pk_journal_lines");
 
@@ -2870,8 +2897,14 @@ namespace Books.Infrastructure.Migrations
                     b.HasIndex("LedgerId", "AccountId")
                         .HasDatabaseName("ix_journal_lines_ledger_id_account_id");
 
+                    b.HasIndex("LedgerId", "ClassId")
+                        .HasDatabaseName("ix_journal_lines_ledger_id_class_id");
+
                     b.HasIndex("LedgerId", "ItemId")
                         .HasDatabaseName("ix_journal_lines_ledger_id_item_id");
+
+                    b.HasIndex("LedgerId", "LocationId")
+                        .HasDatabaseName("ix_journal_lines_ledger_id_location_id");
 
                     b.HasIndex("LedgerId", "PartyId")
                         .HasDatabaseName("ix_journal_lines_ledger_id_party_id");
@@ -2879,9 +2912,14 @@ namespace Books.Infrastructure.Migrations
                     b.HasIndex("LedgerId", "RevisionId")
                         .HasDatabaseName("ix_journal_lines_ledger_id_revision_id");
 
+                    b.HasIndex("LedgerId", "TaxCodeId")
+                        .HasDatabaseName("ix_journal_lines_ledger_id_tax_code_id");
+
                     b.ToTable("journal_lines", null, t =>
                         {
                             t.HasCheckConstraint("ck_journal_lines_amount", "amount <> 0");
+
+                            t.HasCheckConstraint("ck_journal_lines_tax_direction", "tax_direction IS NULL OR tax_direction IN ('sale', 'sale_adjustment', 'purchase', 'purchase_adjustment')");
                         });
                 });
 
@@ -3054,6 +3092,58 @@ namespace Books.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("ck_accounts_type", "type IN ('assets', 'liabilities', 'equity', 'income', 'cost_and_expense')");
                         });
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.AccountClass", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean")
+                        .HasColumnName("active");
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_classes");
+
+                    b.HasAlternateKey("LedgerId", "Id")
+                        .HasName("ak_classes_ledger_id_id");
+
+                    b.HasIndex("LedgerId", "Name")
+                        .HasDatabaseName("ix_classes_ledger_id_name");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_classes_org_id_ledger_id");
+
+                    b.ToTable("classes", (string)null);
                 });
 
             modelBuilder.Entity("Books.Domain.Ledgers.AccountGroup", b =>
@@ -4734,12 +4824,26 @@ namespace Books.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_journal_lines_accounts_ledger_id_account_id");
 
+                    b.HasOne("Books.Domain.Ledgers.AccountClass", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "ClassId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_journal_lines_classes_ledger_id_class_id");
+
                     b.HasOne("Books.Domain.Ledgers.Item", null)
                         .WithMany()
                         .HasForeignKey("LedgerId", "ItemId")
                         .HasPrincipalKey("LedgerId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_journal_lines_items_ledger_id_item_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "LocationId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_journal_lines_locations_ledger_id_location_id");
 
                     b.HasOne("Books.Domain.Ledgers.Party", null)
                         .WithMany()
@@ -4755,6 +4859,13 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_journal_lines_journal_revisions_ledger_id_revision_id");
+
+                    b.HasOne("Books.Domain.Ledgers.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "TaxCodeId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_journal_lines_tax_codes_ledger_id_tax_code_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Journals.JournalRevision", b =>
@@ -4791,6 +4902,17 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_accounts_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.AccountClass", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_classes_ledgers_org_id_ledger_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Ledgers.AccountGroup", b =>

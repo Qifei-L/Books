@@ -3,6 +3,7 @@ using Books.Api.Auth;
 using Books.Application.Common;
 using Books.Application.Journals;
 using Books.Domain.Journals;
+using Books.Domain.Ledgers;
 
 namespace Books.Api.Http;
 
@@ -11,7 +12,7 @@ public static class JournalEndpoints
     /// <param name="Debit">Decimal string such as "100.00"; a line has a debit or a credit, not both.</param>
     /// <param name="CurrencyAmount">Lines on a bank account in another currency: the amount in that currency, on the same side.</param>
     public sealed record LineRequest(Guid AccountId, string? Debit, string? Credit, string? Description, Guid? PartyId = null, Guid? ItemId = null, string? Quantity = null,
-        string? CurrencyAmount = null);
+        string? CurrencyAmount = null, Guid? ClassId = null, Guid? LocationId = null, Guid? TaxCodeId = null, string? TaxDirection = null);
 
     /// <param name="Post">true = Save (post now); false = Save Draft.</param>
     public sealed record JournalRequest(DateOnly AccountingDate, IReadOnlyList<LineRequest> Lines, bool Post, string? Reference, string? Description);
@@ -56,7 +57,16 @@ public static class JournalEndpoints
                     ? q
                     : throw BooksProblem.Invalid($"Line {i + 1} quantity must be a decimal string.");
             decimal? currencyAmount = string.IsNullOrWhiteSpace(line.CurrencyAmount) ? null : Math.Sign(debit - credit) * Parse(line.CurrencyAmount, i, "currency_amount");
-            return new DraftLine(line.AccountId, debit - credit, line.Description, PartyId: line.PartyId, ItemId: line.ItemId, Quantity: quantity, CurrencyAmount: currencyAmount);
+            var direction = string.IsNullOrWhiteSpace(line.TaxDirection) ? (TaxDirection?)null : line.TaxDirection.Trim().ToLowerInvariant() switch
+            {
+                "sale" => TaxDirection.Sale,
+                "sale_adjustment" => TaxDirection.SaleAdjustment,
+                "purchase" => TaxDirection.Purchase,
+                "purchase_adjustment" => TaxDirection.PurchaseAdjustment,
+                _ => throw BooksProblem.Invalid($"Line {i + 1} tax_direction must be sale, sale_adjustment, purchase or purchase_adjustment."),
+            };
+            return new DraftLine(line.AccountId, debit - credit, line.Description, PartyId: line.PartyId, ItemId: line.ItemId, Quantity: quantity, CurrencyAmount: currencyAmount,
+                ClassId: line.ClassId, LocationId: line.LocationId, TaxCodeId: line.TaxCodeId, TaxDirection: direction);
         }).ToList();
         return new JournalDraft(body.AccountingDate, lines, body.Reference, body.Description);
     }

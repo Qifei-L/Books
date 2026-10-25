@@ -1,3 +1,5 @@
+using Books.Domain.Ledgers;
+
 namespace Books.Domain.Journals;
 
 /// <summary>What a user or AI submits for a journal, before any accounting effect.</summary>
@@ -5,7 +7,8 @@ namespace Books.Domain.Journals;
 /// <param name="CurrencyAmount">Lines on a foreign-currency bank account: the same movement in the bank's currency (M12.2).</param>
 public sealed record DraftLine(
     Guid AccountId, decimal Amount, string? Description = null, Guid? LineId = null, Guid? PartyId = null, Guid? ItemId = null, decimal? Quantity = null,
-    decimal? CurrencyAmount = null);
+    decimal? CurrencyAmount = null, Guid? ClassId = null, Guid? LocationId = null, Guid? TaxCodeId = null, decimal? TaxAmount = null,
+    decimal? TaxCalculated = null, TaxDirection? TaxDirection = null);
 
 public sealed record JournalDraft(DateOnly AccountingDate, IReadOnlyList<DraftLine> Lines, string? Reference = null, string? Description = null);
 
@@ -24,7 +27,9 @@ public sealed record JournalContext(
     DateOnly? PreviousDate = null,
     IReadOnlyDictionary<Guid, bool>? Parties = null,
     bool FromDocument = false,
-    IReadOnlyDictionary<Guid, bool>? Items = null);
+    IReadOnlyDictionary<Guid, bool>? Items = null,
+    IReadOnlyDictionary<Guid, bool>? Classes = null,
+    IReadOnlyDictionary<Guid, bool>? Locations = null);
 
 /// <summary>A definite validation failure. <see cref="Line"/> is 1-based when the issue belongs to one line.</summary>
 public sealed record JournalIssue(string Code, string Message, int? Line = null);
@@ -51,6 +56,7 @@ public static class JournalValidator
         new AccountRule(),
         new PartyRule(),
         new ItemRule(),
+        new DimensionRule(),
         new CloseDateRule(),
         new ForeignBankRule(),
     ];
@@ -116,7 +122,7 @@ public sealed class BalanceRule : IJournalRule
     }
 }
 
-/// <summary>Lines use active accounts of this ledger; control accounts take document postings only (rule 18, P7).</summary>
+/// <summary>Lines use active accounts of this ledger; control accounts need a party, in documents and manual journals alike (rule 18, P7).</summary>
 public sealed class AccountRule : IJournalRule
 {
     public IEnumerable<JournalIssue> Check(JournalDraft draft, JournalContext context)
@@ -130,10 +136,6 @@ public sealed class AccountRule : IJournalRule
             else if (!account.Active)
             {
                 yield return new JournalIssue("INACTIVE_ACCOUNT", "The account is inactive.", i + 1);
-            }
-            else if (account.IsControl && !context.FromDocument)
-            {
-                yield return new JournalIssue("CONTROL_ACCOUNT", "Control accounts are posted only by documents.", i + 1);
             }
             else if (account.IsControl && draft.Lines[i].PartyId is null)
             {
@@ -188,6 +190,40 @@ public sealed class ItemRule : IJournalRule
             if (line.Quantity is { } qty && (decimal.Round(qty, 4) != qty || Math.Abs(qty) >= 10_000_000_000_000_000m))
             {
                 yield return new JournalIssue("BAD_QUANTITY", "Quantity allows up to 4 decimals.", i + 1);
+            }
+        }
+    }
+}
+
+/// <summary>A named class or location must be an active one of this ledger.</summary>
+public sealed class DimensionRule : IJournalRule
+{
+    public IEnumerable<JournalIssue> Check(JournalDraft draft, JournalContext context)
+    {
+        for (var i = 0; i < draft.Lines.Count; i++)
+        {
+            var line = draft.Lines[i];
+            if (line.ClassId is { } classId)
+            {
+                if (context.Classes is null || !context.Classes.TryGetValue(classId, out var active))
+                {
+                    yield return new JournalIssue("UNKNOWN_CLASS", "The class is not in this ledger.", i + 1);
+                }
+                else if (!active)
+                {
+                    yield return new JournalIssue("INACTIVE_CLASS", "The class is inactive.", i + 1);
+                }
+            }
+            if (line.LocationId is { } locationId)
+            {
+                if (context.Locations is null || !context.Locations.TryGetValue(locationId, out var active))
+                {
+                    yield return new JournalIssue("UNKNOWN_LOCATION", "The location is not in this ledger.", i + 1);
+                }
+                else if (!active)
+                {
+                    yield return new JournalIssue("INACTIVE_LOCATION", "The location is inactive.", i + 1);
+                }
             }
         }
     }

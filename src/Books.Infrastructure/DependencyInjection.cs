@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddScoped<InvitationService>();
         services.AddScoped<AccountService>();
         services.AddScoped<AccountGroupService>();
+        services.AddScoped<ClassService>();
         services.AddScoped<JournalService>();
         services.AddScoped<LedgerSettingsService>();
         services.AddScoped<ReportService>();

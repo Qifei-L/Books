@@ -9,7 +9,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Books.Application.Journals;
 
 public sealed record JournalLineDto(Guid LineId, Guid AccountId, Guid? PartyId, Guid? ItemId, string? Quantity, string Debit, string Credit, string? Description,
-    string? CurrencyAmount = null);
+    string? CurrencyAmount = null, Guid? ClassId = null, Guid? LocationId = null, Guid? TaxCodeId = null, string? TaxAmount = null,
+    string? TaxCalculated = null, string? TaxDirection = null);
 
 /// <param name="Status">Status of the revision shown: draft, error, posted or deleted.</param>
 public sealed record JournalDto(
@@ -29,11 +30,12 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
             RefuseAgentPosting(principal, post);
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
-            var issues = RejectUnknownReferences(JournalValidator.Validate(draft, await ContextAsync(ledger, draft, null, ct)));
+            var expanded = await ExpandTaxAsync(draft, ledger, ct);
+            var issues = RejectUnknownReferences(JournalValidator.Validate(expanded, await ContextAsync(ledger, expanded, null, ct)));
             var status = !post ? RevisionStatus.Draft : issues.Count == 0 ? RevisionStatus.Posted : RevisionStatus.Error;
 
             var journal = new Journal(Guid.CreateVersion7(), orgId, ledgerId, ledger.IssueJournalNo(), principal.UserId, scope.Now);
-            var revision = AddRevision(journal, draft, status, issues, principal.UserId, scope.Now);
+            var revision = AddRevision(journal, expanded, status, issues, principal.UserId, scope.Now);
             if (status == RevisionStatus.Posted)
             {
                 ledger.RecordPosting(scope.Now);
@@ -70,11 +72,12 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             }
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var effective = journal.EffectiveRevisionId is { } effectiveId ? await db.JournalRevisions.SingleAsync(r => r.Id == effectiveId, ct) : null;
-            var issues = RejectUnknownReferences(JournalValidator.Validate(draft, await ContextAsync(ledger, draft, effective?.AccountingDate, ct)));
+            var expanded = await ExpandTaxAsync(draft, ledger, ct);
+            var issues = RejectUnknownReferences(JournalValidator.Validate(expanded, await ContextAsync(ledger, expanded, effective?.AccountingDate, ct)));
             var status = !post ? RevisionStatus.Draft : issues.Count == 0 ? RevisionStatus.Posted : RevisionStatus.Error;
 
             await SupersedeAsync(journal, keepEffective: status != RevisionStatus.Posted, scope.Now, ct);
-            var revision = AddRevision(journal, draft, status, issues, principal.UserId, scope.Now);
+            var revision = AddRevision(journal, expanded, status, issues, principal.UserId, scope.Now);
             if (status == RevisionStatus.Posted)
             {
                 ledger.RecordPosting(scope.Now);
@@ -118,7 +121,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
     /// request is rejected as invalid input (400) and nothing is saved.
     /// </summary>
     internal static IReadOnlyList<JournalIssue> RejectUnknownReferences(IReadOnlyList<JournalIssue> issues) =>
-        issues.FirstOrDefault(i => i.Code is "UNKNOWN_ACCOUNT" or "UNKNOWN_PARTY" or "UNKNOWN_ITEM") is { } unknown
+        issues.FirstOrDefault(i => i.Code is "UNKNOWN_ACCOUNT" or "UNKNOWN_PARTY" or "UNKNOWN_ITEM" or "UNKNOWN_CLASS" or "UNKNOWN_LOCATION") is { } unknown
             ? throw BooksProblem.Invalid($"Line {unknown.Line}: {unknown.Message}")
             : issues;
 
@@ -198,6 +201,93 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             ? journal.CurrentRevisionId!.Value
             : journal.EffectiveRevisionId.Value;
 
+    /// <summary>
+    /// Splits a manual journal line that carries a tax code: the entered amount is gross, the account gets the net,
+    /// a tax line goes to the code's tax account, and the net line keeps the code/amount/direction for reporting.
+    /// </summary>
+    private async Task<JournalDraft> ExpandTaxAsync(JournalDraft draft, Ledger ledger, CancellationToken ct)
+    {
+        if (draft.Lines.All(l => l.TaxCodeId is null))
+        {
+            return draft;
+        }
+        var codeIds = draft.Lines.Where(l => l.TaxCodeId != null).Select(l => l.TaxCodeId!.Value).Distinct().ToList();
+        var codes = await db.TaxCodes.AsNoTracking().Where(t => t.LedgerId == ledger.Id && codeIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, ct);
+        var taxAccountIds = codes.Values.Where(c => c.AccountId != null).Select(c => c.AccountId!.Value).Distinct().ToList();
+        var accountIds = draft.Lines.Select(l => l.AccountId).Concat(taxAccountIds).Distinct().ToList();
+        var accounts = await db.Accounts.AsNoTracking().Where(a => a.LedgerId == ledger.Id && accountIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, ct);
+        var taxAccounts = (await db.AccountUsages.AsNoTracking()
+            .Where(u => u.LedgerId == ledger.Id && taxAccountIds.Contains(u.AccountId)
+                && (u.Usage == Usage.OutputVat || u.Usage == Usage.InputVat || u.Usage == Usage.NonDeductibleVat
+                    || u.Usage == Usage.WithholdingPayable || u.Usage == Usage.OtherTaxPayable))
+            .Select(u => u.AccountId).ToListAsync(ct)).ToHashSet();
+        var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
+        var lines = new List<DraftLine>();
+        foreach (var line in draft.Lines)
+        {
+            if (line.TaxCodeId is not { } codeId)
+            {
+                if (line.TaxDirection is not null)
+                {
+                    throw BooksProblem.Invalid("tax_direction needs a tax_code_id.");
+                }
+                lines.Add(line);
+                continue;
+            }
+            if (!codes.TryGetValue(codeId, out var code))
+            {
+                throw BooksProblem.Invalid("tax_code_id must be a tax code of this ledger.");
+            }
+            if (code.Kind is not (TaxKind.VatOutput or TaxKind.VatInput or TaxKind.VatInputNonDeductible or TaxKind.OtherTax))
+            {
+                throw BooksProblem.Invalid($"{code.Name} cannot be used on a manual journal; choose a VAT or other tax code.");
+            }
+            if (!code.AppliesOn(draft.AccountingDate))
+            {
+                throw BooksProblem.Invalid($"{code.Name} does not apply on {draft.AccountingDate:yyyy-MM-dd}.");
+            }
+            if (code.AccountId is not { } taxAccountId || !accounts.TryGetValue(taxAccountId, out var taxAccount) || !taxAccount.Active)
+            {
+                throw BooksProblem.Invalid($"{code.Name} has no active tax account.");
+            }
+            if (!accounts.TryGetValue(line.AccountId, out var lineAccount))
+            {
+                throw BooksProblem.Invalid("The line's account is not in this ledger.");
+            }
+            if (lineAccount.IsControl || lineAccount.IsBank || taxAccounts.Contains(line.AccountId))
+            {
+                throw BooksProblem.Invalid("Tax codes apply to income, expense or other tax-bearing accounts, not to control, bank or tax accounts.");
+            }
+            var direction = line.TaxDirection ?? (code.Kind == TaxKind.VatOutput || code.Kind == TaxKind.OtherTax ? TaxDirection.Sale : TaxDirection.Purchase);
+            var allowed = code.Kind == TaxKind.VatOutput || code.Kind == TaxKind.OtherTax
+                ? new[] { TaxDirection.Sale, TaxDirection.SaleAdjustment }
+                : new[] { TaxDirection.Purchase, TaxDirection.PurchaseAdjustment };
+            if (!allowed.Contains(direction))
+            {
+                throw BooksProblem.Invalid($"{code.Name} is a {(code.Kind == TaxKind.VatOutput || code.Kind == TaxKind.OtherTax ? "sale" : "purchase")} tax code.");
+            }
+            var tax = TaxCalculator.ForGross(line.Amount, code.Rate, minor);
+            var net = line.Amount - tax.Amount;
+            if (net == 0)
+            {
+                throw BooksProblem.Invalid("The gross amount leaves no net amount after tax.");
+            }
+            lines.Add(line with
+            {
+                Amount = net,
+                TaxCodeId = code.Id,
+                TaxAmount = tax.Amount,
+                TaxCalculated = tax.Calculated,
+                TaxDirection = direction,
+            });
+            if (tax.Amount != 0)
+            {
+                lines.Add(new DraftLine(taxAccountId, tax.Amount, $"{code.Name} (tax)"));
+            }
+        }
+        return draft with { Lines = lines };
+    }
+
     internal JournalRevision AddRevision(Journal journal, JournalDraft draft, RevisionStatus status, IReadOnlyList<JournalIssue> issues, Guid userId, DateTimeOffset now)
     {
         var revision = new JournalRevision(
@@ -207,7 +297,8 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         for (var i = 0; i < draft.Lines.Count; i++)
         {
             var line = draft.Lines[i];
-            db.JournalLines.Add(new JournalLine(revision, i + 1, line.LineId ?? Guid.CreateVersion7(), line.AccountId, Trim(line.Description), line.Amount, line.PartyId, line.ItemId, line.Quantity, line.CurrencyAmount));
+            db.JournalLines.Add(new JournalLine(revision, i + 1, line.LineId ?? Guid.CreateVersion7(), line.AccountId, Trim(line.Description), line.Amount, line.PartyId, line.ItemId, line.Quantity, line.CurrencyAmount, line.ClassId, line.LocationId,
+                line.TaxCodeId, line.TaxAmount, line.TaxCalculated, line.TaxDirection));
         }
         journal.Apply(revision);
         return revision;
@@ -231,7 +322,16 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         var items = await db.Items.AsNoTracking()
             .Where(i => i.LedgerId == ledger.Id && itemIds.Contains(i.Id))
             .ToDictionaryAsync(i => i.Id, i => i.Active, ct);
-        return new JournalContext(Currencies.Require(ledger.BaseCurrency).MinorUnits, ledger.ClosedThrough, accounts, previousDate, parties, Items: items);
+        var classIds = draft.Lines.Where(l => l.ClassId != null).Select(l => l.ClassId!.Value).Distinct().ToList();
+        var classes = await db.Classes.AsNoTracking()
+            .Where(c => c.LedgerId == ledger.Id && classIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Active, ct);
+        var locationIds = draft.Lines.Where(l => l.LocationId != null).Select(l => l.LocationId!.Value).Distinct().ToList();
+        var locations = await db.Locations.AsNoTracking()
+            .Where(l => l.LedgerId == ledger.Id && locationIds.Contains(l.Id))
+            .ToDictionaryAsync(l => l.Id, l => l.Active, ct);
+        return new JournalContext(Currencies.Require(ledger.BaseCurrency).MinorUnits, ledger.ClosedThrough, accounts, previousDate, parties, Items: items,
+            Classes: classes, Locations: locations);
     }
 
     internal async Task<JournalDto> LoadAsync(Guid journalId, Guid revisionId, Ledger ledger, CancellationToken ct)
@@ -245,7 +345,9 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             journal.Id, journal.LedgerId, journal.JournalNo, journal.SourceKind, journal.SourceId, Text.Of(revision.Status), journal.IsPosted, revision.AccountingDate,
             revision.Reference, revision.Description,
             lines.Select(l => new JournalLineDto(l.LineId, l.AccountId, l.PartyId, l.ItemId, l.Quantity?.ToString("0.####", CultureInfo.InvariantCulture), Format(Math.Max(l.Amount, 0), minor), Format(Math.Max(-l.Amount, 0), minor), l.Description,
-                l.CurrencyAmount?.ToString("0.####", CultureInfo.InvariantCulture))).ToList(),
+                l.CurrencyAmount?.ToString("0.####", CultureInfo.InvariantCulture), l.ClassId, l.LocationId, l.TaxCodeId,
+                l.TaxAmount is { } tax ? Format(tax, minor) : null, l.TaxCalculated is { } calculated ? Format(calculated, minor) : null,
+                l.TaxDirection is { } direction ? Text.Of(direction) : null)).ToList(),
             issues, revision.RevisionNo, journal.CreatedBy, journal.CreatedAt, journal.Version.ToString());
     }
 

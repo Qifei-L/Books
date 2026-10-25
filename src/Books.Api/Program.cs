@@ -79,6 +79,7 @@ api.MapLedgerEndpoints();
 api.MapMembershipEndpoints();
 api.MapInvitationEndpoints();
 api.MapAccountEndpoints();
+api.MapClassEndpoints();
 api.MapPartyEndpoints();
 api.MapTaxCodeEndpoints();
 api.MapBankEndpoints();

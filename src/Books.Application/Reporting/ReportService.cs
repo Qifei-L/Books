@@ -19,7 +19,8 @@ public sealed record TrialBalance(
     DateOnly From, DateOnly To, string Currency, IReadOnlyList<TrialBalanceRow> Rows, TrialBalanceTotals Totals, bool Balanced,
     IReadOnlyList<ReportWarning> Warnings);
 
-public sealed record GlLine(DateOnly Date, Guid JournalId, long JournalNo, string? Reference, string? Description, string Debit, string Credit, string Balance);
+public sealed record GlLine(DateOnly Date, Guid JournalId, long JournalNo, Guid LineId, Guid? PartyId, Guid? ClassId, Guid? LocationId,
+    string? SourceKind, Guid? SourceId, string? Reference, string? Description, string Debit, string Credit, string Balance);
 
 public sealed record GlDetail(
     DateOnly From, DateOnly To, string Currency, Guid AccountId, string Code, string Name,
@@ -38,7 +39,8 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
 
     private sealed record Total(decimal Amount);
 
-    private sealed record Posting(DateOnly AccountingDate, Guid JournalId, long JournalNo, string? Reference, string? Description, decimal Amount);
+    private sealed record Posting(DateOnly AccountingDate, Guid JournalId, long JournalNo, Guid LineId, Guid? PartyId, Guid? ClassId, Guid? LocationId,
+        string? SourceKind, Guid? SourceId, string? Reference, string? Description, decimal Amount);
 
     public Task<TrialBalance> TrialBalanceAsync(Principal principal, Guid orgId, Guid ledgerId, DateOnly from, DateOnly to, CancellationToken ct) =>
         reads.SnapshotAsync(principal, orgId, async scope =>
@@ -120,6 +122,8 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
                 """).SingleAsync(ct)).Amount;
             var postings = await db.Database.SqlQuery<Posting>($"""
                 SELECT r.accounting_date AS accounting_date, j.id AS journal_id, j.journal_no AS journal_no,
+                    l.line_id AS line_id, l.party_id AS party_id, l.class_id AS class_id, l.location_id AS location_id,
+                    j.source_kind AS source_kind, j.source_id AS source_id,
                     r.reference AS reference, COALESCE(l.description, r.description) AS description, l.amount AS amount
                 FROM journals j
                 JOIN journal_revisions r ON r.id = j.effective_revision_id
@@ -134,7 +138,8 @@ public sealed class ReportService(IBooksDb db, ReadRunner reads)
             var lines = postings.Select(p =>
             {
                 running += p.Amount;
-                return new GlLine(p.AccountingDate, p.JournalId, p.JournalNo, p.Reference, p.Description,
+                return new GlLine(p.AccountingDate, p.JournalId, p.JournalNo, p.LineId, p.PartyId, p.ClassId, p.LocationId,
+                    p.SourceKind, p.SourceId, p.Reference, p.Description,
                     Format(Math.Max(p.Amount, 0), minor), Format(Math.Max(-p.Amount, 0), minor), Format(running, minor));
             }).ToList();
             return new GlDetail(from, to, ledger.BaseCurrency, account.Id, account.Code, account.Name, Format(opening, minor), lines,
