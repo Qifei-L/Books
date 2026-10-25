@@ -94,6 +94,12 @@ a.button {
 
 table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
 th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+/* Only the three long text columns wrap; everything else — dates, amounts, the status badge — stays on
+   one line, so a narrow window shrinks the table instead of scrolling it sideways. */
+table.list th.col-party, table.list td.col-party,
+table.list th.col-description, table.list td.col-description,
+table.list th.col-reference, table.list td.col-reference { white-space: normal; overflow-wrap: anywhere; }
+.cell-sub { white-space: nowrap; }
 th { font-weight: 600; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; background: var(--card); }
 thead th, table > tbody:first-child > tr:first-child th { position: sticky; top: 0; z-index: 1; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -145,7 +151,7 @@ table.lines input.num { text-align: right; min-width: 70px; }
 /* Manager.io-style list mechanics: sortable headers with a caret, search on the right of the toolbar. */
 /* The table: one scroll container so the header sticks, a totals row that stays at the bottom, a row
    menu on hover, and two densities. */
-.table-scroll { overflow-x: auto; }
+.table-scroll { max-width: 100%; }
 table.list th { position: sticky; top: 0; z-index: 3; background: var(--card); box-shadow: inset 0 -1px 0 var(--line); }
 table.list tr.total td { position: sticky; bottom: 0; z-index: 3; background: var(--card); }
 table.list tr.total td { box-shadow: inset 0 2px 0 var(--ink); border-top: none; }
@@ -172,7 +178,23 @@ tr:hover .row-menu-btn { visibility: visible; }
 .filter-bar { position: relative; }
 /* Dates and numbers keep their place from page to page; long text in the party and reference
    columns is clipped, with the full value on hover. */
-.cell-clip { display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.cell-clip { display: inline; }
+/* A narrow window shrinks the text columns and the party column; the table stops overflowing. */
+table.list { max-width: 100%; }
+table.list td, table.list th { overflow: hidden; }
+/* A narrower window drops the wide, secondary columns before the table would scroll sideways.
+   (A container query would be more precise, but `container-type` breaks the sticky header.) */
+@media (max-width: 1300px) {
+  table.list .col-description, table.list .col-other_tax_total { display: none; }
+}
+@media (max-width: 1120px) {
+  table.list .col-fx { display: none; }
+  table.list td, table.list th { padding-left: 6px; padding-right: 6px; font-size: 13px; }
+}
+@media (max-width: 960px) {
+  table.list .col-khr, table.list .col-reference { display: none; }
+  .cell-sub { white-space: normal; }
+}
 th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--ink); }
 th.sortable .caret { font-size: 9px; margin-left: 4px; color: var(--accent); }

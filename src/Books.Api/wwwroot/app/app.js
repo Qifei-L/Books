@@ -692,20 +692,20 @@ async function renderDocList(kind) {
   // of all of them can be changed, and both choices are kept per list kind for the session.
   const META = {
     party: { label: k.partyLabel, always: true, sortable: true },
-    due: { label: "Due", always: true, sortable: true, w: "150px" },
-    date: { label: "Date", sortable: true, w: "110px" },
-    reference: { label: "Reference", sortable: true, w: "150px" },
-    ...Object.fromEntries(k.amounts.slice(0, -1).map((a) => [a.key, { label: a.label, sortable: true, num: true, w: "104px" }])),
-    other_tax_total: { label: "Other tax", sortable: true, num: true, w: "104px" },
-    amount: { label: `${amountLabel} (${currency})`, always: true, sortable: true, num: true, w: "130px" },
-    fx: { label: "Currency", sortable: true, w: "130px" },
-    khr: { label: "KHR", sortable: true, num: true, w: "128px" },
-    status: { label: "Status", always: true, sortable: true, w: "104px" },
-    description: { label: "Description", sortable: true, w: "200px" },
-    lines_count: { label: "Lines", sortable: true, num: true, w: "74px" },
-    party_tax_id: { label: "Tax ID", sortable: true, w: "140px" },
-    party_terms: { label: "Terms (days)", sortable: true, num: true, w: "110px" },
-    journal: { label: "Journal No.", sortable: true, w: "110px" },
+    due: { label: "Due", always: true, sortable: true, w: "100px" },
+    date: { label: "Date", sortable: true, w: "96px" },
+    reference: { label: "Reference", sortable: true, w: "132px" },
+    ...Object.fromEntries(k.amounts.slice(0, -1).map((a) => [a.key, { label: a.label, sortable: true, num: true, w: "84px" }])),
+    other_tax_total: { label: "Other tax", sortable: true, num: true, w: "84px" },
+    amount: { label: `${amountLabel} (${currency})`, always: true, sortable: true, num: true, w: "100px" },
+    fx: { label: "Currency", sortable: true, w: "84px" },
+    khr: { label: "KHR", sortable: true, num: true, w: "112px" },
+    status: { label: "Status", always: true, sortable: true, w: "80px" },
+    description: { label: "Description", sortable: true, w: "168px" },
+    lines_count: { label: "Lines", sortable: true, num: true, w: "68px" },
+    party_tax_id: { label: "Tax ID", sortable: true, w: "128px" },
+    party_terms: { label: "Terms (days)", sortable: true, num: true, w: "96px" },
+    journal: { label: "Journal No.", sortable: true, w: "96px" },
   };
   const order = docColumnOrder(kind, Object.keys(META));
   const columns = [{ key: "select", label: "", w: "34px" }]
@@ -718,7 +718,7 @@ async function renderDocList(kind) {
     const cls = [c.num ? "num" : "", c.sortable ? "sortable" : "", c.sortable && sort.key === c.key ? "sorted" : ""].filter(Boolean).join(" ");
     const caret = c.sortable && sort.key === c.key ? `<span class="caret">${sort.dir === "asc" ? "▲" : "▼"}</span>` : "";
     if (c.key === "select") return `<th style="width:${c.w}"><input type="checkbox" id="${ids.selectAll}" title="Select all on this page"></th>`;
-    return `<th class="${cls}" ${c.sortable ? `data-sort="${c.key}"` : ""}${c.w ? ` style="width:${c.w}"` : ""}>${c.label}${caret}</th>`;
+    return `<th class="${cls} col-${c.key}" ${c.sortable ? `data-sort="${c.key}"` : ""}${c.w ? ` style="width:${c.w}"` : ""}>${c.label}${caret}</th>`;
   }).join("");
 
   const cell = (d) => {
@@ -760,15 +760,16 @@ async function renderDocList(kind) {
 
   const rowHtml = (d) => {
     const cells = cell(d);
-    return `<tr class="click" data-id="${d.id}">${columns.map((c) => `<td class="${c.num ? "num" : ""}">${cells[c.key] ?? ""}</td>`).join("")}</tr>`;
+    return `<tr class="click" data-id="${d.id}">${columns.map((c) => `<td class="${c.num ? "num" : ""} col-${c.key}">${cells[c.key] ?? ""}</td>`).join("")}</tr>`;
   };
   const subtotalRow = (list, key) => `<tr class="subtotal">${columns.map((c) => {
-    if (c.key === "select" || c.key === "menu") return `<td></td>`;
-    if (c.key === "party") return `<td><span class="muted">Subtotal</span></td>`;
-    if (c.key === "amount") return `<td class="num">${money(sum(list, amountKey))}</td>`;
-    if (c.num && c.key !== "lines_count" && c.key !== "party_terms") return `<td class="num">${money(sum(list, c.key))}</td>`;
-    if (c.key === "status") return `<td>${list.length} ${list.length === 1 ? k.noun : k.plural}</td>`;
-    return `<td></td>`;
+    const cellClass = `col-${c.key}`;
+    if (c.key === "select" || c.key === "menu") return `<td class="${cellClass}"></td>`;
+    if (c.key === "party") return `<td class="${cellClass}"><span class="muted">Subtotal</span></td>`;
+    if (c.key === "amount") return `<td class="num ${cellClass}">${money(sum(list, amountKey))}</td>`;
+    if (c.num && c.key !== "lines_count" && c.key !== "party_terms") return `<td class="num ${cellClass}">${money(sum(list, c.key))}</td>`;
+    if (c.key === "status") return `<td class="${cellClass}">${list.length} ${list.length === 1 ? k.noun : k.plural}</td>`;
+    return `<td class="${cellClass}"></td>`;
   }).join("")}</tr>`;
 
   const body = grouped
@@ -784,12 +785,13 @@ async function renderDocList(kind) {
     : paged.map(rowHtml).join("");
 
   const totals = `<tr class="total">${columns.map((c) => {
-    if (c.key === "select" || c.key === "menu") return `<td></td>`;
-    if (c.key === "party") return `<td>Total</td>`;
-    if (c.key === "status") return `<td>${sorted.length} ${sorted.length === 1 ? k.noun : k.plural}</td>`;
-    if (c.key === "amount") return `<td class="num">${money(sum(sorted, amountKey))}</td>`;
-    if (c.num && c.key !== "lines_count" && c.key !== "party_terms") return `<td class="num">${money(sum(sorted, c.key))}</td>`;
-    return `<td></td>`;
+    const cellClass = `col-${c.key}`;
+    if (c.key === "select" || c.key === "menu") return `<td class="${cellClass}"></td>`;
+    if (c.key === "party") return `<td class="${cellClass}">Total</td>`;
+    if (c.key === "status") return `<td class="${cellClass}">${sorted.length} ${sorted.length === 1 ? k.noun : k.plural}</td>`;
+    if (c.key === "amount") return `<td class="num ${cellClass}">${money(sum(sorted, amountKey))}</td>`;
+    if (c.num && c.key !== "lines_count" && c.key !== "party_terms") return `<td class="num ${cellClass}">${money(sum(sorted, c.key))}</td>`;
+    return `<td class="${cellClass}"></td>`;
   }).join("")}</tr>`;
 
   const pager = `<div class="pager">

@@ -84,4 +84,7 @@ sample data.
   restores them without rendering again.
 - `openRowMenu`: closes on the next click elsewhere; Delete sends `If-Match` through `write`.
 - Sticky header and totals depend on `.page` being the only scrolling container; do not add `overflow` to
-  `.page-body`.
+  `.page-body` or to `.table-scroll` — a scroll container there captures `position: sticky` and the header
+  scrolls away.
+- A narrow window drops the wide columns (description, other tax, currency, KHR, reference) at 1300/1120/960 px
+  instead of scrolling the table sideways.
