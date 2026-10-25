@@ -145,6 +145,8 @@ async function chooseLedger(ledger) {
   $("ledger-meta").textContent = `${ledger.base_currency} · FY from ${months[ledger.fy_start_month]} · `
     + (ledger.closed_through ? `closed to ${ledger.closed_through}` : "not closed") + (ledger.effective_access === "edit" ? "" : " · read only");
   state.rendered = {};
+  // The cached document lists belong to the previous company.
+  state.docData = {};
   await loadAccounts();
   await showTab(state.tab ?? "sales-invoices", true);
 }
@@ -374,6 +376,23 @@ async function showTab(id, force = false) {
   }
 }
 
+// The column panel closes with Escape or a click outside it, and stays open while a column is moved.
+const kindOfContainer = (container) => Object.keys(DOC_KINDS).find((key) => DOC_KINDS[key].container === container);
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  const kind = kindOfContainer(state.tab);
+  if (kind && colsOpen(kind)) { state.colsOpen[kind] = false; renderDocList(kind); }
+});
+
+document.addEventListener("mousedown", (event) => {
+  const kind = kindOfContainer(state.tab);
+  if (!kind || !colsOpen(kind)) return;
+  if (event.target.closest(".popover") || event.target.closest(`#${DOC_KINDS[kind].container}-cols`)) return;
+  state.colsOpen[kind] = false;
+  renderDocList(kind);
+});
+
 loadUi();
 buildNav();
 
@@ -579,6 +598,7 @@ function docColumnOrder(kind, all) {
   return state.docOrder[kind];
 }
 const docDensity = () => (state.density ??= "comfortable");
+const colsOpen = (kind) => ((state.colsOpen ??= {})[kind] ??= false);
 const docPageSize = () => (state.pageSize ??= 50);
 const overdueDays = (d) => Math.floor((new Date(today()) - new Date(d.due_date)) / 86400000);
 
@@ -588,11 +608,18 @@ async function renderDocList(kind) {
   const tab = docTab(kind);
   const sort = docSort(kind);
   const range = presetRange(f.preset, f);
-  const [docs, counterparts, parties] = await Promise.all([
-    api(`${ledgerUrl()}/${k.path}`),
-    k.refPath ? api(`${ledgerUrl()}/${k.refPath}`) : Promise.resolve([]),
-    api(`${ledgerUrl()}/parties`),
-  ]);
+  // The data is fetched once per list and reused while the page stays open; a save or a delete clears
+  // the cache through refreshLedger. Column and density changes then cost nothing.
+  state.docData ??= {};
+  if (!state.docData[kind]) {
+    const [docs, counterparts, parties] = await Promise.all([
+      api(`${ledgerUrl()}/${k.path}`),
+      k.refPath ? api(`${ledgerUrl()}/${k.refPath}`) : Promise.resolve([]),
+      api(`${ledgerUrl()}/parties`),
+    ]);
+    state.docData[kind] = { docs, counterparts, parties };
+  }
+  const { docs, counterparts, parties } = state.docData[kind];
   const nameOf = (id) => parties.find((p) => p.id === id)?.name ?? "";
   const partyName = (d) => nameOf(d[k.partyKey]);
   const counterpartNo = (id) => counterparts.find((c) => c.id === id)?.invoice_no ?? "";
@@ -764,7 +791,7 @@ async function renderDocList(kind) {
       </span>
     </div>`;
   };
-  const columnsMenu = `<div class="popover hidden" id="${ids.colsMenu}">
+  const columnsMenu = `<div class="popover${colsOpen(kind) ? "" : " hidden"}" id="${ids.colsMenu}">
     <p class="muted small" style="margin:0 0 6px">Show a column, or move it left and right</p>
     ${order.map(columnRow).join("")}
     <p class="muted small" style="margin:6px 0 0">${amountLabel} always shows; the arrows set the order.</p>
@@ -822,11 +849,12 @@ async function renderDocList(kind) {
       renderDocList(kind);
     };
   }
-  $(ids.cols).onclick = () => $(ids.colsMenu).classList.toggle("hidden");
+  $(ids.cols).onclick = () => { state.colsOpen[kind] = !colsOpen(kind); renderDocList(kind); };
   for (const box of $(ids.colsMenu).querySelectorAll("input[data-col]")) {
     box.onchange = () => {
       if (box.checked) chosen.add(box.dataset.col);
       else chosen.delete(box.dataset.col);
+      state.colsOpen[kind] = true;
       saveUi();
       renderDocList(kind);
     };
@@ -843,6 +871,7 @@ async function renderDocList(kind) {
       const j = button.dataset.move === "up" ? i - 1 : i + 1;
       if (j < 0 || j >= order.length) return;
       [order[i], order[j]] = [order[j], order[i]];
+      state.colsOpen[kind] = true;
       saveUi();
       renderDocList(kind);
     };

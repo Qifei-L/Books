@@ -53,6 +53,7 @@ const options = (rows, selected, label, empty) =>
 // document no longer pulls every list in the company.
 async function refreshLedger() {
   state.rendered = {};
+  state.docData = {};
   await showTab(state.tab ?? "sales-invoices", true);
 }
 
