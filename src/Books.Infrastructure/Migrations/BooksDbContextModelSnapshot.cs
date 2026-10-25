@@ -1871,6 +1871,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("line_id");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
                     b.Property<decimal>("NetAmount")
                         .HasPrecision(20, 4)
                         .HasColumnType("numeric(20,4)")
@@ -1938,6 +1942,9 @@ namespace Books.Infrastructure.Migrations
 
                     b.HasIndex("ItemId")
                         .HasDatabaseName("ix_purchase_invoice_lines_item_id");
+
+                    b.HasIndex("LocationId")
+                        .HasDatabaseName("ix_purchase_invoice_lines_location_id");
 
                     b.HasIndex("TaxCodeId")
                         .HasDatabaseName("ix_purchase_invoice_lines_tax_code_id");
@@ -2196,6 +2203,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("line_id");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
                     b.Property<decimal>("NetAmount")
                         .HasPrecision(20, 4)
                         .HasColumnType("numeric(20,4)")
@@ -2259,6 +2270,9 @@ namespace Books.Infrastructure.Migrations
 
                     b.HasIndex("ItemId")
                         .HasDatabaseName("ix_sales_invoice_lines_item_id");
+
+                    b.HasIndex("LocationId")
+                        .HasDatabaseName("ix_sales_invoice_lines_location_id");
 
                     b.HasIndex("OtherTaxCodeId")
                         .HasDatabaseName("ix_sales_invoice_lines_other_tax_code_id");
@@ -2425,6 +2439,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(20, 4)
                         .HasColumnType("numeric(20,4)")
@@ -2452,9 +2470,131 @@ namespace Books.Infrastructure.Migrations
                     b.HasIndex("ItemId")
                         .HasDatabaseName("ix_stock_adjustment_lines_item_id");
 
+                    b.HasIndex("LocationId")
+                        .HasDatabaseName("ix_stock_adjustment_lines_location_id");
+
                     b.ToTable("stock_adjustment_lines", null, t =>
                         {
                             t.HasCheckConstraint("ck_stock_adjustment_lines_quantity", "quantity <> 0 OR value <> 0");
+                        });
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.StockTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("FromLocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("from_location_id");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reference");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("ToLocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("to_location_id");
+
+                    b.Property<long>("TransferNo")
+                        .HasColumnType("bigint")
+                        .HasColumnName("transfer_no");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stock_transfers");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_stock_transfers_created_by");
+
+                    b.HasIndex("LedgerId", "FromLocationId")
+                        .HasDatabaseName("ix_stock_transfers_ledger_id_from_location_id");
+
+                    b.HasIndex("LedgerId", "ToLocationId")
+                        .HasDatabaseName("ix_stock_transfers_ledger_id_to_location_id");
+
+                    b.HasIndex("LedgerId", "TransferNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_stock_transfers_ledger_id_transfer_no");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_stock_transfers_org_id_ledger_id");
+
+                    b.ToTable("stock_transfers", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_transfers", "status IN ('posted', 'deleted') AND from_location_id <> to_location_id");
+                        });
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.StockTransferLine", b =>
+                {
+                    b.Property<Guid>("TransferId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("transfer_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_no");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("quantity");
+
+                    b.HasKey("TransferId", "LineNo")
+                        .HasName("pk_stock_transfer_lines");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_stock_transfer_lines_item_id");
+
+                    b.ToTable("stock_transfer_lines", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_transfer_lines_quantity", "quantity > 0");
                         });
                 });
 
@@ -3329,6 +3469,64 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.Location", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean")
+                        .HasColumnName("active");
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_locations");
+
+                    b.HasAlternateKey("LedgerId", "Id")
+                        .HasName("ak_locations_ledger_id_id");
+
+                    b.HasIndex("LedgerId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_locations_ledger_id")
+                        .HasFilter("is_default");
+
+                    b.HasIndex("OrgId", "LedgerId")
+                        .HasDatabaseName("ix_locations_org_id_ledger_id");
+
+                    b.ToTable("locations", (string)null);
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.Party", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4051,6 +4249,12 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_purchase_invoice_lines_items_item_id");
 
+                    b.HasOne("Books.Domain.Ledgers.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_purchase_invoice_lines_locations_location_id");
+
                     b.HasOne("Books.Domain.Ledgers.TaxCode", null)
                         .WithMany()
                         .HasForeignKey("TaxCodeId")
@@ -4151,6 +4355,12 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_sales_invoice_lines_items_item_id");
 
+                    b.HasOne("Books.Domain.Ledgers.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_sales_invoice_lines_locations_location_id");
+
                     b.HasOne("Books.Domain.Ledgers.TaxCode", null)
                         .WithMany()
                         .HasForeignKey("OtherTaxCodeId")
@@ -4234,6 +4444,63 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_stock_adjustment_lines_items_item_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_stock_adjustment_lines_locations_location_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.StockTransfer", b =>
+                {
+                    b.HasOne("Books.Domain.Access.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_transfers_users_created_by");
+
+                    b.HasOne("Books.Domain.Ledgers.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "FromLocationId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_transfers_locations_ledger_id_from_location_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId", "ToLocationId")
+                        .HasPrincipalKey("LedgerId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_transfers_locations_ledger_id_to_location_id");
+
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_transfers_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.StockTransferLine", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_transfer_lines_items_item_id");
+
+                    b.HasOne("Books.Domain.Documents.StockTransfer", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("TransferId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_transfer_lines_stock_transfers_transfer_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Journals.Journal", b =>
@@ -4517,6 +4784,17 @@ namespace Books.Infrastructure.Migrations
                         .HasConstraintName("fk_ledgers_companies");
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.Location", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId", "LedgerId")
+                        .HasPrincipalKey("OrgId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_locations_ledgers_org_id_ledger_id");
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.Party", b =>
                 {
                     b.HasOne("Books.Domain.Ledgers.Ledger", null)
@@ -4592,6 +4870,11 @@ namespace Books.Infrastructure.Migrations
                 {
                     b.Navigation("Entries");
 
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.StockTransfer", b =>
+                {
                     b.Navigation("Lines");
                 });
 

@@ -90,6 +90,7 @@ internal sealed class PurchaseInvoiceLineConfiguration : IEntityTypeConfiguratio
 {
     public void Configure(EntityTypeBuilder<PurchaseInvoiceLine> b)
     {
+        b.HasOne<Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
         b.Property(x => x.Unit).HasMaxLength(20);
         b.Property(x => x.UnitFactor).HasPrecision(20, 4).HasDefaultValue(1m);
         b.Ignore(x => x.BaseQuantity);
@@ -193,6 +194,7 @@ internal sealed class SalesInvoiceLineConfiguration : IEntityTypeConfiguration<S
 {
     public void Configure(EntityTypeBuilder<SalesInvoiceLine> b)
     {
+        b.HasOne<Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
         b.Property(x => x.Unit).HasMaxLength(20);
         b.Property(x => x.UnitFactor).HasPrecision(20, 4).HasDefaultValue(1m);
         b.Ignore(x => x.BaseQuantity);
@@ -455,6 +457,7 @@ internal sealed class StockAdjustmentLineConfiguration : IEntityTypeConfiguratio
 {
     public void Configure(EntityTypeBuilder<StockAdjustmentLine> b)
     {
+        b.HasOne<Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
         b.ToTable("stock_adjustment_lines", t => t.HasCheckConstraint("ck_stock_adjustment_lines_quantity", "quantity <> 0 OR value <> 0"));
         b.HasKey(x => new { x.AdjustmentId, x.LineNo });
         b.Property(x => x.Description).HasMaxLength(1000);
@@ -520,6 +523,58 @@ internal sealed class StockAdjustmentEntryConfiguration : IEntityTypeConfigurati
         b.Property(x => x.Amount).HasPrecision(20, 4);
         b.Property(x => x.Description).HasMaxLength(1000);
         b.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class LocationConfiguration : IEntityTypeConfiguration<Location>
+{
+    public void Configure(EntityTypeBuilder<Location> b)
+    {
+        b.ToTable("locations");
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Name).HasMaxLength(200);
+        b.Property(x => x.Code).HasMaxLength(20);
+        b.HasAlternateKey(x => new { x.LedgerId, x.Id });
+        b.HasIndex(x => x.LedgerId).IsUnique().HasFilter("is_default");
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class StockTransferConfiguration : IEntityTypeConfiguration<StockTransfer>
+{
+    public void Configure(EntityTypeBuilder<StockTransfer> b)
+    {
+        b.ToTable("stock_transfers", t => t.HasCheckConstraint("ck_stock_transfers", "status IN ('posted', 'deleted') AND from_location_id <> to_location_id"));
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Reference).HasMaxLength(200);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.HasIndex(x => new { x.LedgerId, x.TransferNo }).IsUnique();
+        b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.TransferId).OnDelete(DeleteBehavior.Restrict);
+        b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        b.HasOne<Ledger>().WithMany()
+            .HasForeignKey(x => new { x.OrgId, x.LedgerId }).HasPrincipalKey(x => new { x.OrgId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Location>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.FromLocationId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Location>().WithMany()
+            .HasForeignKey(x => new { x.LedgerId, x.ToLocationId }).HasPrincipalKey(x => new { x.LedgerId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class StockTransferLineConfiguration : IEntityTypeConfiguration<StockTransferLine>
+{
+    public void Configure(EntityTypeBuilder<StockTransferLine> b)
+    {
+        b.ToTable("stock_transfer_lines", t => t.HasCheckConstraint("ck_stock_transfer_lines_quantity", "quantity > 0"));
+        b.HasKey(x => new { x.TransferId, x.LineNo });
+        b.Property(x => x.Quantity).HasPrecision(20, 4);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

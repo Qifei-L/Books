@@ -227,6 +227,11 @@ public sealed class PurchaseInvoiceLine
     /// <summary>The quantity in the item's base unit.</summary>
     public decimal? BaseQuantity => Quantity * UnitFactor;
 
+    /// <summary>Inventory items: the location the stock leaves or arrives at; null when the ledger has no locations.</summary>
+    public Guid? LocationId { get; private set; }
+
+    public void AtLocation(Guid? locationId) => LocationId = locationId;
+
     public void InUnit(string? unit, decimal factor)
     {
         Unit = string.IsNullOrWhiteSpace(unit) ? null : unit.Trim();

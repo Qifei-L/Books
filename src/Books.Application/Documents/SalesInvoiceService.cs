@@ -16,7 +16,7 @@ namespace Books.Application.Documents;
 /// <param name="OtherTaxCodeId">A specific, accommodation or public lighting tax charged on the line, on top of VAT.</param>
 public sealed record SalesLineInput(
     Guid AccountId, string? Description, Guid? ItemId, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
-    Guid? TaxCodeId, decimal? TaxOverride, string? TaxReason, Guid? OtherTaxCodeId = null, string? Unit = null);
+    Guid? TaxCodeId, decimal? TaxOverride, string? TaxReason, Guid? OtherTaxCodeId = null, string? Unit = null, Guid? LocationId = null);
 
 /// <param name="ReceivableAccountId">Omit to use the ledger's only Receivable account.</param>
 /// <param name="DueDate">Omit for invoice date + the customer's payment terms.</param>
@@ -28,7 +28,7 @@ public sealed record SalesInvoiceInput(
 public sealed record SalesLineDto(
     Guid LineId, Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string NetAmount,
     Guid? TaxCodeId, string TaxCalculated, string TaxAmount, bool TaxAdjusted, string? TaxReason, Guid? OtherTaxCodeId, string OtherTaxAmount,
-    string? Unit = null);
+    string? Unit = null, Guid? LocationId = null);
 
 public sealed record SalesInvoiceDto(
     Guid Id, Guid LedgerId, string Type, long InvoiceNo, Guid? OriginalInvoiceId, Guid CustomerId, Guid ReceivableAccountId, DateOnly Date, DateOnly DueDate,
@@ -255,6 +255,10 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             salesLine.InUnit(unit, factor);
             if (trackedItem is not null)
             {
+                salesLine.AtLocation(await Locations.ResolveAsync(db, ledger.Id, line.LocationId, $"Line {i}: location_id", ct));
+            }
+            if (trackedItem is not null)
+            {
                 // Average cost (owner default, Manager.io style) of the stock before this document, on its date, into
                 // the item's cost of sales account and out of its inventory account.
                 var average = await Inventory.AverageCostAsync(db, ledger.Id, line.ItemId!.Value, input.Date, invoice.Id, ct);
@@ -331,7 +335,7 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             x.i.Id, x.i.LedgerId, x.i.IsCreditNote ? "credit_note" : "invoice", x.i.InvoiceNo, x.i.OriginalInvoiceId, x.i.CustomerId, x.i.ReceivableAccountId,
             x.i.Date, x.i.DueDate, x.i.Reference, x.i.Description,
             x.i.Lines.OrderBy(l => l.LineNo).Select(l => new SalesLineDto(l.LineId, l.AccountId, l.Description, l.ItemId, Q(l.Quantity), Q(l.UnitPrice),
-                F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason, l.OtherTaxCodeId, F(l.OtherTaxAmount), l.Unit)).ToList(),
+                F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason, l.OtherTaxCodeId, F(l.OtherTaxAmount), l.Unit, l.LocationId)).ToList(),
             F(x.i.NetTotal), F(x.i.OtherTaxTotal), F(x.i.TaxTotal), F(x.i.GrossTotal), taxCurrencies.GetValueOrDefault(x.i.Id),
             Text.Of(x.i.Status), x.i.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.i.Issues, BooksJson.Options)!,
             x.i.JournalId, x.JournalNo, x.i.Version.ToString(), x.i.Currency, x.i.ExchangeRate?.ToString("0.##########", CultureInfo.InvariantCulture),

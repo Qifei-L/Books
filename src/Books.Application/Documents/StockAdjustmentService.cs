@@ -15,8 +15,9 @@ namespace Books.Application.Documents;
 /// <param name="Amount">Signed change of value; omit to value the quantity at the average cost (or UnitCost coming in). Alone, it revalues the stock.</param>
 /// <param name="UnitCost">Cost of stock coming in, without an Amount; omit to use the average cost on the date.</param>
 /// <param name="AccountId">The other side; omit for the item's cost of sales account. Not used when the adjustment gives entries.</param>
+/// <param name="LocationId">The location counted or adjusted; omit for the default location.</param>
 public sealed record StockAdjustmentLineInput(Guid ItemId, string? Description, decimal? Quantity, decimal? CountedQuantity, decimal? UnitCost, Guid? AccountId,
-    decimal? Amount = null);
+    decimal? Amount = null, Guid? LocationId = null);
 
 /// <param name="Amount">Debit positive, credit negative.</param>
 public sealed record StockAdjustmentEntryInput(Guid AccountId, decimal Amount, string? Description);
@@ -26,7 +27,8 @@ public sealed record StockAdjustmentInput(DateOnly Date, string? Reference, stri
     IReadOnlyList<StockAdjustmentEntryInput>? Entries = null);
 
 public sealed record StockAdjustmentLineDto(
-    int LineNo, Guid ItemId, string? Description, string Quantity, string? CountedQuantity, string BookQuantity, string? UnitCost, string Value, Guid? AccountId);
+    int LineNo, Guid ItemId, string? Description, string Quantity, string? CountedQuantity, string BookQuantity, string? UnitCost, string Value, Guid? AccountId,
+    Guid? LocationId = null);
 
 public sealed record StockAdjustmentEntryDto(int LineNo, Guid AccountId, string Debit, string Credit, string? Description);
 
@@ -167,9 +169,9 @@ public sealed class StockAdjustmentService(IBooksDb db, WriteRunner writes, Read
     private async Task SetAsync(StockAdjustment adjustment, Ledger ledger, StockAdjustmentInput input, bool isNew, CancellationToken ct)
     {
         var lines = input.Lines ?? throw BooksProblem.Invalid("lines is required.");
-        if (lines.GroupBy(l => l.ItemId).Any(g => g.Count() > 1))
+        if (lines.GroupBy(l => (l.ItemId, l.LocationId)).Any(g => g.Count() > 1))
         {
-            throw BooksProblem.Invalid("Each item may appear once per adjustment.");
+            throw BooksProblem.Invalid("Each item may appear once per location in an adjustment.");
         }
         var minor = Currencies.Require(ledger.BaseCurrency).MinorUnits;
         var itemIds = lines.Select(l => l.ItemId).ToList();
@@ -215,10 +217,13 @@ public sealed class StockAdjustmentService(IBooksDb db, WriteRunner writes, Read
                 throw BooksProblem.Invalid($"lines[{i}]: counted_quantity and unit_cost cannot be negative.");
             }
             var (onHand, onHandValue) = await Inventory.PositionAsync(db, ledger.Id, item.Id, input.Date, adjustment.Id, ct);
-            var change = line.Quantity ?? (line.CountedQuantity is { } counted ? counted - onHand : 0);
+            // Counts are per location: the change is what was counted there less what the books show there.
+            var location = await Locations.ResolveAsync(db, ledger.Id, line.LocationId, $"lines[{i}].location_id", ct);
+            var book = location is null ? onHand : await Inventory.QuantityAtAsync(db, ledger.Id, item.Id, location.Value, input.Date, adjustment.Id, ct);
+            var change = line.Quantity ?? (line.CountedQuantity is { } counted ? counted - book : 0);
             if (change == 0 && line.Amount is null or 0)
             {
-                throw BooksProblem.Invalid($"lines[{i}]: {item.Name} already has {Q(onHand)} on hand on {input.Date:yyyy-MM-dd}; leave the line out.");
+                throw BooksProblem.Invalid($"lines[{i}]: {item.Name} already has {Q(book)} on hand on {input.Date:yyyy-MM-dd}; leave the line out.");
             }
             if (change < 0 && line.UnitCost is not null)
             {
@@ -253,7 +258,7 @@ public sealed class StockAdjustmentService(IBooksDb db, WriteRunner writes, Read
             }
             try
             {
-                built.Add(new StockAdjustmentLine(item.Id, line.Description, change, line.CountedQuantity, onHand, line.UnitCost, value, account, inventoryAccount));
+                built.Add(new StockAdjustmentLine(item.Id, line.Description, change, line.CountedQuantity, book, line.UnitCost, value, account, inventoryAccount).AtLocation(location));
             }
             catch (DomainException e)
             {
@@ -300,7 +305,7 @@ public sealed class StockAdjustmentService(IBooksDb db, WriteRunner writes, Read
         static string? N(decimal? v) => v is { } x ? Q(x) : null;
         return new StockAdjustmentDto(a.Id, a.LedgerId, a.AdjustmentNo, a.Date, a.Reference, a.Description,
             a.Lines.OrderBy(l => l.LineNo).Select(l => new StockAdjustmentLineDto(l.LineNo, l.ItemId, l.Description, Q(l.Quantity), N(l.CountedQuantity),
-                Q(l.BookQuantity), N(l.UnitCost), F(l.Value), l.AccountId)).ToList(),
+                Q(l.BookQuantity), N(l.UnitCost), F(l.Value), l.AccountId, l.LocationId)).ToList(),
             F(a.Lines.Sum(l => l.Value)), status,
             a.Issues is null ? [] : System.Text.Json.JsonSerializer.Deserialize<List<JournalIssue>>(a.Issues, BooksJson.Options)!,
             a.JournalId, journalNo, a.Version.ToString(),
