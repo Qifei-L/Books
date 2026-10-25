@@ -4,7 +4,7 @@ Where the preview app stands after the shell, Sales, Purchases, Cash and bank, I
 assets, Journals, Business parties, the chart and tax settings, and the shared list work, what was decided on
 the way, and what is deliberately still missing. Branch `ui/sales-pages`, pull request #98 against `main`. The
 app change is confined to `src/Books.Api/wwwroot/app`: `app.js`, `index.html`, `app.css`, `forms.js`,
-`setup.js`, `inventory.js`, `stock.js`, `payroll.js`, `list.js`.
+`setup.js`, `inventory.js`, `stock.js`, `payroll.js`, `list.js`, `classes.js`.
 
 ## Shape
 
@@ -270,3 +270,13 @@ parties simple list and the Payroll Employees page. What is left is master data,
 
 Order agreed: Cash and bank, Business parties, Inventory, the chart/bank and tax merges, the remaining
 document lists and the Payroll employees list are done. What remains is groups, usages and members.
+## Journal dimensions (2026-10-25)
+
+The journal feature now has a Classes page (Books group) and class/location/party/tax controls on each manual journal
+line. Sales and purchase line grids also show Class and Location. GL Detail adds Class, Location and Party columns and
+links each line to its journal. The tax code on a manual line is entered gross; the server shows the net line and posts
+the tax line separately. Withholding on manual journals remains out of scope.
+
+Still open for the UI: filters by class/location on TB, BS and P&L; class/location pickers on payments, stock
+adjustments, assemblies, fixed assets and pay runs; and a permission gate for manual AR/AP postings.
+

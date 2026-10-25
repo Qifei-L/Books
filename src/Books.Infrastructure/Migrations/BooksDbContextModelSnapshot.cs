@@ -1996,6 +1996,10 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("account_id");
 
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("class_id");
+
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
@@ -2310,6 +2314,10 @@ namespace Books.Infrastructure.Migrations
                     b.Property<Guid>("AccountId")
                         .HasColumnType("uuid")
                         .HasColumnName("account_id");
+
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("class_id");
 
                     b.Property<decimal>("CostAmount")
                         .HasPrecision(20, 4)
@@ -2887,6 +2895,12 @@ namespace Books.Infrastructure.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)")
                         .HasColumnName("tax_direction");
+
+                    b.Property<bool>("TaxLine")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("tax_line");
 
                     b.HasKey("RevisionId", "LineNo")
                         .HasName("pk_journal_lines");

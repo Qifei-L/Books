@@ -84,6 +84,7 @@ internal sealed class JournalLineConfiguration : IEntityTypeConfiguration<Journa
         b.HasIndex(x => new { x.LedgerId, x.LocationId });
         b.Property(x => x.TaxAmount).HasPrecision(20, 4);
         b.Property(x => x.TaxCalculated).HasPrecision(20, 4);
+        b.Property(x => x.TaxLine).HasDefaultValue(false);
         b.ToTable("journal_lines", t =>
         {
             t.HasCheckConstraint("ck_journal_lines_amount", "amount <> 0");

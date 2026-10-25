@@ -11,7 +11,8 @@ public static class PurchaseEndpoints
     /// <param name="TaxAmount">Optional override of the calculated VAT.</param>
     public sealed record LineRequest(
         Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string? Amount,
-        Guid? TaxCodeId, string? TaxAmount, string? TaxReason, Guid? WithholdingCodeId, string? Unit = null, Guid? LocationId = null);
+        Guid? TaxCodeId, string? TaxAmount, string? TaxReason, Guid? WithholdingCodeId, string? Unit = null, Guid? LocationId = null,
+        Guid? ClassId = null);
 
     public sealed record InvoiceRequest(
         Guid SupplierId, Guid? PayableAccountId, DateOnly Date, DateOnly? DueDate, string? Reference, string? Description,
@@ -55,7 +56,7 @@ public static class PurchaseEndpoints
         (body.Lines ?? throw BooksProblem.Invalid("lines is required.")).Select((l, i) => new PurchaseLineInput(
             l.AccountId, l.Description, l.ItemId, Number(l.Quantity, i, "quantity", signed: true), Number(l.UnitPrice, i, "unit_price"),
             Number(l.Amount, i, "amount", signed: true), l.TaxCodeId, Number(l.TaxAmount, i, "tax_amount", signed: true), l.TaxReason,
-            l.WithholdingCodeId, l.Unit, l.LocationId)).ToList(),
+            l.WithholdingCodeId, l.Unit, l.LocationId, l.ClassId)).ToList(),
         body.OriginalInvoiceId,
         body.TaxCurrencyRate is null && body.TaxCurrencyReason is null ? null
             : new TaxCurrencyInput(Rate(body.TaxCurrencyRate), body.TaxCurrencyReason),

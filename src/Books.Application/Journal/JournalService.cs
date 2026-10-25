@@ -10,7 +10,7 @@ namespace Books.Application.Journals;
 
 public sealed record JournalLineDto(Guid LineId, Guid AccountId, Guid? PartyId, Guid? ItemId, string? Quantity, string Debit, string Credit, string? Description,
     string? CurrencyAmount = null, Guid? ClassId = null, Guid? LocationId = null, Guid? TaxCodeId = null, string? TaxAmount = null,
-    string? TaxCalculated = null, string? TaxDirection = null);
+    string? TaxCalculated = null, string? TaxDirection = null, bool TaxLine = false);
 
 /// <param name="Status">Status of the revision shown: draft, error, posted or deleted.</param>
 public sealed record JournalDto(
@@ -282,7 +282,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             });
             if (tax.Amount != 0)
             {
-                lines.Add(new DraftLine(taxAccountId, tax.Amount, $"{code.Name} (tax)"));
+                lines.Add(new DraftLine(taxAccountId, tax.Amount, $"{code.Name} (tax)", TaxLine: true));
             }
         }
         return draft with { Lines = lines };
@@ -298,7 +298,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
         {
             var line = draft.Lines[i];
             db.JournalLines.Add(new JournalLine(revision, i + 1, line.LineId ?? Guid.CreateVersion7(), line.AccountId, Trim(line.Description), line.Amount, line.PartyId, line.ItemId, line.Quantity, line.CurrencyAmount, line.ClassId, line.LocationId,
-                line.TaxCodeId, line.TaxAmount, line.TaxCalculated, line.TaxDirection));
+                line.TaxCodeId, line.TaxAmount, line.TaxCalculated, line.TaxDirection, line.TaxLine));
         }
         journal.Apply(revision);
         return revision;
@@ -347,7 +347,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             lines.Select(l => new JournalLineDto(l.LineId, l.AccountId, l.PartyId, l.ItemId, l.Quantity?.ToString("0.####", CultureInfo.InvariantCulture), Format(Math.Max(l.Amount, 0), minor), Format(Math.Max(-l.Amount, 0), minor), l.Description,
                 l.CurrencyAmount?.ToString("0.####", CultureInfo.InvariantCulture), l.ClassId, l.LocationId, l.TaxCodeId,
                 l.TaxAmount is { } tax ? Format(tax, minor) : null, l.TaxCalculated is { } calculated ? Format(calculated, minor) : null,
-                l.TaxDirection is { } direction ? Text.Of(direction) : null)).ToList(),
+                l.TaxDirection is { } direction ? Text.Of(direction) : null, l.TaxLine)).ToList(),
             issues, revision.RevisionNo, journal.CreatedBy, journal.CreatedAt, journal.Version.ToString());
     }
 

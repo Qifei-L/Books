@@ -41,7 +41,7 @@ Replace our Manager.io bookkeeping with a system that:
 
 ## Milestones
 
-| Milestone | Done when | Status (2026-10-24) |
+| Milestone | Done when | Status (2026-10-25) |
 | --- | --- | --- |
 | M1 Foundation | Org isolation, invitation and last-admin tests pass; accounts CRUD | Done |
 | M2 Journal core | Post, edit, delete, Close; TB and GL Detail; invariants tested | Done |
@@ -57,7 +57,8 @@ Replace our Manager.io bookkeeping with a system that:
 | M12 Multi-currency | Foreign-currency bank accounts, documents and parties; exchange differences | Done: invoices and notes, KHR bank accounts, realized differences, year-end revaluation |
 | M13 Attachments | Files attached to documents and journals, shared by every document type | Planned |
 | M14 Organization-shared information | Information kept once per organization and used by every company (ledger) in it: customers and suppliers, items, tax codes, return definitions and templates; exchange rates are already shared. Each ledger still keeps its own balances and documents | Planned (scope to confirm) |
-| M15 Data entry for people | Forms in the app for the work people do by hand: customers and suppliers, sales, purchases, payments and receipts, journals; same API, rules and audit as AI clients | In progress |
-| Later | Annual income tax return; CamInvoice | Planned |
+| M15 Data entry for people | Forms in the app for the work people do by hand: customers and suppliers, sales, purchases, payments and receipts, journals; same API, rules and audit as AI clients | In progress (journal dimensions done) |
+| M15.1 Journal dimensions | Manual journals post AR/AP with a party; class and location on journal, sales and purchase lines; class master data, API and page; manual VAT/other tax entered gross and split into net + tax; GL Detail shows class, location and party | Done |
+| Later | Report filters by class/location (TB/BS/P&L); remaining document dimensions; M13 attachments; M14 organization-shared data; annual income tax return; CamInvoice | Planned |
 
 MCP tools ship with each milestone, not at the end.

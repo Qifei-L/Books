@@ -83,6 +83,45 @@ public sealed class JournalDimensionTests(TestHost host)
         Assert.Equal(locationId, gl.GetProperty("lines")[0].GetProperty("location_id").GetGuid());
     }
 
+    [Fact]
+    public async Task A_document_line_class_flows_to_the_journal_and_GL()
+    {
+        var s = await new PurchaseInvoiceTests(host).SetUpAsync();
+        var classId = (await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/classes", new { name = "Projects" })).DataAsync(HttpStatusCode.Created)).Id();
+        var invoice = await PostAsync(s.Books.Admin, s.Url, new
+        {
+            supplier_id = s.Supplier, date = "2026-10-15", reference = "CLASS-1",
+            lines = new object[] { new { account_id = s.Rent, amount = "100.00", class_id = classId } },
+        });
+
+        Assert.Equal(classId, invoice.GetProperty("lines")[0].GetProperty("class_id").GetGuid());
+        var gl = await GetAsync(s.Books.Admin, $"{s.LedgerUrl}/reports/gl-detail?accountId={s.Rent}&from=2026-10-01&to=2026-10-31");
+        Assert.Equal(classId, gl.GetProperty("lines")[0].GetProperty("class_id").GetGuid());
+    }
+
+    [Fact]
+    public async Task Editing_a_tax_journal_does_not_duplicate_the_generated_tax_line()
+    {
+        var s = await new PurchaseInvoiceTests(host).SetUpAsync();
+        var tax = s.Taxes["VAT 10% (purchases)"];
+        var body = new
+        {
+            accounting_date = "2026-10-25", post = true, reference = "MJ-TAX-EDIT",
+            lines = new object[]
+            {
+                new { account_id = s.Rent, debit = "110.00", tax_code_id = tax, description = "Rent gross" },
+                new { account_id = s.Books.Cash, credit = "110.00", description = "Paid" },
+            },
+        };
+        var posted = await PostAsync(s.Books.Admin, $"{s.LedgerUrl}/journals", body);
+        var edited = await (await s.Books.Admin.WriteAsync(HttpMethod.Put, $"{s.LedgerUrl}/journals/{posted.Id()}",
+            body, ifMatch: long.Parse(Text(posted, "version")))).DataAsync();
+
+        Assert.Equal("posted", edited.GetProperty("status").GetString());
+        Assert.Equal(3, edited.GetProperty("lines").GetArrayLength());
+        Assert.Single(edited.GetProperty("lines").EnumerateArray(), (l) => l.TryGetProperty("tax_line", out var t) && t.GetBoolean());
+    }
+
     private static async Task<JsonElement> PostAsync(HttpClient client, string url, object body) =>
         await (await client.PostAsync(url, body)).DataAsync(HttpStatusCode.Created);
 

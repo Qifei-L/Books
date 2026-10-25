@@ -8,7 +8,7 @@ namespace Books.Domain.Journals;
 public sealed record DraftLine(
     Guid AccountId, decimal Amount, string? Description = null, Guid? LineId = null, Guid? PartyId = null, Guid? ItemId = null, decimal? Quantity = null,
     decimal? CurrencyAmount = null, Guid? ClassId = null, Guid? LocationId = null, Guid? TaxCodeId = null, decimal? TaxAmount = null,
-    decimal? TaxCalculated = null, TaxDirection? TaxDirection = null);
+    decimal? TaxCalculated = null, TaxDirection? TaxDirection = null, bool TaxLine = false);
 
 public sealed record JournalDraft(DateOnly AccountingDate, IReadOnlyList<DraftLine> Lines, string? Reference = null, string? Description = null);
 

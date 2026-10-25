@@ -33,3 +33,12 @@ Research summary from 2026-10-23. **This is not tax advice.** Confirm each item 
 - The exact boxes on the current monthly return form, so the tax module's box mapping matches it.
 - Whether the prepayment suspension applies to our companies, and whether a nil return is still required.
 - Which other monthly taxes apply to us (salary, specific tax, accommodation, public lighting) and whether any belong in v1.
+
+## Manual journal VAT (2026-10-25)
+
+A manual journal line may carry a VAT or other tax code. The amount entered is gross: the server posts the net to the
+line's account and the tax to the code's tax account, and keeps the code, tax amount and sale/purchase direction on the
+net line. The tax return already includes postings on tax accounts that do not come from documents; the direction is
+stored for drilldown and future line-box mapping. Withholding on a manual journal is not supported; use a payment or
+payroll document so the withholding has a document to attach to.
+

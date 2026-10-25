@@ -160,7 +160,8 @@ public sealed class PurchaseInvoice
         var sign = IsDebitNote ? -1 : 1;
         decimal C(decimal amount) => ToBase(amount, minorUnits);
         var text = Description ?? (IsDebitNote ? $"Debit note {InvoiceNo}" : $"Purchase invoice {InvoiceNo}");
-        var lines = _lines.Select(l => new DraftLine(l.AccountId, sign * C(l.NetAmount), l.Description ?? text, l.LineId, ItemId: l.ItemId, Quantity: l.Quantity)).ToList();
+        var lines = _lines.Select(l => new DraftLine(l.AccountId, sign * C(l.NetAmount), l.Description ?? text, l.LineId, ItemId: l.ItemId, Quantity: l.Quantity,
+            ClassId: l.ClassId, LocationId: l.LocationId)).ToList();
         foreach (var vat in _lines.Where(l => l.TaxAmount != 0 && l.TaxCodeId is not null)
                      .GroupBy(l => taxCodes[l.TaxCodeId!.Value].AccountId!.Value))
         {
@@ -226,7 +227,11 @@ public sealed class PurchaseInvoiceLine
     /// <summary>Inventory items: the location the stock leaves or arrives at; null when the ledger has no locations.</summary>
     public Guid? LocationId { get; private set; }
 
+    /// <summary>Optional reporting class carried through to the journal line.</summary>
+    public Guid? ClassId { get; private set; }
+
     public void AtLocation(Guid? locationId) => LocationId = locationId;
+    public void AtClass(Guid? classId) => ClassId = classId;
 
     public void InUnit(string? unit, decimal factor)
     {

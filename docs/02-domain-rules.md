@@ -31,7 +31,7 @@ Single source of truth · Consistency by design · Traceability · Secure by def
 15. The chart has groups and accounts, as in Manager.io. Groups are headings that never take postings and may sit inside a group of the same type. Accounts sit under at most one group of the same type in the same ledger and never contain other accounts. **[T]**
 16. Code is user-entered and editable, unique within a ledger ignoring letter case. The stable Account ID is what journals reference.
 17. System purposes: Retained Earnings, Opening Balance Clearing (must be zero after setup), Rounding Differences (only if needed).
-18. Control accounts (AR, AP) are posted only by documents, and every line on them carries a Party. **[T]** *(default)*
+18. Control accounts (AR, AP) carry a Party. Documents post them directly; a manual journal may also post them when every control line names an active party. Inventory, fixed assets and payroll remain document-only. **[T]**
 19. Used accounts are deactivated, not deleted; accounts that were never used may be deleted. Type and parent of a used account do not change. *(default)*
 20. Current Year Profit is calculated in reports, never posted to.
 
@@ -39,7 +39,7 @@ Single source of truth · Consistency by design · Traceability · Secure by def
 
 21. A journal has one transaction currency and one shared rate; manual rates are recorded with source Manual.
 22. A posted journal balances exactly in transaction and base currency. **[T]** No balancing line is invented and nothing is silently rounded.
-23. Lines carry Account, optional Party, optional Item (which may suggest an account), optional Qty. The selected Account is what is saved.
+23. Lines carry Account, optional Party, optional Item (which may suggest an account), optional Qty, optional Class and optional Location. The selected Account is what is saved. Class and Location are reporting dimensions; they never change the account or the subledger. A manual line may also carry a VAT or other tax code: the entered amount is gross, the account gets the net, and a tax line goes to the code's tax account.
 24. Journal No. is system-generated and unique per ledger. Reference is free text and may repeat.
 25. **Save** saves and posts in one action. **Save Draft** saves without posting.
 26. Outcomes: **Posted** (includes valid postings to Suspense), **Error** (definite validation failure, no accounting effect), **Pending** (unknown, reconcile before retrying). A timeout is not a failure.
@@ -61,7 +61,7 @@ Single source of truth · Consistency by design · Traceability · Secure by def
 
 37. Reports read only the current effective postings. Drafts, Error attempts and superseded revisions do not count. **[T]**
 38. Trial Balance: Code, Name, opening, period and closing debit/credit, with a full-ledger balance check. **[T]**
-39. GL Detail: date, Journal No., Reference, description, debit, credit, running balance, with opening balance and period totals.
+39. GL Detail: date, Journal No., Reference, description, Class, Location, Party, debit, credit, running balance, with opening balance and period totals.
 40. Balance Sheet (as of date): Assets = Liabilities + Equity, with Current Year Profit calculated and never double-counted with Retained Earnings. **[T]**
 41. P&L (date range): Income − Cost & Expense.
 42. Report totals and their drilldown come from the same database snapshot.

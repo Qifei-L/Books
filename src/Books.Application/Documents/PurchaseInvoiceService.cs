@@ -3,6 +3,7 @@ using System.Text.Json;
 using Books.Application.Access;
 using Books.Application.Common;
 using Books.Application.Journals;
+using Books.Application.Ledgers;
 using Books.Domain.Access;
 using Books.Domain.Documents;
 using Books.Domain.Journals;
@@ -15,7 +16,7 @@ namespace Books.Application.Documents;
 /// <param name="TaxOverride">A VAT amount entered by a person instead of the calculated one.</param>
 public sealed record PurchaseLineInput(
     Guid AccountId, string? Description, Guid? ItemId, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
-    Guid? TaxCodeId, decimal? TaxOverride, string? TaxReason, Guid? WithholdingCodeId, string? Unit = null, Guid? LocationId = null);
+    Guid? TaxCodeId, decimal? TaxOverride, string? TaxReason, Guid? WithholdingCodeId, string? Unit = null, Guid? LocationId = null, Guid? ClassId = null);
 
 /// <param name="PayableAccountId">Omit to use the ledger's only Payable account.</param>
 /// <param name="DueDate">Omit for invoice date + the supplier's payment terms.</param>
@@ -27,7 +28,7 @@ public sealed record PurchaseInvoiceInput(
 public sealed record PurchaseLineDto(
     Guid LineId, Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string NetAmount,
     Guid? TaxCodeId, string TaxCalculated, string TaxAmount, bool TaxAdjusted, string? TaxReason,
-    Guid? WithholdingCodeId, string WithholdingAmount, string? Unit = null, Guid? LocationId = null);
+    Guid? WithholdingCodeId, string WithholdingAmount, string? Unit = null, Guid? LocationId = null, Guid? ClassId = null);
 
 public sealed record PurchaseInvoiceDto(
     Guid Id, Guid LedgerId, string Type, long InvoiceNo, Guid? OriginalInvoiceId, Guid SupplierId, Guid PayableAccountId, DateOnly Date, DateOnly DueDate,
@@ -250,10 +251,8 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
             var purchaseLine = new PurchaseInvoiceLine(accountId, description, line.ItemId, line.Quantity, unitPrice, net,
                 line.TaxCodeId, tax, line.WithholdingCodeId, withholding);
             purchaseLine.InUnit(unit, factor);
-            if (line.ItemId is { } stockItem && await db.Items.AnyAsync(x => x.Id == stockItem && x.TrackInventory, ct))
-            {
-                purchaseLine.AtLocation(await Locations.ResolveAsync(db, ledger.Id, line.LocationId, $"Line {i}: location_id", ct));
-            }
+            purchaseLine.AtLocation(await Locations.ResolveAsync(db, ledger.Id, line.LocationId, $"Line {i}: location_id", ct));
+            purchaseLine.AtClass(await Classes.ResolveAsync(db, ledger.Id, line.ClassId, $"Line {i}: class_id", ct));
             lines.Add(purchaseLine);
         }
 
@@ -323,7 +322,7 @@ public sealed class PurchaseInvoiceService(IBooksDb db, WriteRunner writes, Read
             x.i.Id, x.i.LedgerId, x.i.IsDebitNote ? "debit_note" : "invoice", x.i.InvoiceNo, x.i.OriginalInvoiceId, x.i.SupplierId, x.i.PayableAccountId, x.i.Date, x.i.DueDate, x.i.Reference, x.i.Description,
             x.i.Lines.OrderBy(l => l.LineNo).Select(l => new PurchaseLineDto(l.LineId, l.AccountId, l.Description, l.ItemId, Q(l.Quantity), Q(l.UnitPrice),
                 F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason,
-                l.WithholdingCodeId, F(l.WithholdingAmount), l.Unit, l.LocationId)).ToList(),
+                l.WithholdingCodeId, F(l.WithholdingAmount), l.Unit, l.LocationId, l.ClassId)).ToList(),
             F(x.i.NetTotal), F(x.i.TaxTotal), F(x.i.GrossTotal), F(x.i.WithholdingTotal), F(x.i.PayableTotal), taxCurrencies.GetValueOrDefault(x.i.Id),
             Text.Of(x.i.Status), x.i.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.i.Issues, BooksJson.Options)!,
             x.i.JournalId, x.JournalNo, x.i.Version.ToString(), x.i.Currency, x.i.ExchangeRate?.ToString("0.##########", CultureInfo.InvariantCulture),

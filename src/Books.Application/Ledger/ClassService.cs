@@ -25,6 +25,10 @@ public sealed class ClassService(IBooksDb db, WriteRunner writes, ReadRunner rea
         writes.RunAsync(principal, new WriteRequest("class.save", orgId, meta, LedgerId: ledgerId), async scope =>
         {
             await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            if (string.IsNullOrWhiteSpace(input.Name))
+            {
+                throw BooksProblem.Invalid("name is required.");
+            }
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var all = await db.Classes.Where(c => c.LedgerId == ledgerId).ToListAsync(ct);
             AccountClass item;
@@ -35,7 +39,14 @@ public sealed class ClassService(IBooksDb db, WriteRunner writes, ReadRunner rea
             }
             else
             {
-                item = new AccountClass(Guid.CreateVersion7(), ledger, input.Name, input.Code, scope.Now);
+                try
+                {
+                    item = new AccountClass(Guid.CreateVersion7(), ledger, input.Name, input.Code, scope.Now);
+                }
+                catch (DomainException e)
+                {
+                    throw BooksProblem.Invalid(e.Message);
+                }
                 db.Classes.Add(item);
                 all.Add(item);
             }
@@ -57,4 +68,20 @@ public sealed class ClassService(IBooksDb db, WriteRunner writes, ReadRunner rea
         }, ct);
 
     private static ClassDto ToDto(AccountClass c) => new(c.Id, c.Name, c.Code, c.Active, c.Version.ToString());
+}
+
+/// <summary>Which class a document line uses.</summary>
+internal static class Classes
+{
+    /// <summary>The class given (an active one of the ledger), or null when none is given.</summary>
+    public static async Task<Guid?> ResolveAsync(IBooksDb db, Guid ledgerId, Guid? classId, string field, CancellationToken ct)
+    {
+        if (classId is not { } id)
+        {
+            return null;
+        }
+        return await db.Classes.AnyAsync(c => c.LedgerId == ledgerId && c.Id == id && c.Active, ct)
+            ? id
+            : throw BooksProblem.Invalid($"{field} must be an active class of this ledger.");
+    }
 }

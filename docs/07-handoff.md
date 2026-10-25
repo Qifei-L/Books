@@ -1,4 +1,4 @@
-# Handoff (2026-10-24)
+# Handoff (2026-10-25)
 
 What is built, what is not finished, and the questions still open. Read [05-decisions](05-decisions.md) for every owner
 decision; this page lists only what is left.
@@ -35,10 +35,11 @@ The HTTP API exists (`src/Books.Api/Http/LocationEndpoints.cs`, `AssemblyEndpoin
 
 Update the tool-list test (it checks the names in alphabetical order).
 
-### 2. Location on lines in the app
+### 2. Location and class on lines in the app
 
-Sales, purchase and stock adjustment forms (`forms.js`, `inventory.js`) have no location picker. Lines without one go to
-the default location. Show the picker only when the ledger has locations.
+Sales and purchase forms now show Class and Location pickers; journal lines show both, plus party and tax. The stock
+adjustment, assembly, payment, fixed-asset and pay-run forms still have no Class/Location picker. Lines without a class
+are unclassified; lines without a location use the default location.
 
 ### 3. Bill of materials in the app (question open)
 
@@ -60,9 +61,9 @@ Defaults were applied; owner may still change them:
 
 ## Decided for later
 
-- **Branches / locations at company level.** The owner plans company-level books and features per branch or location
-  later. For now a location is only a stock place, and stock recorded before any location existed belongs to the default
-  location (warehouse). Keep `Location` free of accounting meaning so it can grow into a branch dimension later.
+- **Branches / locations at company level.** A location is now both the stock place and an accounting dimension on
+  journal, sales and purchase lines. Branch-level books (a separate P&L/BS per branch) are still later. Stock recorded
+  before any location existed belongs to the default location (warehouse).
 
 ## Working on this repo
 
@@ -72,3 +73,19 @@ Defaults were applied; owner may still change them:
 - Development uses the local test issuer only; no real credentials or keys in code. Do not deploy or create cloud
   resources.
 - Small PRs; business questions not covered by the docs go at the top of the PR description for the owner.
+
+## Journal dimensions (2026-10-25)
+
+Branch `feat/journal-dimensions` adds the first slice of class/location dimensions and manual journal control:
+
+| Area | Done | Still missing |
+| --- | --- | --- |
+| Journal form | Party, class, location, tax code and tax direction; gross tax split | Withholding on manual journals (use payment/payroll) |
+| Sales / purchase forms | Class and location pickers on each line | Payment, stock adjustment, assembly, fixed-asset and pay-run lines |
+| Classes | Ledger-scoped master data, API and Classes page | Shared classes across an organization (M14) |
+| GL Detail | Class, location and party names per line | TB/BS/P&L filters by class/location |
+| MCP | list_classes, list_locations, dimensions on save_journal | class/location on sales, purchase and stock-adjustment draft line records |
+| Aging | Manual AR/AP lines count; aging still equals the control balance | Manual AR/AP permission is not restricted to administrators yet |
+
+Rules: class and location are reporting dimensions only; they never change the account or the subledger. A manual journal may post AR/AP with a party, but it still cannot control inventory, fixed assets or payroll.
+

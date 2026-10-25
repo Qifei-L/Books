@@ -141,7 +141,7 @@ public sealed class JournalLine
 
     public JournalLine(JournalRevision revision, int lineNo, Guid lineId, Guid accountId, string? description, decimal amount, Guid? partyId = null, Guid? itemId = null, decimal? quantity = null,
         decimal? currencyAmount = null, Guid? classId = null, Guid? locationId = null, Guid? taxCodeId = null, decimal? taxAmount = null,
-        decimal? taxCalculated = null, TaxDirection? taxDirection = null)
+        decimal? taxCalculated = null, TaxDirection? taxDirection = null, bool taxLine = false)
     {
         CurrencyAmount = currencyAmount;
         RevisionId = revision.Id;
@@ -161,6 +161,7 @@ public sealed class JournalLine
         TaxAmount = taxAmount;
         TaxCalculated = taxCalculated;
         TaxDirection = taxDirection;
+        TaxLine = taxLine;
     }
 
     public Guid RevisionId { get; private set; }
@@ -195,4 +196,7 @@ public sealed class JournalLine
     public decimal? TaxAmount { get; private set; }
     public decimal? TaxCalculated { get; private set; }
     public TaxDirection? TaxDirection { get; private set; }
+
+    /// <summary>True on the line generated for a manual journal's tax; the app hides it on edit and re-splits the net line.</summary>
+    public bool TaxLine { get; private set; }
 }

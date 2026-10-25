@@ -166,9 +166,9 @@ const DOCS = {
 /** What a sales or purchase form offers: parties on that side, accounts, items, tax codes, and invoices a note may correct. */
 async function documentChoices(side) {
   const sale = side === "sale";
-  const [parties, accounts, items, taxCodes, invoices] = await Promise.all([
+  const [parties, accounts, items, taxCodes, invoices, classes, locations] = await Promise.all([
     api(`${ledgerUrl()}/parties`), api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/items`), api(`${ledgerUrl()}/tax-codes`),
-    api(`${ledgerUrl()}/${sale ? "sales-invoices" : "purchase-invoices"}`),
+    api(`${ledgerUrl()}/${sale ? "sales-invoices" : "purchase-invoices"}`), api(`${ledgerUrl()}/classes`), api(`${ledgerUrl()}/locations`),
   ]);
   const usable = (a) => a.postable && a.active && !a.is_control && !a.is_bank;
   return {
@@ -179,6 +179,8 @@ async function documentChoices(side) {
     other: taxCodes.filter((t) => t.active && t.kind === "other_tax"),
     wht: taxCodes.filter((t) => t.active && t.kind === "withholding"),
     invoices: invoices.filter((i) => i.status === "posted" && i.type === "invoice"),
+    classes: classes.filter((c) => c.active),
+    locations: locations.filter((l) => l.active),
   };
 }
 
@@ -218,6 +220,8 @@ async function documentForm(kind, doc) {
       { name: "item_id", head: "Item", cell: (l) => `<select name="item_id">${options(c.items, l?.item_id, (i) => i.name, "")}</select>`,
         init: (tr) => { field(tr, "item_id").onchange = () => fillFromItem(tr, c.items, spec.side, form.elements.currency.value === state.ledger.base_currency); } },
       { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(c.accounts, l?.account_id, (a) => `${a.code} ${a.name}`, "Choose")}</select>` },
+      { name: "class_id", head: "Class", cell: (l) => `<select name="class_id">${options(c.classes, l?.class_id, (cl) => cl.name, "")}</select>` },
+      { name: "location_id", head: "Location", cell: (l) => `<select name="location_id">${options(c.locations, l?.location_id, (loc) => loc.name, "")}</select>` },
       { name: "description", head: "Description", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },
       { name: "quantity", head: "Qty", num: true, cell: (l) => `<input name="quantity" class="num" inputmode="decimal" value="${l?.quantity ?? ""}">` },
       { name: "unit", head: "Unit", cell: (l) => `<select name="unit">${unitOptions(c.items.find((i) => i.id === l?.item_id), l?.unit)}</select>` },
@@ -491,7 +495,8 @@ async function journalForm(j) {
     };
     const grid = lineGrid(form.querySelector("table.lines"), columns, totals);
     form.querySelector("[data-add]").onclick = () => grid.add();
-    for (const l of j?.lines ?? [null, null]) grid.add(l);
+    // Tax lines are generated from the net line on save; do not send them back or the edit would double the tax.
+    for (const l of j?.lines ?? [null, null]) if (!l?.tax_line) grid.add(l);
     totals();
 
     const url = `${ledgerUrl()}/journals`;
