@@ -126,6 +126,11 @@ async function run() {
   assert.equal(await page.locator('#record-body input[name="valid_tax_invoice"]').count(), 0);
   assert.ok(!(await page.locator("#record-body table.lines").innerText()).includes("Tax invoice"));
 
+  // The VAT picker is the ledger's active tax codes: purchase input codes include the non-creditable kind.
+  const vatOptions = await page.locator('#record-body table.lines select[name="tax_code_id"]').first().locator("option").allTextContents();
+  assert.ok(vatOptions.includes("VAT 10% (purchases, non-creditable)"));
+  assert.ok(!vatOptions.includes("VAT 4% fuel (sales)"));
+
   // An inventory item posts through its own account, so the account picker hides and shows that account.
   const trackedItem = await page.evaluate(async () => {
     const response = await fetch(`/api/v1/organizations/${state.org}/ledgers/${state.ledger.id}/items`, {

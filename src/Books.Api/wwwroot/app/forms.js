@@ -179,7 +179,9 @@ async function documentChoices(side) {
     parties: parties.filter((p) => p.active && (sale ? p.is_customer : p.is_supplier)),
     accounts: accounts.filter((a) => usable(a) && (sale ? a.type === "income" : ["cost_and_expense", "assets"].includes(a.type))),
     items: items.filter((i) => i.active),
-    vat: taxCodes.filter((t) => t.active && [sale ? "vat_output" : "vat_input", "vat_zero_rated", "non_vat"].includes(t.kind)),
+    vat: taxCodes.filter((t) => t.active && [
+      ...(sale ? ["vat_output"] : ["vat_input", "vat_input_non_deductible"]), "vat_zero_rated", "non_vat",
+    ].includes(t.kind)),
     other: taxCodes.filter((t) => t.active && t.kind === "other_tax"),
     wht: taxCodes.filter((t) => t.active && t.kind === "withholding"),
     invoices: invoices.filter((i) => i.status === "posted" && i.type === "invoice"),

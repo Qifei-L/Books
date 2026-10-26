@@ -613,7 +613,9 @@ async function paymentRecordForm(path, receipt, id) {
       api(`${ledgerUrl()}/bank-accounts`), api(`${ledgerUrl()}/parties`), api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/tax-codes`),
       api(`${ledgerUrl()}/sales-invoices`), api(`${ledgerUrl()}/purchase-invoices`),
     ]);
-    const vat = taxCodes.filter((t) => t.active && [receipt ? "vat_output" : "vat_input", "vat_zero_rated", "non_vat"].includes(t.kind));
+    const vat = taxCodes.filter((t) => t.active && [
+      ...(receipt ? ["vat_output"] : ["vat_input", "vat_input_non_deductible"]), "vat_zero_rated", "non_vat",
+    ].includes(t.kind));
     const wht = taxCodes.filter((t) => t.active && t.kind === "withholding");
     const lineAccounts = accounts.filter((a) => a.postable && a.active && !a.is_bank);
     const invoices = [...sales.map((i) => ({ ...i, label: `SI ${i.invoice_no}`, party: i.customer_id })), ...purchases.map((i) => ({ ...i, label: `PI ${i.invoice_no}`, party: i.supplier_id, gross_total: i.payable_total }))]
