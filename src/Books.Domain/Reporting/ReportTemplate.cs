@@ -129,7 +129,7 @@ public static class ReportTemplates
         [ReportTemplateKind.GlDetail] = ["gl"],
         [ReportTemplateKind.Aging] = ["ar", "ap"],
         [ReportTemplateKind.TaxReturn] = ["boxes"],
-        [ReportTemplateKind.TaxWorkpaper] = ["boxes", "reconciliation", "issues", "signatures"],
+        [ReportTemplateKind.TaxWorkpaper] = ["boxes", "reconciliation", "state_charge", "non_deductible", "issues", "signatures"],
     };
 
     public static readonly IReadOnlyDictionary<ReportTemplateKind, string> DefaultNames = new Dictionary<ReportTemplateKind, string>

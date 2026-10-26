@@ -106,7 +106,8 @@ attachments (20 MB, safe file types, audited, MCP upload/list, Files tab on jour
 full-page record surface for journals, sales, purchases and payments (hash routes, shared header/grid/action bar,
 Back/Esc and unsaved confirmation, Playwright smoke test in `tests/ui`). State Charge is VAT: the invoice may label the
 VAT row "State Charge", but it uses the normal output VAT code, account and return boxes; the separate tax kind and
-`t701_state_charge` boxes were removed on 2026-10-26. Still open: official GDT form facsimiles and
+`t701_state_charge` boxes were removed on 2026-10-26. State Charge is now a VAT return category on an output VAT code,
+and the tax workpaper has State charge VAT and Non-creditable input VAT detail sections/sheets. Still open: official GDT form facsimiles and
 migrating the remaining record dialogs (transfers, payroll, stock, fixed assets).
 
 ## Remaining P items (2026-10-25)

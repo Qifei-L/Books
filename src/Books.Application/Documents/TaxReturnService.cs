@@ -23,7 +23,11 @@ public sealed record TaxReturnDto(
     string Period, DateOnly From, DateOnly To, string TaxPack, int DefinitionVersion, string ReturnName, string Currency, string? TaxCurrency,
     string TaxCurrencyBasis, string? OverrideRate, string? OverrideReason,
     IReadOnlyList<ReturnBoxAmount> Boxes, IReadOnlyList<ReconciliationRow> Reconciliation, IReadOnlyList<TaxLineDto> AdjustedLines, IReadOnlyList<JournalIssue> Issues,
-    FiledInfo? Filed = null);
+    FiledInfo? Filed = null, IReadOnlyList<WorkpaperLineDto>? StateChargeLines = null, IReadOnlyList<WorkpaperLineDto>? NonDeductibleLines = null);
+
+/// <summary>A detail line for the tax workpaper (state charge VAT or non-creditable input VAT).</summary>
+public sealed record WorkpaperLineDto(string DocumentType, Guid DocumentId, long DocumentNo, DateOnly Date, string Party, string? Reference,
+    string? Description, string Net, string Tax, string? Box);
 
 /// <summary>A posting on a tax account in the month that does not come from a purchase or sales document.</summary>
 public sealed record OtherPosting(long JournalNo, DateOnly Date, string Account, string? Reference, string? Description, string? Source, string Amount);
@@ -350,7 +354,14 @@ internal sealed record ReturnCalculation(
     public TaxReturnDto ToDto() => new(
         Period, From, To, Definition.TaxPack, Definition.Version, Definition.Name, Currency.Code, TaxCurrency?.Code,
         Override is null ? "document_snapshots" : "override", Override?.Rate.ToString("0.##########", CultureInfo.InvariantCulture), Override?.Reason,
-        Boxes, Reconciliation, Lines.Where(l => l.TaxAdjusted).Select(l => LineDto(l, l.Tax)).ToList(), Issues);
+        Boxes, Reconciliation, Lines.Where(l => l.TaxAdjusted).Select(l => LineDto(l, l.Tax)).ToList(), Issues, null,
+        Lines.Where(l => l.TaxCategory == "state_charge").Select(l => WorkpaperLine(l, null)).ToList(),
+        Lines.Where(l => l.IsPurchase && l.TaxKind == TaxKind.VatInputNonDeductible)
+            .Select(l => WorkpaperLine(l, l.PartyTaxable ? "09" : "10")).ToList());
+
+    public WorkpaperLineDto WorkpaperLine(TaxLine l, string? box) => new(
+        l.DocumentKind, l.DocumentId, l.DocumentNo, l.Date, l.PartyId == Guid.Empty ? "" : Parties.GetValueOrDefault(l.PartyId, "?"), l.Reference,
+        l.Description, TaxReturnService.F(l.Net, Currency.MinorUnits), TaxReturnService.F(l.Tax, Currency.MinorUnits), box);
 
     public TaxLineDto LineDto(TaxLine l, decimal amount) => new(
         l.DocumentKind, l.DocumentId, l.DocumentNo, l.Date, l.PartyId == Guid.Empty ? "" : Parties.GetValueOrDefault(l.PartyId, "?"), l.Reference, l.LineNo, l.Description,

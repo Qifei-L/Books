@@ -375,6 +375,7 @@ public static class TaxReturns
         new("specific", "Specific tax on certain merchandise and services", "other_tax"),
         new("accommodation", "Accommodation tax", "other_tax"),
         new("public_lighting", "Public lighting tax", "other_tax"),
+        new("state_charge", "State charge (output VAT)", "vat_output"),
     ]);
 }
 

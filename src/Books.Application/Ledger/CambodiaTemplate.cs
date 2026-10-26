@@ -50,6 +50,7 @@ public sealed class CambodiaTemplate(IBooksDb db, WriteRunner writes, AccountUsa
     private static readonly TaxSpec[] TaxCodes =
     [
         new("VAT 10% (sales)", TaxKind.VatOutput, 10m, "2100"),
+        new("State Charge 10% (sales)", TaxKind.VatOutput, 10m, "2100", Category: "state_charge"),
         new("VAT 10% (purchases)", TaxKind.VatInput, 10m, "1300"),
         new("VAT 10% (purchases, non-creditable)", TaxKind.VatInputNonDeductible, 10m, "5900"),
         new("VAT 10% (imports)", TaxKind.VatInput, 10m, "1300", Category: "import"),

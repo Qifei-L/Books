@@ -50,17 +50,18 @@ public sealed class StateChargeTests(TestHost host)
     }
 
     [Fact]
-    public async Task State_charge_is_not_a_return_category_either()
+    public async Task State_charge_is_an_output_VAT_category()
     {
         var s = await new SalesInvoiceTests(host).SetUpAsync();
 
-        var response = await s.Books.Admin.PostAsync($"{s.LedgerUrl}/tax-codes", new
+        var created = await (await s.Books.Admin.PostAsync($"{s.LedgerUrl}/tax-codes", new
         {
-            name = "VAT 10% with a state charge category", kind = "vat_output", rate = "10",
+            name = "State Charge 10% custom", kind = "vat_output", rate = "10",
             account_id = s.Account("2100"), return_category = "state_charge",
-        });
+        })).DataAsync(HttpStatusCode.Created);
 
-        await response.AssertProblemAsync(HttpStatusCode.BadRequest, "INVALID_ARGUMENT");
+        Assert.Equal("vat_output", created.GetProperty("kind").GetString());
+        Assert.Equal("state_charge", created.GetProperty("return_category").GetString());
     }
 
     private static string Text(System.Text.Json.JsonElement element, string property) => element.GetProperty(property).GetString()!;

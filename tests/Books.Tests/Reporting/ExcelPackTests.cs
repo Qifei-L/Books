@@ -38,6 +38,8 @@ public sealed class ExcelPackTests(TestHost host)
 
         Assert.True(workbook.TryGetWorksheet("Boxes", out var boxes));
         Assert.True(workbook.TryGetWorksheet("Reconciliation", out _));
+        Assert.True(workbook.TryGetWorksheet("State charge", out _));
+        Assert.True(workbook.TryGetWorksheet("Non-deductible", out _));
         Assert.True(workbook.TryGetWorksheet("Issues", out _));
         Assert.Contains(boxes.CellsUsed(), c => c.GetString() == "t701_19");
         Assert.Equal(XLDataType.Number, boxes.CellsUsed().Single(c => c.GetString() == "t701_19").CellRight(2).DataType);

@@ -16,7 +16,7 @@ public static class StimulsoftReportRenderer
     public static byte[] RenderTaxWorkpaper(TaxReturnDto dto, BrandingDto branding, string companyName, IReadOnlyList<string>? sections = null,
         string? watermark = null)
     {
-        var enabled = (sections ?? ["boxes", "reconciliation", "issues", "signatures"]).ToHashSet();
+        var enabled = (sections ?? ["boxes", "reconciliation", "state_charge", "non_deductible", "issues", "signatures"]).ToHashSet();
         var report = new StiReport();
         var page = NewPage(report);
         var y = 1.4;
@@ -62,6 +62,56 @@ public static class StimulsoftReportRenderer
                 Add(page, 10.5, y, 3.8, 0.5, row.ReturnAmount, 8, right: true);
                 Add(page, 14.5, y, 4.5, 0.5, row.Difference, 8, right: true);
                 y += 0.52;
+            }
+        }
+
+        if (enabled.Contains("state_charge") && dto.StateChargeLines is { Count: > 0 })
+        {
+            y += 0.5;
+            if (y > 24) { page = NewPage(report); y = 1.4; }
+            Add(page, 1.5, y, 18, 0.6, "State charge VAT (ordinary output VAT)", 11);
+            y += 0.55;
+            Add(page, 1.5, y, 4.5, 0.5, "Document", 8);
+            Add(page, 6, y, 2.5, 0.5, "Date", 8);
+            Add(page, 8.5, y, 5, 0.5, "Party", 8);
+            Add(page, 14, y, 2.5, 0.5, "Net", 8, right: true);
+            Add(page, 16.5, y, 3, 0.5, "VAT", 8, right: true);
+            y += 0.52;
+            foreach (var line in dto.StateChargeLines)
+            {
+                if (y > 26.5) { page = NewPage(report); y = 1.4; }
+                Add(page, 1.5, y, 4.4, 0.5, $"{line.DocumentType} {line.DocumentNo}", 7);
+                Add(page, 6, y, 2.4, 0.5, line.Date.ToString("yyyy-MM-dd"), 7);
+                Add(page, 8.5, y, 5, 0.5, line.Party, 7);
+                Add(page, 14, y, 2.5, 0.5, line.Net, 7, right: true);
+                Add(page, 16.5, y, 3, 0.5, line.Tax, 7, right: true);
+                y += 0.45;
+            }
+        }
+
+        if (enabled.Contains("non_deductible") && dto.NonDeductibleLines is { Count: > 0 })
+        {
+            y += 0.5;
+            if (y > 23) { page = NewPage(report); y = 1.4; }
+            Add(page, 1.5, y, 18, 0.6, "Non-creditable input VAT", 11);
+            y += 0.55;
+            Add(page, 1.5, y, 4.5, 0.5, "Document", 8);
+            Add(page, 6, y, 2.5, 0.5, "Date", 8);
+            Add(page, 8.5, y, 4, 0.5, "Party", 8);
+            Add(page, 12.5, y, 1.2, 0.5, "Box", 8);
+            Add(page, 14, y, 2.5, 0.5, "Net", 8, right: true);
+            Add(page, 16.5, y, 3, 0.5, "VAT", 8, right: true);
+            y += 0.52;
+            foreach (var line in dto.NonDeductibleLines)
+            {
+                if (y > 26.5) { page = NewPage(report); y = 1.4; }
+                Add(page, 1.5, y, 4.4, 0.5, $"{line.DocumentType} {line.DocumentNo}", 7);
+                Add(page, 6, y, 2.4, 0.5, line.Date.ToString("yyyy-MM-dd"), 7);
+                Add(page, 8.5, y, 3.9, 0.5, line.Party, 7);
+                Add(page, 12.5, y, 1.2, 0.5, line.Box ?? "", 7);
+                Add(page, 14, y, 2.5, 0.5, line.Net, 7, right: true);
+                Add(page, 16.5, y, 3, 0.5, line.Tax, 7, right: true);
+                y += 0.45;
             }
         }
 

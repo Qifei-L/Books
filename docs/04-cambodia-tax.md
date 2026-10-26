@@ -42,6 +42,12 @@ monthly return has no separate State Charge box, so Books does not have a `state
 line field or a `t701_state_charge` box. A tax invoice may print the VAT row as "State Charge" (`?stateCharge=true`
 on the PDF), while the accounting stays ordinary output VAT.
 
+Implementation: a State Charge tax code is an ordinary `vat_output` code whose `return_category` is `state_charge`
+(the Cambodia template includes "State Charge 10% (sales)"). Its lines still count in the normal VAT boxes, and the
+tax workpaper has a separate **State charge VAT** detail section/sheet so the supply type is visible without inventing
+a GDT box. The **Non-creditable input VAT** detail section/sheet lists purchase lines that use
+`vat_input_non_deductible` (boxes 09/10 and the informational `t701_non_deductible_vat`).
+
 ## Manual journal VAT (2026-10-25)
 
 A manual journal line may carry a VAT or other tax code. The amount entered is gross: the server posts the net to the

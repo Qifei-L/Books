@@ -215,7 +215,7 @@ public static class ExcelExport
     }
 
 
-    /// <summary>The tax workpaper as three sheets: boxes, reconciliation with the tax accounts, and issues.</summary>
+    /// <summary>The tax workpaper: boxes, reconciliation, state charge and non-deductible details, and issues.</summary>
     public static byte[] TaxWorkpaper(TaxReturnDto r, string ledgerName)
     {
         using var book = new XLWorkbook();
@@ -249,6 +249,44 @@ public static class ExcelExport
             row++;
         }
         rec.SheetView.FreezeRows(4);
+
+        var stateCharge = book.Worksheets.Add("State charge");
+        Header(stateCharge, 4, "Document", "Date", "Party", "Reference", "Net", "VAT");
+        row = 5;
+        foreach (var line in r.StateChargeLines ?? [])
+        {
+            stateCharge.Cell(row, 1).Value = $"{line.DocumentType} {line.DocumentNo}";
+            stateCharge.Cell(row, 2).Value = line.Date.ToDateTime(TimeOnly.MinValue);
+            stateCharge.Cell(row, 2).Style.DateFormat.Format = "yyyy-mm-dd";
+            stateCharge.Cell(row, 3).Value = line.Party;
+            stateCharge.Cell(row, 4).Value = line.Reference ?? "";
+            Amounts(stateCharge, row, 5, line.Net, line.Tax);
+            row++;
+        }
+        if (r.StateChargeLines is not { Count: > 0 })
+        {
+            stateCharge.Cell(row, 1).Value = "No state charge VAT lines in this period.";
+        }
+        stateCharge.SheetView.FreezeRows(4);
+
+        var nonDeductible = book.Worksheets.Add("Non-deductible");
+        Header(nonDeductible, 4, "Document", "Date", "Party", "Box", "Net", "VAT");
+        row = 5;
+        foreach (var line in r.NonDeductibleLines ?? [])
+        {
+            nonDeductible.Cell(row, 1).Value = $"{line.DocumentType} {line.DocumentNo}";
+            nonDeductible.Cell(row, 2).Value = line.Date.ToDateTime(TimeOnly.MinValue);
+            nonDeductible.Cell(row, 2).Style.DateFormat.Format = "yyyy-mm-dd";
+            nonDeductible.Cell(row, 3).Value = line.Party;
+            nonDeductible.Cell(row, 4).Value = line.Box ?? "";
+            Amounts(nonDeductible, row, 5, line.Net, line.Tax);
+            row++;
+        }
+        if (r.NonDeductibleLines is not { Count: > 0 })
+        {
+            nonDeductible.Cell(row, 1).Value = "No non-creditable input VAT lines in this period.";
+        }
+        nonDeductible.SheetView.FreezeRows(4);
 
         var issues = book.Worksheets.Add("Issues");
         Header(issues, 4, "Code", "Message");
