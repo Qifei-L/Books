@@ -689,6 +689,7 @@ $("tb-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const f = event.target;
+    syncReportUrl("tb", f);
     const tb = await api(`${ledgerUrl()}/reports/trial-balance?from=${f.from.value}&to=${f.to.value}${filterQuery(f)}`);
     const t = tb.totals;
     $("tb-out").innerHTML = `${tb.warnings.map((w) => `<div class="warning">${esc(w.message)}</div>`).join("")}
@@ -710,6 +711,7 @@ $("gl-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const f = event.target;
+    syncReportUrl("gl", f);
     const [gl, classes, locations, parties] = await Promise.all([
       api(`${ledgerUrl()}/reports/gl-detail?accountId=${f.account.value}&from=${f.from.value}&to=${f.to.value}${filterQuery(f)}`),
       api(`${ledgerUrl()}/classes`), api(`${ledgerUrl()}/locations`), api(`${ledgerUrl()}/parties`),
@@ -1030,6 +1032,7 @@ $("pl-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const f = event.target;
+    syncReportUrl("pl", f);
     const pl = await api(`${ledgerUrl()}/reports/profit-and-loss?from=${f.from.value}&to=${f.to.value}${filterQuery(f)}`);
     $("pl-out").innerHTML = `<table><tr><th>Account</th><th class="num">${pl.currency}</th></tr>${statementTable(pl.sections)}
       <tr class="total"><td>Net profit</td><td class="num">${pl.net_profit}</td></tr></table><p class="muted small">Click an account for its GL detail.</p>`;
@@ -1043,6 +1046,7 @@ $("bs-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const bs = await api(`${ledgerUrl()}/reports/balance-sheet?asOf=${event.target.asOf.value}${filterQuery(event.target)}`);
+    syncReportUrl("bs", event.target);
     $("bs-out").innerHTML = `<p>${bs.balanced ? `<span class="ok">Balanced</span>` : `<span class="error">Not balanced</span>`}
       · assets ${bs.total_assets} = liabilities and equity ${bs.total_liabilities_and_equity}</p>
       <table><tr><th>Account</th><th class="num">${bs.currency}</th></tr>${statementTable(bs.sections)}</table><p class="muted small">Click an account for its GL detail.</p>`;

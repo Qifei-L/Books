@@ -681,11 +681,42 @@ async function deletePaymentRecord(path, id, version, no) {
   }
 }
 
-// Reports keep their filters in the hash and open their rows in the same full-page surface (G).
+// Reports keep their filters in the hash and open their rows in the same full-page surface.
 async function renderReportRoute(route) {
-  const report = route.id;
-  const tab = { tb: "tb", pl: "pl", bs: "bs", gl: "gl" }[report];
+  const tab = ({ tb: "tb", pl: "pl", bs: "bs", gl: "gl" })[route.id];
   if (!tab) return leaveRecord(false);
-  leaveRecord(false);
+  // Leave the record surface without touching the report hash in the address bar.
+  state.record = null;
+  state.recordDirty = false;
+  $("record-page").classList.add("hidden");
+  $("home").classList.remove("hidden");
+  const form = $(`${tab}-form`);
+  if (form) {
+    const q = route.query;
+    const set = (name, value) => { if (value !== null && form.elements[name]) form.elements[name].value = value; };
+    set("from", q.get("from"));
+    set("to", q.get("to"));
+    set("asOf", q.get("asOf"));
+    set("account", q.get("accountId"));
+    set("class", q.get("classId"));
+    set("location", q.get("locationId"));
+  }
+  state.reportApplying = true;
   await showTab(tab, true);
+  form?.requestSubmit();
+  state.reportApplying = false;
 }
+
+// A submitted report form writes its filters to the address bar. pushState keeps Back as "previous filters"
+// without firing hashchange, so the route is applied from the popstate handler below.
+function syncReportUrl(tab, form) {
+  if (!state.ledger || state.reportApplying) return;
+  const query = new URLSearchParams();
+  for (const [key, value] of new FormData(form)) {
+    if (value === "" || value === null) continue;
+    query.set(key === "account" ? "accountId" : key === "class" ? "classId" : key === "location" ? "locationId" : key, value);
+  }
+  history.pushState(null, "", `#/ledger/${state.ledger.id}/reports/${tab}?${query}`);
+}
+
+window.addEventListener("popstate", () => { applyRoute(); });

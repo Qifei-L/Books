@@ -59,6 +59,41 @@ public sealed class JournalDimensionTests(TestHost host)
     }
 
     [Fact]
+    public async Task Manual_VAT_direction_reaches_the_return_line_boxes_and_not_the_posting_boxes()
+    {
+        var s = await new PurchaseInvoiceTests(host).SetUpAsync();
+        var purchaseTax = s.Taxes["VAT 10% (purchases)"];
+        var salesTax = s.Taxes["VAT 10% (sales)"];
+        await PostAsync(s.Books.Admin, $"{s.LedgerUrl}/journals", new
+        {
+            accounting_date = "2026-10-25", post = true, reference = "MJ-IN",
+            lines = new object[]
+            {
+                new { account_id = s.Rent, debit = "110.00", tax_code_id = purchaseTax, description = "Rent gross" },
+                new { account_id = s.Books.Cash, credit = "110.00", description = "Paid" },
+            },
+        });
+        await PostAsync(s.Books.Admin, $"{s.LedgerUrl}/journals", new
+        {
+            accounting_date = "2026-10-26", post = true, reference = "MJ-OUT",
+            lines = new object[]
+            {
+                new { account_id = s.Books.Cash, debit = "110.00", description = "Received" },
+                new { account_id = s.Books.Sales, credit = "110.00", tax_code_id = salesTax, tax_direction = "sale", description = "Sale gross" },
+            },
+        });
+
+        var boxes = TaxReturnTests.Boxes(await (await s.Books.Admin.GetAsync($"{s.LedgerUrl}/tax-returns/2026-10", Ct)).DataAsync());
+
+        // The manual lines land in their line boxes (no party: non-taxable) ...
+        Assert.Equal("10.00", boxes["t701_04"].Usd);
+        Assert.Equal("10.00", boxes["t701_15"].Usd);
+        // ... and are not counted a second time in the posting boxes.
+        Assert.Equal("0.00", boxes["t701_input_journals"].Usd);
+        Assert.Equal("0.00", boxes["t701_output_journals"].Usd);
+    }
+
+    [Fact]
     public async Task A_manual_journal_keeps_class_and_location_on_the_line_and_in_GL()
     {
         var books = await JournalBooks.CreateAsync(host);

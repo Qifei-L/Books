@@ -108,6 +108,8 @@ async function run() {
   await page.locator('#record-actions button', { hasText: "Edit" }).first().click();
   await page.waitForFunction(() => !document.getElementById("record-bar").classList.contains("hidden"));
   await page.locator("#record-cancel").click();
+  await page.waitForFunction(() => document.getElementById("record-bar").classList.contains("hidden"));
+  await page.waitForTimeout(300);
   await page.locator("#record-back").click();
   await page.waitForSelector("#home:not(.hidden)");
 
@@ -132,6 +134,25 @@ async function run() {
     await page.locator("#record-back").click();
     await page.waitForSelector("#home:not(.hidden)");
   }
+
+  // Report filters live in the URL and survive a reload and Back.
+  await nav('#sidenav button[data-tab="tb"]', "#tb-out table");
+  await page.locator('#tb-form input[name="from"]').fill("2026-02-01");
+  await page.locator("#tb-form").evaluate((form) => form.requestSubmit());
+  await page.waitForFunction(() => location.hash.includes("from=2026-02-01"), null, { timeout: 15000 });
+  await page.waitForTimeout(500);
+  const reportHash = await page.evaluate(() => location.hash);
+  await page.reload();
+  await page.waitForFunction(() => !document.getElementById("home").classList.contains("hidden"), null, { timeout: 20000 });
+  await page.waitForSelector("#tb-out table", { timeout: 15000 });
+  assert.equal(await page.locator('#tb-form input[name="from"]').inputValue(), "2026-02-01");
+  assert.equal(await page.evaluate(() => location.hash), reportHash);
+  await page.locator('#tb-form input[name="from"]').fill("2026-03-01");
+  await page.locator("#tb-form").evaluate((form) => form.requestSubmit());
+  await page.waitForFunction(() => location.hash.includes("from=2026-03-01"), null, { timeout: 15000 });
+  await page.goBack();
+  await page.waitForFunction(() => location.hash.includes("from=2026-02-01"), null, { timeout: 15000 });
+  assert.equal(await page.locator('#tb-form input[name="from"]').inputValue(), "2026-02-01");
 
   // New journal: the same header, grid and fixed bar; save and post, then delete.
   await nav('#sidenav button[data-tab="journals"]', "#tab-journals tr[data-id]");

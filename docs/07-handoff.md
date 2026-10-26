@@ -107,3 +107,12 @@ full-page record surface for journals, sales, purchases and payments (hash route
 Back/Esc and unsaved confirmation, Playwright smoke test in `tests/ui`). Still open: official GDT form facsimiles and
 migrating the remaining record dialogs (transfers, payroll, stock, fixed assets).
 
+## Remaining P items (2026-10-25)
+
+Done: report filters in the URL (refresh and Back keep class/location/date), manual VAT direction regression test
+(line boxes, not posting boxes), report-run/share permission tests, the class FK decision (service-only, no deletion),
+the `tax_line` backfill decision (no historical rows on this pre-release branch) and the Playwright UI smoke test.
+
+Still open after this branch: organization/ledger role capabilities and party localizations (H), official GDT form
+facsimiles, and migrating the remaining record dialogs.
+
