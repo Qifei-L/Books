@@ -41,6 +41,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<ReportTemplate> ReportTemplates => Set<ReportTemplate>();
     public DbSet<ReportRun> ReportRuns => Set<ReportRun>();
     public DbSet<ReportShare> ReportShares => Set<ReportShare>();
+    public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<Location> Locations => Set<Location>();
     public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
     public DbSet<StockTransferLine> StockTransferLines => Set<StockTransferLine>();

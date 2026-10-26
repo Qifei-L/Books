@@ -22,9 +22,10 @@ public sealed class McpReadToolTests(TestHost host)
 
         Assert.Equal(["clear_bank_postings", "delete_journal", "get_ap_aging", "get_ar_aging", "get_balance_sheet", "get_bank_reconciliation", "get_customer_statement", "get_fixed_asset_register", "get_fx_revaluation_preview",
             "get_gl_detail", "get_inventory", "get_item_movements", "get_pay_run_lines", "get_profit_and_loss", "get_supplier_statement", "get_tax_pack", "get_tax_return", "get_tax_return_box_lines", "get_trial_balance",
-            "import_bank_statement", "list_accounts", "list_bank_accounts", "list_classes", "list_fx_revaluations", "list_items", "list_journals", "list_ledgers", "list_locations", "list_organizations", "list_parties",
+            "import_bank_statement", "list_accounts", "list_attachments", "list_bank_accounts", "list_classes", "list_fx_revaluations", "list_items", "list_journals", "list_ledgers", "list_locations", "list_organizations", "list_parties",
             "list_pay_runs", "list_payments", "list_purchase_invoices", "list_sales_invoices", "list_stock_adjustments", "list_tax_codes", "list_tax_return_definitions", "list_transfers", "save_fixed_asset",
-            "save_journal", "save_pay_run_draft", "save_payment_drafts", "save_purchase_drafts", "save_sales_drafts", "save_stock_adjustment_draft", "save_tax_return_definition_draft"],
+            "save_journal", "save_pay_run_draft", "save_payment_drafts", "save_purchase_drafts", "save_sales_drafts", "save_stock_adjustment_draft", "save_tax_return_definition_draft",
+            "upload_attachment"],
             tools.Keys.Order());
         Assert.All(tools.Where(t => t.Key.StartsWith("list_") || t.Key.StartsWith("get_")), t => Assert.True(t.Value.ProtocolTool.Annotations?.ReadOnlyHint));
         Assert.False(tools["save_journal"].ProtocolTool.Annotations?.ReadOnlyHint ?? false);

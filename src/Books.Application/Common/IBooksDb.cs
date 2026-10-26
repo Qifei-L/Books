@@ -42,6 +42,7 @@ public interface IBooksDb
     DbSet<ReportTemplate> ReportTemplates { get; }
     DbSet<ReportRun> ReportRuns { get; }
     DbSet<ReportShare> ReportShares { get; }
+    DbSet<Attachment> Attachments { get; }
     DbSet<Location> Locations { get; }
     DbSet<StockTransfer> StockTransfers { get; }
     DbSet<StockTransferLine> StockTransferLines { get; }

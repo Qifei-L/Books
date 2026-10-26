@@ -702,6 +702,81 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("assembly_lines", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Documents.Attachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("file_name");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("hash");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<Guid>("RecordId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("record_id");
+
+                    b.Property<string>("RecordKind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("record_kind");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<Guid>("UploadedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("uploaded_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_attachments");
+
+                    b.HasIndex("OrgId")
+                        .HasDatabaseName("ix_attachments_org_id");
+
+                    b.HasIndex("LedgerId", "RecordKind", "RecordId")
+                        .HasDatabaseName("ix_attachments_ledger_id_record_kind_record_id");
+
+                    b.ToTable("attachments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_attachments_record_kind", "record_kind IN ('journal', 'sales_invoice', 'sales_credit_note', 'purchase_invoice', 'purchase_debit_note')");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Documents.BankClearing", b =>
                 {
                     b.Property<Guid>("AccountId")
@@ -4505,6 +4580,23 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_assembly_lines_items_component_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Documents.Attachment", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_attachments_ledgers_ledger_id");
+
+                    b.HasOne("Books.Domain.Access.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_attachments_organizations_org_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Documents.BankClearing", b =>

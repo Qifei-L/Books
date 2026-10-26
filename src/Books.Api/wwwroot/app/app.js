@@ -694,8 +694,10 @@ function showJournal(j) {
     <table><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr>
     ${j.lines.map((l) => `<tr><td>${esc(accountName(l.account_id))}</td><td class="num">${l.debit === "0.00" ? "" : l.debit}</td><td class="num">${l.credit === "0.00" ? "" : l.credit}</td></tr>`).join("")}</table>
     ${j.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}
-    ${canEdit() && !j.source_kind && j.status !== "deleted" ? `<p><button class="secondary" onclick="editJournal('${j.id}')">Edit</button></p>` : ""}`;
+    ${canEdit() && !j.source_kind && j.status !== "deleted" ? `<p><button class="secondary" onclick="editJournal('${j.id}')">Edit</button></p>` : ""}
+    ${attachmentsPanel("journal", j.id)}`;
   showDialog();
+  wireAttachments($("journal-body"));
 }
 
 const blank = (v) => (v === "0.00" || v === "0" ? "" : v);
@@ -859,8 +861,10 @@ async function showSale(d, party) {
     ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}
     ${related}
     <p><button class="secondary" onclick="openPdf('${d.type === "credit_note" ? "credit-notes" : "sales-invoices"}/${d.id}/pdf')">Print PDF</button>
-      ${canEdit() ? `<button class="secondary" onclick="editDocument('sale', '${d.type}', '${d.id}')">Edit</button>` : ""}</p>`;
+      ${canEdit() ? `<button class="secondary" onclick="editDocument('sale', '${d.type}', '${d.id}')">Edit</button>` : ""}</p>
+    ${attachmentsPanel(d.type === "credit_note" ? "sales_credit_note" : "sales_invoice", d.id)}`;
   showDialog();
+  wireAttachments($("journal-body"));
 }
 
 // The PDF needs the bearer token, so it is fetched and opened as a blob.
@@ -1091,8 +1095,10 @@ function showPurchase(d, party) {
     ${d.tax_currency ? `<p class="muted">${d.tax_currency.currency} at ${d.tax_currency.rate} (${esc(d.tax_currency.rate_source)}, ${d.tax_currency.rate_date})${d.tax_currency.reason ? ` · ${esc(d.tax_currency.reason)}` : ""}:
       gross ${d.tax_currency.gross_total} · VAT ${d.tax_currency.tax_total}</p>` : ""}
     ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}${journalButton(d)}
-    ${canEdit() ? `<p><button class="secondary" onclick="editDocument('purchase', '${d.type}', '${d.id}')">Edit</button></p>` : ""}`;
+    ${canEdit() ? `<p><button class="secondary" onclick="editDocument('purchase', '${d.type}', '${d.id}')">Edit</button></p>` : ""}
+    ${attachmentsPanel(d.type === "debit_note" ? "purchase_debit_note" : "purchase_invoice", d.id)}`;
   showDialog();
+  wireAttachments($("journal-body"));
 }
 
 // Statements: nested groups with a subtotal at every level.

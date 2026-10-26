@@ -50,7 +50,8 @@ builder.Services.AddMcpServer()
     .WithTools<BooksPurchaseTools>()
     .WithTools<BooksSalesTools>()
     .WithTools<BooksTaxTools>()
-    .WithTools<BooksBankTools>();
+    .WithTools<BooksBankTools>()
+    .WithTools<BooksAttachmentTools>();
 
 InvoicePdf.Configure();
 
@@ -87,6 +88,7 @@ api.MapClassEndpoints();
 api.MapReportDeliveryEndpoints();
 api.MapReportTemplateEndpoints();
 api.MapReportRunEndpoints();
+api.MapAttachmentEndpoints();
 api.MapPartyEndpoints();
 api.MapTaxCodeEndpoints();
 api.MapBankEndpoints();

@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<ReportDeliverySettingsService>();
         services.AddScoped<ReportTemplateService>();
         services.AddScoped<ReportRunService>();
+        services.AddScoped<AttachmentService>();
         services.AddScoped<JournalService>();
         services.AddScoped<LedgerSettingsService>();
         services.AddScoped<ReportService>();
