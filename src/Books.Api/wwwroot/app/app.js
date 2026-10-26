@@ -149,6 +149,7 @@ async function start() {
     $("signin").classList.add("hidden");
     $("home").classList.remove("hidden");
     await loadOrganizations();
+    await applyRoute();
   } catch (error) {
     showError(error);
   }
@@ -228,36 +229,31 @@ const SOURCES = {
   fx_revaluation: "Exchange revaluation", fx_revaluation_reversal: "Revaluation reversal",
 };
 
+// Journal and document detail is the full-page record surface; the URL carries the ledger and record.
 async function openJournal(id) {
-  try {
-    showJournal(await api(`${ledgerUrl()}/journals/${id}`));
-  } catch (error) {
-    showError(error);
-  }
+  openRecordPage("journals", id);
 }
 
 async function openJournalNo(no) {
   const journal = (await api(`${ledgerUrl()}/journals`)).find((j) => j.journal_no === Number(no));
-  if (journal) showJournal(journal);
+  if (journal) openJournal(journal.id);
 }
 
-const DOC_LISTS = {
-  sales_invoice: "sales-invoices", sales_credit_note: "credit-notes", purchase_invoice: "purchase-invoices", purchase_debit_note: "debit-notes",
-  payment: "payments", receipt: "receipts", pay_run: "pay-runs", bank_transfer: "transfers", stock_adjustment: "stock-adjustments",
+const DOC_LIST_BY_KIND = {
+  purchase_invoice: "purchase-invoices", purchase_debit_note: "debit-notes", sales_invoice: "sales-invoices", sales_credit_note: "credit-notes",
+  payment: "payments", receipt: "receipts",
 };
 
-// Opens whatever produced a posting: the document's own view where there is one, otherwise its journal.
+// Opens whatever produced a posting: migrated records open full page; the rest keep their dialog.
 async function openDocument(kind, id) {
   try {
     if (kind === "journal" || !DOC_LISTS[kind]) return openJournal(id);
+    if (DOC_LIST_BY_KIND[kind]) return openRecordPage(DOC_LIST_BY_KIND[kind], id);
     const [docs, parties] = await Promise.all([api(`${ledgerUrl()}/${DOC_LISTS[kind]}`), api(`${ledgerUrl()}/parties`)]);
     const party = (pid) => parties.find((p) => p.id === pid)?.name ?? "";
     const doc = docs.find((d) => d.id === id);
     if (!doc) return;
-    if (kind.startsWith("sales")) await showSale(doc, party);
-    else if (kind.startsWith("purchase")) showPurchase(doc, party);
-    else if (kind === "payment" || kind === "receipt") showPayment(doc, party);
-    else if (kind === "pay_run") {
+    if (kind === "pay_run") {
       $("journal-dialog").close();
       await showTab("payroll-runs");
       showPayRun(doc);
@@ -272,24 +268,15 @@ async function openDocument(kind, id) {
   }
 }
 
-// Warnings never stop a save (for example stock going below zero); they come back with the saved document.
+const DOC_LISTS = {
+  sales_invoice: "sales-invoices", sales_credit_note: "credit-notes", purchase_invoice: "purchase-invoices", purchase_debit_note: "debit-notes",
+  payment: "payments", receipt: "receipts", pay_run: "pay-runs", bank_transfer: "transfers", stock_adjustment: "stock-adjustments",
+};
+
+// Opens whatever produced a posting: the document's own view where there is one, otherwise its journal.
 const warningsHtml = (d) => (d.warnings ?? []).map((w) => `<div class="warning">${esc(w)}</div>`).join("");
 
 const journalButton = (d) => d.journal_id ? `<p><button class="secondary" onclick="openJournal('${d.journal_id}')">Journal ${d.journal_no ?? ""}</button></p>` : "";
-
-function showPayment(d, party) {
-  state.trailLabel ??= `${d.type === "receipt" ? "Receipt" : "Payment"} ${d.payment_no}`;
-  $("journal-body").innerHTML = `<h3>${d.type === "receipt" ? "Receipt" : "Payment"} ${d.payment_no} <span class="pill ${d.status}">${d.status}</span></h3>
-    <p class="muted">${esc(accountName(d.bank_account_id))} · ${d.date} · ${esc(party(d.party_id))} · ${esc(d.reference ?? "")} · ${esc(d.description ?? "")}
-      ${d.exchange_rate ? ` · ${d.currency} at ${d.exchange_rate}` : ""}</p>
-    <table><tr><th>Category</th><th>Description</th><th class="num">Amount</th><th class="num">VAT</th><th class="num">WHT</th><th class="num">Total</th></tr>
-    ${d.lines.map((l) => `<tr><td>${l.kind === "account" ? esc(accountName(l.account_id)) : `${esc(accountName(l.control_account_id))} · ${l.kind === "invoice" ? "settles an invoice" : "party balance"}`}</td>
-      <td>${esc(l.description ?? "")}</td><td class="num">${l.amount}</td><td class="num">${blank(l.tax_amount)}</td><td class="num">${blank(l.withholding_amount)}</td><td class="num">${l.total}</td></tr>`).join("")}
-    <tr class="total"><td colspan="5">Total</td><td class="num">${d.total} ${d.currency ?? ""}</td></tr></table>
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}${journalButton(d)}
-    ${canEdit() ? `<p><button class="secondary" onclick="editPayment('${d.type}', '${d.id}')">Edit</button></p>` : ""}`;
-  showDialog();
-}
 
 // Transfers have no party and no line grid; the detail is the two accounts, what was sent and received,
 // the fee and the journal. Editing is a form of its own (setup.js).
@@ -459,6 +446,15 @@ const setActions = (html) => {
 async function showTab(id, force = false) {
   const page = PAGES[id];
   if (!page) return;
+  // A nav click leaves the record surface first; unsaved edits ask before they are lost.
+  if (state.record) {
+    if (!canLeaveRecord()) return;
+    state.record = null;
+    state.recordDirty = false;
+    $("record-page").classList.add("hidden");
+    $("home").classList.remove("hidden");
+    if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+  }
   state.tab = id;
   const module = moduleOf(id);
   const moduleId = module?.id;
@@ -685,21 +681,6 @@ const accountName = (id) => {
   return a ? `${a.code} ${a.name}` : id;
 };
 
-function showJournal(j) {
-  state.trailLabel ??= `Journal ${j.journal_no}`;
-  $("journal-body").innerHTML = `<h3>Journal ${j.journal_no} <span class="pill ${j.status}">${j.status}</span></h3>
-    ${j.source_kind ? `<p>From ${SOURCES[j.source_kind] ?? esc(j.source_kind)} · change it through the document, not the journal.
-      <button class="secondary" onclick="drillTo('${SOURCES[j.source_kind] ?? "Document"}', () => openDocument('${j.source_kind}', '${j.source_id}'))">Open ${SOURCES[j.source_kind] ?? "document"}</button></p>` : ""}
-    <p class="muted">${j.accounting_date} · ${esc(j.reference ?? "")} · ${esc(j.description ?? "")} · revision ${j.revision_no}, version ${j.version}</p>
-    <table><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr>
-    ${j.lines.map((l) => `<tr><td>${esc(accountName(l.account_id))}</td><td class="num">${l.debit === "0.00" ? "" : l.debit}</td><td class="num">${l.credit === "0.00" ? "" : l.credit}</td></tr>`).join("")}</table>
-    ${j.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}
-    ${canEdit() && !j.source_kind && j.status !== "deleted" ? `<p><button class="secondary" onclick="editJournal('${j.id}')">Edit</button></p>` : ""}
-    ${attachmentsPanel("journal", j.id)}`;
-  showDialog();
-  wireAttachments($("journal-body"));
-}
-
 const blank = (v) => (v === "0.00" || v === "0" ? "" : v);
 const filterQuery = (f) => (f.class?.value ? `&classId=${f.class.value}` : "") + (f.location?.value ? `&locationId=${f.location.value}` : "");
 
@@ -807,64 +788,6 @@ async function renderSalesSettings() {
     </dl>
     <h3>What decides the printed style</h3>
     <p class="muted small">The lines' tax codes decide: any VAT above 0% prints a tax invoice, only 0% or non-VAT prints a zero or non-VAT invoice, and no codes print a commercial invoice. State Charge relabels the VAT line, a draft prints marked DRAFT, and the KHR total comes from the invoice's own rate snapshot rather than today's rate.</p>`;
-}
-
-// A sales invoice (or credit note) is also the entry point of a small trail: the customer, its journal, the
-// receipts and payments that settle it, the credit notes that correct it, and the tax return for its month.
-async function showSale(d, party) {
-  const title = d.type === "credit_note" ? "Credit note" : "Sales invoice";
-  state.trailLabel ??= `${title} ${d.invoice_no}`;
-  const month = d.date.slice(0, 7);
-  let payments = [], receipts = [], credits = [], relatedError = null;
-  try {
-    [payments, receipts, credits] = await Promise.all([
-      api(`${ledgerUrl()}/payments`), api(`${ledgerUrl()}/receipts`), api(`${ledgerUrl()}/credit-notes`),
-    ]);
-  } catch (error) {
-    relatedError = error.message;
-  }
-  const settled = [];
-  for (const doc of [...payments, ...receipts]) {
-    if (doc.status === "deleted") continue;
-    for (const line of doc.lines ?? []) if (line.invoice_id === d.id) settled.push({ doc, line });
-  }
-  settled.sort((a, b) => a.doc.date.localeCompare(b.doc.date));
-  const creditNotes = d.type === "credit_note" ? [] : credits.filter((c) => c.original_invoice_id === d.id && c.status !== "deleted");
-  const t = d.tax_currency;
-  const related = `
-    <h4>Related</h4>
-    <div class="trail-links">
-      <button type="button" class="secondary small" onclick="drillTo('Customer statement', () => showStatement('customer', '${d.customer_id}', today()))">Customer statement</button>
-      ${d.journal_id ? `<button type="button" class="secondary small" onclick="drillTo('Journal ${d.journal_no ?? ""}', () => openJournal('${d.journal_id}'))">Journal ${d.journal_no ?? ""}</button>` : ""}
-      ${d.original_invoice_id ? `<button type="button" class="secondary small" onclick="drillTo('Original invoice', () => openDocument('sales_invoice', '${d.original_invoice_id}'))">Original invoice</button>` : ""}
-      <button type="button" class="secondary small" onclick="openTaxPeriod('${month}')">Tax return ${month}</button>
-    </div>
-    ${relatedError ? `<p class="muted small">Related documents could not be loaded: ${esc(relatedError)}</p>` : ""}
-    ${d.type === "credit_note" ? "" : settled.length
-      ? `<h4>Received against this invoice</h4><table><tr><th>Document</th><th>Date</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr>
-        ${settled.map(({ doc, line }) => `<tr class="click" onclick="drillTo('${doc.type === "receipt" ? "Receipt" : "Payment"} ${doc.payment_no ?? ""}', () => openDocument('${doc.type}', '${doc.id}'))">
-          <td>${doc.type === "receipt" ? "Receipt" : "Payment"} ${doc.payment_no ?? ""}</td><td>${doc.date}</td><td>${esc(doc.reference ?? "")}</td>
-          <td class="num">${money(Number(line.total ?? line.amount), doc.currency)}</td><td><span class="pill ${doc.status}">${doc.status}</span></td></tr>`).join("")}</table>`
-      : `<p class="muted small">No receipt or payment references this invoice yet.</p>`}
-    ${creditNotes.length ? `<h4>Credit notes</h4><table><tr><th>Number</th><th>Date</th><th class="num">Gross</th><th>Status</th></tr>
-      ${creditNotes.map((c) => `<tr class="click" onclick="drillTo('Credit note ${c.invoice_no}', () => openDocument('sales_credit_note', '${c.id}'))">
-        <td>Credit note ${c.invoice_no}</td><td>${c.date}</td><td class="num">${money(Number(c.gross_total), c.currency)}</td><td><span class="pill ${c.status}">${c.status}</span></td></tr>`).join("")}</table>` : ""}`;
-
-  $("journal-body").innerHTML = `<h3>${title} ${d.invoice_no} <span class="pill ${d.status}">${d.status}</span></h3>
-    <p class="muted">${esc(party(d.customer_id))} · ${d.date} · due ${d.due_date} · ${esc(d.reference ?? "")}</p>
-    <table><tr><th>Account</th><th>Description</th><th class="num">Net</th><th class="num">VAT</th></tr>
-    ${d.lines.map((l) => `<tr><td>${esc(accountName(l.account_id))}</td><td>${esc(l.description)}</td><td class="num">${l.net_amount}</td>
-      <td class="num">${l.tax_amount}${l.tax_adjusted ? ` <span class="pill draft" title="${esc(l.tax_reason)}">adjusted</span>` : ""}</td></tr>`).join("")}
-    <tr class="total"><td colspan="2">Gross ${d.gross_total}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td></tr></table>
-    ${t ? `<p>Total including VAT: <b>${Number(t.gross_total).toLocaleString()} ${t.currency}</b> (VAT ${Number(t.tax_total).toLocaleString()} ${t.currency})
-      at ${t.rate} ${esc(t.rate_source)} of ${t.rate_date}${t.reason ? ` · ${esc(t.reason)}` : ""}</p>` : ""}
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}
-    ${related}
-    <p><button class="secondary" onclick="openPdf('${d.type === "credit_note" ? "credit-notes" : "sales-invoices"}/${d.id}/pdf')">Print PDF</button>
-      ${canEdit() ? `<button class="secondary" onclick="editDocument('sale', '${d.type}', '${d.id}')">Edit</button>` : ""}</p>
-    ${attachmentsPanel(d.type === "credit_note" ? "sales_credit_note" : "sales_invoice", d.id)}`;
-  showDialog();
-  wireAttachments($("journal-body"));
 }
 
 // The PDF needs the bearer token, so it is fetched and opened as a blob.
@@ -1082,23 +1005,6 @@ async function renderTax(period) {
     };
   }
   for (const tr of $("tab-tax").querySelectorAll("tr[data-tax]")) tr.onclick = () => taxCodeForm(taxCodes.find((t) => t.id === tr.dataset.tax));
-}
-
-function showPurchase(d, party) {
-  $("journal-body").innerHTML = `<h3>${d.type === "debit_note" ? "Debit note" : "Purchase invoice"} ${d.invoice_no} <span class="pill ${d.status}">${d.status}</span></h3>
-    <p class="muted">${esc(party(d.supplier_id))} · ${d.date} · due ${d.due_date} · ${esc(d.reference ?? "")}</p>
-    <table><tr><th>Account</th><th>Description</th><th class="num">Net</th><th class="num">VAT</th><th>Tax invoice</th><th class="num">WHT</th></tr>
-    ${d.lines.map((l) => `<tr><td>${esc(accountName(l.account_id))}</td><td>${esc(l.description)}</td><td class="num">${l.net_amount}</td>
-      <td class="num">${l.tax_amount}${l.tax_adjusted ? ` <span class="pill draft" title="${esc(l.tax_reason)}">adjusted</span>` : ""}</td>
-      <td>${l.tax_code_id ? (l.valid_tax_invoice ? "valid" : "missing: non-deductible") : ""}</td><td class="num">${l.withholding_amount}</td></tr>`).join("")}
-    <tr class="total"><td colspan="2">Totals · gross ${d.gross_total} · payable ${d.payable_total}</td><td class="num">${d.net_total}</td><td class="num">${d.tax_total}</td><td></td><td class="num">${d.withholding_total}</td></tr></table>
-    ${d.tax_currency ? `<p class="muted">${d.tax_currency.currency} at ${d.tax_currency.rate} (${esc(d.tax_currency.rate_source)}, ${d.tax_currency.rate_date})${d.tax_currency.reason ? ` · ${esc(d.tax_currency.reason)}` : ""}:
-      gross ${d.tax_currency.gross_total} · VAT ${d.tax_currency.tax_total}</p>` : ""}
-    ${d.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}${warningsHtml(d)}${journalButton(d)}
-    ${canEdit() ? `<p><button class="secondary" onclick="editDocument('purchase', '${d.type}', '${d.id}')">Edit</button></p>` : ""}
-    ${attachmentsPanel(d.type === "debit_note" ? "purchase_debit_note" : "purchase_invoice", d.id)}`;
-  showDialog();
-  wireAttachments($("journal-body"));
 }
 
 // Statements: nested groups with a subtotal at every level.

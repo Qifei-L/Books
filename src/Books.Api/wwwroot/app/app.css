@@ -292,6 +292,31 @@ label.inline-label { flex-direction: row; align-items: center; gap: 6px; margin:
 .files-body { margin-top: 8px; }
 .files-upload { display: flex; gap: 8px; align-items: center; }
 
+/* Full-page record surface: one header, one body and a fixed action bar (owner decision C+A). */
+#record-page { max-width: 1400px; margin: 0 auto; padding: 18px 24px 110px; }
+.record-head { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+.record-heading { min-width: 220px; flex: 1; }
+.record-heading h1 { margin: 0; font-size: 22px; }
+.record-status { padding-top: 4px; }
+.record-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.record-body { background: var(--card, #fff); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+.record-body table { width: 100%; border-collapse: collapse; }
+.record-body th, .record-body td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.record-body th.num, .record-body td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.record-body table.lines input, .record-body table.lines select { min-width: 80px; width: 100%; }
+.record-bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 18px; align-items: center;
+  padding: 10px 24px; background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -2px 10px rgba(0,0,0,.06); z-index: 20; }
+.record-totals { flex: 1; font-variant-numeric: tabular-nums; }
+.record-buttons { display: flex; gap: 8px; }
+.record-body .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 14px; margin-bottom: 12px; }
+.record-body .grid .wide { grid-column: span 2; }
+@media (max-width: 820px) {
+  #record-page { padding: 12px 12px 120px; }
+  .record-body .grid { grid-template-columns: 1fr 1fr; }
+  .record-body .grid .wide { grid-column: span 2; }
+  .record-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+}
+
 @media (max-width: 1100px) {
   :root { --side: 196px; }
   .page { padding: 16px 18px 64px; }

@@ -121,6 +121,27 @@
       </div>
     </section>
 
+    <section id="record-page" class="hidden">
+      <header class="record-head">
+        <button type="button" class="link" id="record-back">← Back</button>
+        <div class="record-heading">
+          <h1 id="record-title"></h1>
+          <p id="record-sub" class="page-sub"></p>
+        </div>
+        <div id="record-status" class="record-status"></div>
+        <div id="record-actions" class="record-actions"></div>
+      </header>
+      <div id="record-body" class="record-body"></div>
+      <footer id="record-bar" class="record-bar hidden">
+        <div id="record-totals" class="record-totals"></div>
+        <div class="record-buttons">
+          <button type="button" class="secondary" id="record-cancel">Cancel</button>
+          <button type="button" class="secondary" id="record-save-draft">Save draft</button>
+          <button type="button" id="record-post">Save and post</button>
+        </div>
+      </footer>
+    </section>
+
     <dialog id="journal-dialog">
       <div id="journal-body"></div>
       <form method="dialog"><button>Close</button></form>
@@ -138,6 +159,7 @@
 <script src="templates.js"></script>
 <script src="attachments.js"></script>
   <script src="forms.js"></script>
+<script src="record.js"></script>
   <script src="inventory.js"></script>
   <script src="setup.js"></script>
   <script src="payroll.js"></script>

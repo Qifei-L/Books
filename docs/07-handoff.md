@@ -101,7 +101,9 @@ and a seven-day share window.
 Done: branding/output settings, the Stimulsoft client pack PDF (cover, P&L, BS, TB, AR/AP aging), the tax workpaper PDF
 (trial watermark until a licence key is configured), versioned report templates (code defaults, ledger overrides,
 draft → published, section order and switches), report runs with stored files, hashes, snapshots and expiring
-share links (watermark and download audit), multi-sheet Excel packs (client pack and tax workpaper), and M17
-attachments (20 MB, safe file types, audited, MCP upload/list, Files tab on journal/sales/purchase details). Still open:
-official GDT form facsimiles and the full-page record surface.
+share links (watermark and download audit), multi-sheet Excel packs (client pack and tax workpaper), M17
+attachments (20 MB, safe file types, audited, MCP upload/list, Files tab on journal/sales/purchase details), and the
+full-page record surface for journals, sales, purchases and payments (hash routes, shared header/grid/action bar,
+Back/Esc and unsaved confirmation, Playwright smoke test in `tests/ui`). Still open: official GDT form facsimiles and
+migrating the remaining record dialogs (transfers, payroll, stock, fixed assets).
 

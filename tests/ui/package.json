@@ -1,0 +1,11 @@
+{
+  "name": "books-ui-tests",
+  "private": true,
+  "description": "Playwright smoke tests for the Books preview app",
+  "scripts": {
+    "smoke": "node record-surface.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.1"
+  }
+}

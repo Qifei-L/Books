@@ -14,6 +14,9 @@
 // density switch. Sales, purchases and the bank documents share the renderer.
 const BANK_HIDDEN = ["due", "other_tax_total", "fx", "khr", "lines_count", "party_tax_id", "party_terms", "journal"];
 
+// Records that have the full-page surface; their New button opens a new record there.
+const RECORD_NEW_PATHS = new Set(["sales-invoices", "credit-notes", "purchase-invoices", "debit-notes"]);
+
 const DOC_KINDS = {
   invoice: {
     path: "sales-invoices", container: "sales-invoices", formKey: "invoice", side: "sale",
@@ -51,8 +54,8 @@ const DOC_KINDS = {
     container: "bank-transactions", noun: "transaction", plural: "transactions", prefix: "",
     numberKey: "doc_no", newLabel: "New transaction",
     newMenu: [
-      { label: "Payment", run: () => paymentForm("payment") },
-      { label: "Receipt", run: () => paymentForm("receipt") },
+      { label: "Payment", run: () => openRecordPage("payments", "new") },
+      { label: "Receipt", run: () => openRecordPage("receipts", "new") },
       { label: "Transfer", run: () => transferForm() },
     ],
     partyKey: "party_id", partyFilter: (p) => p.active, partyLabel: "Party",
@@ -134,8 +137,8 @@ const DOC_KINDS = {
       d.doc_kind === "transfer" ? `${bankLabel(d.from_account_id)} ${bankLabel(d.to_account_id)} Transfer in Transfer out` : transactionCategoryText(d),
       ...(d.lines ?? []).map((l) => paymentLineText(l)),
     ].join(" "),
-    open: (d, c) => (d.doc_kind === "transfer" ? showTransfer(d) : showPayment(d, c.nameOf)),
-    edit: (d) => (d.doc_kind === "transfer" ? transferForm(d) : editPayment(d.doc_kind, d.id)),
+    open: (d, c) => (d.doc_kind === "transfer" ? showTransfer(d) : openRecordPage(d.doc_path, d.id)),
+    edit: (d) => (d.doc_kind === "transfer" ? transferForm(d) : openRecordPage(d.doc_path, d.id)),
   },
   // Stock adjustments and counts: no Posted/Draft tabs, status in the row. The Value column is money; the
   // Items column is the quantity side, which is not summed across units.
@@ -228,7 +231,7 @@ const DOC_KINDS = {
   // status in the row; a journal created by a document is opened there, not edited here.
   journal: {
     path: "journals", container: "journals", noun: "journal", plural: "journals", prefix: "J",
-    numberKey: "journal_no", newLabel: "New journal", newAction: "journalForm()",
+    numberKey: "journal_no", newLabel: "New journal", newAction: "openRecordPage('journals', 'new')",
     filterParty: false, partyLabel: "Journal",
     hide: BANK_HIDDEN, extra: "none", tabs: false, hideGroup: true, searchHint: "reference, description, account, status",
     amounts: [{ key: "total", label: "Amount" }],
@@ -253,8 +256,8 @@ const DOC_KINDS = {
       };
     },
     searchText: (d) => [d.reference, d.description, d.status, ...(d.lines ?? []).map((l) => accountName(l.account_id))].join(" "),
-    open: (d) => showJournal(d),
-    edit: (d) => editJournal(d.id),
+    open: (d) => openRecordPage("journals", d.id),
+    edit: (d) => openRecordPage("journals", d.id),
     editWhen: (d) => !d.source_kind,
   },
   // Pay runs are imported, not created here: one row per run, with its employee count and the amounts the
@@ -831,7 +834,7 @@ async function renderDocList(kind) {
   const searchHadFocus = previousSearch && document.activeElement === previousSearch;
   const searchSelection = searchHadFocus ? [previousSearch.selectionStart, previousSearch.selectionEnd] : null;
 
-  const newAction = k.newAction ?? (k.formKey ? `documentForm('${k.formKey}')` : null);
+  const newAction = k.newAction ?? (RECORD_NEW_PATHS.has(k.path) ? `openRecordPage('${k.path}', 'new')` : null);
   const newButton = canEdit() && (newAction || k.newMenu)
     ? `<button type="button" class="new-doc" ${newAction ? `onclick="${newAction}"` : ""}>+ ${esc(k.newLabel)}${k.newMenu ? " ▾" : ""}</button>`
     : "";
@@ -1121,7 +1124,7 @@ async function renderDocList(kind) {
     };
   }
 
-  const openDoc = (doc) => (k.open ? k.open(doc, ctx) : k.side === "sale" ? showSale(doc, nameOf) : showPurchase(doc, nameOf));
+  const openDoc = (doc) => (k.open ? k.open(doc, ctx) : openRecordPage(k.path, doc.id));
   for (const tr of $(`tab-${k.container}`).querySelectorAll("tr[data-id]")) {
     tr.onclick = (event) => {
       if (event.target.closest(".row-menu-btn") || event.target.closest(".row-menu")) return;
@@ -1135,7 +1138,7 @@ async function renderDocList(kind) {
       openRowMenu(button, [
         { label: "Open", run: () => openDoc(doc) },
         ...((k.canPrint ?? k.side === "sale") ? [{ label: "Print PDF", run: () => openPdf(`${k.path}/${doc.id}/pdf`) }] : []),
-        ...(canEdit() && !k.noEdit && (!k.editWhen || k.editWhen(doc)) ? [{ label: "Edit", run: () => (k.edit ? k.edit(doc, ctx) : editDocument(k.side, doc.type, doc.id)) }] : []),
+        ...(canEdit() && !k.noEdit && (!k.editWhen || k.editWhen(doc)) ? [{ label: "Edit", run: () => (k.edit ? k.edit(doc, ctx) : openRecordPage(k.path, doc.id)) }] : []),
         ...(canEdit() ? [{
           label: "Delete", danger: true, run: async () => {
             if (!confirm(`Delete ${nounOf(doc)} ${numberOf(doc)}?${doc.status === "posted" ? " Its journal is removed too." : ""}`)) return;
