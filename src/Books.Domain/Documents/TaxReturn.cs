@@ -14,7 +14,7 @@ public sealed record TaxLine(
     Guid AccountId, Guid? TaxCodeId, TaxKind? TaxKind, decimal Net, decimal Tax, decimal TaxCalculated, string? TaxReason,
     string? WithholdingCategory, decimal Withholding, decimal? KhrRate, string? PostingUsage = null, bool PartyTaxable = false, PayRunLine? Payroll = null,
     decimal PayrollScale = 1, string? TaxCategory = null, decimal OtherTax = 0, string? OtherTaxCategory = null,
-    TaxDirection? TaxDirection = null)
+    TaxDirection? TaxDirection = null, decimal StateCharge = 0, string? StateChargeCategory = null)
 {
     public const string JournalKind = "journal";
 
@@ -77,7 +77,8 @@ public sealed record LineRule(
     [property: JsonPropertyName("valid_tax_invoice")] bool? ValidTaxInvoice = null,
     [property: JsonPropertyName("withholding_category")] string? WithholdingCategory = null, string Amount = "net", string? Party = null,
     [property: JsonPropertyName("tax_category")] string? TaxCategory = null,
-    [property: JsonPropertyName("other_tax_category")] string? OtherTaxCategory = null);
+    [property: JsonPropertyName("other_tax_category")] string? OtherTaxCategory = null,
+    [property: JsonPropertyName("state_charge_category")] string? StateChargeCategory = null);
 
 /// <summary>The sum of earlier boxes, each added or subtracted, optionally times a percent and rounded to the currency.</summary>
 public sealed record FormulaRule(IReadOnlyList<FormulaTerm> Terms, decimal? Percent = null);
@@ -124,9 +125,9 @@ public static class TaxReturns
         }
         var categoryKeys = categories.Select(c => c.Key).ToHashSet();
         var taxCategoryKeys = (spec.TaxCategories ?? []).Select(c => c.Key).ToHashSet();
-        foreach (var bad in (spec.TaxCategories ?? []).Where(c => c.Kind is not ("vat_input" or "vat_output" or "other_tax")))
+        foreach (var bad in (spec.TaxCategories ?? []).Where(c => c.Kind is not ("vat_input" or "vat_output" or "other_tax" or "state_charge")))
         {
-            errors.Add($"Tax category {bad.Key}: kind must be vat_input, vat_output or other_tax.");
+            errors.Add($"Tax category {bad.Key}: kind must be vat_input, vat_output, other_tax or state_charge.");
         }
         var seen = new HashSet<string>();
         var boxes = new List<ReturnBox>();
@@ -187,13 +188,17 @@ public static class TaxReturns
                 {
                     errors.Add($"{at}: withholding category {category} is not defined.");
                 }
-                if (rule.Amount is not ("net" or "tax" or "withholding" or "other_tax" or "taxable"))
+                if (rule.Amount is not ("net" or "tax" or "withholding" or "other_tax" or "state_charge" or "taxable"))
                 {
-                    errors.Add($"{at}: amount must be net, tax, withholding, other_tax or taxable.");
+                    errors.Add($"{at}: amount must be net, tax, withholding, other_tax, state_charge or taxable.");
                 }
                 if (rule.OtherTaxCategory is { } otherCategory && !taxCategoryKeys.Contains(otherCategory))
                 {
                     errors.Add($"{at}: other tax category {otherCategory} is not defined.");
+                }
+                if (rule.StateChargeCategory is { } chargeCategory && !taxCategoryKeys.Contains(chargeCategory))
+                {
+                    errors.Add($"{at}: state charge category {chargeCategory} is not defined.");
                 }
                 if (rule.TaxCategory is { } taxCategory && taxCategory != "none" && !taxCategoryKeys.Contains(taxCategory))
                 {
@@ -280,7 +285,8 @@ public static class TaxReturns
             && (rule.Party is null || (rule.Party == "taxable") == l.PartyTaxable)
             && (rule.TaxCategory is null || (rule.TaxCategory == "none" ? l.TaxCategory is null : l.TaxCategory == rule.TaxCategory))
             && (rule.OtherTaxCategory is null || l.OtherTaxCategory == rule.OtherTaxCategory)
-                ? rule.Amount switch { "tax" => l.Tax, "withholding" => l.Withholding, "other_tax" => l.OtherTax, "taxable" => l.Net + l.OtherTax, _ => l.Net }
+            && (rule.StateChargeCategory is null || l.StateChargeCategory == rule.StateChargeCategory)
+                ? rule.Amount switch { "tax" => l.Tax, "withholding" => l.Withholding, "other_tax" => l.OtherTax, "state_charge" => l.StateCharge, "taxable" => l.Net + l.OtherTax + l.StateCharge, _ => l.Net }
                 : null;
     }
 
@@ -361,6 +367,8 @@ public static class TaxReturns
         .. Other("specific", "Specific tax on certain merchandise and services (TTR001 line 06)"),
         .. Other("accommodation", "Accommodation tax (TTR001 line 07)"),
         .. Other("public_lighting", "Public lighting tax (TTR001 line 08)"),
+        new("t701_state_charge_base", OtherTaxes, "State charge: taxable sales", new LineRule("sale", StateChargeCategory: "state_charge")),
+        new("t701_state_charge", OtherTaxes, "State charge", new LineRule("sale", StateChargeCategory: "state_charge", Amount: "state_charge")),
         new("tos_resident_gross", Salary, "Salaries of resident employees", Payroll: new PayrollRule("gross", true)),
         new("tos_resident_tax", Salary, "Tax on salary, resident employees", Payroll: new PayrollRule("salary_tax", true)),
         new("tos_nonresident_gross", Salary, "Salaries of non-resident employees", Payroll: new PayrollRule("gross", false)),
@@ -375,6 +383,7 @@ public static class TaxReturns
         new("specific", "Specific tax on certain merchandise and services", "other_tax"),
         new("accommodation", "Accommodation tax", "other_tax"),
         new("public_lighting", "Public lighting tax", "other_tax"),
+        new("state_charge", "State charge", "state_charge"),
     ]);
 }
 

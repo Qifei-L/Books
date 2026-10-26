@@ -187,6 +187,10 @@ public static class InvoicePdf
         {
             Row("អាករផ្សេងៗ", other.Label, other.Amount);
         }
+        foreach (var charge in p.StateCharges)
+        {
+            Row("បន្ទុករដ្ឋ", charge.Label, charge.Amount);
+        }
         if (p.Style != "commercial")
         {
             Row(p.StateCharge ? "បន្ទុករដ្ឋ" : "អាករលើតម្លៃបន្ថែម", p.StateCharge ? "State charge" : "VAT", p.VatTotal);

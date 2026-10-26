@@ -393,13 +393,15 @@ async function renderDocumentRecord(route) {
     status: doc.status,
     subtitle: `${party} · ${doc.date} · due ${doc.due_date} · ${esc(doc.reference ?? "")}`,
     actions,
-    body: `<table><tr><th>Account</th><th>Description</th><th>Class</th><th>Location</th><th class="num">Net</th><th class="num">VAT</th>${spec.type === "sale" ? '<th class="num">Other tax</th>' : '<th class="num">WHT</th>'}</tr>
+    body: `<table><tr><th>Account</th><th>Description</th><th>Class</th><th>Location</th><th class="num">Net</th><th class="num">VAT</th>${spec.type === "sale" ? '<th class="num">Other tax</th><th class="num">State charge</th>' : '<th class="num">WHT</th>'}</tr>
       ${doc.lines.map((l) => `<tr><td>${esc(accountName(l.account_id))}</td><td>${esc(l.description)}</td>
         <td>${esc(dimensionName("class", l.class_id))}</td><td>${esc(dimensionName("location", l.location_id))}</td>
         <td class="num">${l.net_amount}</td><td class="num">${l.tax_amount}${l.tax_adjusted ? ` <span class="pill draft">adjusted</span>` : ""}</td>
-        <td class="num">${spec.type === "sale" ? l.other_tax_amount : l.withholding_amount}</td></tr>`).join("")}
+        <td class="num">${spec.type === "sale" ? l.other_tax_amount : l.withholding_amount}</td>
+        ${spec.type === "sale" ? `<td class="num">${l.state_charge_amount ?? "0"}</td>` : ""}</tr>`).join("")}
       <tr class="total"><td colspan="4">Gross ${doc.gross_total}${spec.type === "purchase" ? ` · payable ${doc.payable_total}` : ""}</td>
-        <td class="num">${doc.net_total}</td><td class="num">${doc.tax_total}</td><td class="num">${spec.type === "sale" ? doc.other_tax_total : doc.withholding_total}</td></tr></table>
+        <td class="num">${doc.net_total}</td><td class="num">${doc.tax_total}</td><td class="num">${spec.type === "sale" ? doc.other_tax_total : doc.withholding_total}</td>
+        ${spec.type === "sale" ? `<td class="num">${doc.state_charge_total ?? "0"}</td>` : ""}</tr></table>
       ${taxCurrency}
       ${doc.issues.map((i) => `<div class="warning">${esc(i.code)}: ${esc(i.message)}</div>`).join("")}
       ${(doc.warnings ?? []).map((w) => `<div class="warning">${esc(w)}</div>`).join("")}
@@ -453,23 +455,25 @@ async function documentRecordForm(segment, kind, id) {
       { name: "amount", head: "Amount", num: true, cell: (l) => `<input name="amount" class="num" inputmode="decimal" value="${l && !l.quantity ? l.net_amount : ""}" placeholder="qty × price">` },
       { name: "tax_code_id", head: "VAT", cell: (l) => `<select name="tax_code_id">${options(c.vat, l?.tax_code_id, (t) => t.name, "None")}</select>` },
       ...(sale
-        ? [{ name: "other_tax_code_id", head: "Other tax", cell: (l) => `<select name="other_tax_code_id">${options(c.other, l?.other_tax_code_id, (t) => t.name, "None")}</select>` }]
+        ? [{ name: "other_tax_code_id", head: "Other tax", cell: (l) => `<select name="other_tax_code_id">${options(c.other, l?.other_tax_code_id, (t) => t.name, "None")}</select>` },
+           { name: "state_charge_code_id", head: "State charge", cell: (l) => `<select name="state_charge_code_id">${options(c.stateCharge, l?.state_charge_code_id, (t) => t.name, "None")}</select>` }]
         : [
           { name: "valid_tax_invoice", head: "Tax invoice", cell: (l) => `<input type="checkbox" name="valid_tax_invoice" ${l?.valid_tax_invoice === false ? "" : "checked"}>` },
           { name: "withholding_code_id", head: "WHT", cell: (l) => `<select name="withholding_code_id">${options(c.wht, l?.withholding_code_id, (t) => t.name, "None")}</select>` },
         ]),
     ];
     const totals = () => {
-      let net = 0, other = 0, vat = 0, wht = 0;
+      let net = 0, other = 0, charge = 0, vat = 0, wht = 0;
       for (const tr of grid.rows()) {
         const amount = value(tr, "amount") !== null ? num(value(tr, "amount")) : num(value(tr, "quantity")) * num(value(tr, "unit_price"));
         const o = amount * rateOf(value(tr, "other_tax_code_id"), c.other);
-        net += amount; other += o; vat += (amount + o) * rateOf(value(tr, "tax_code_id"), c.vat);
+        const sc = amount * rateOf(value(tr, "state_charge_code_id"), c.stateCharge);
+        net += amount; other += o; charge += sc; vat += (amount + o + sc) * rateOf(value(tr, "tax_code_id"), c.vat);
         wht += amount * rateOf(value(tr, "withholding_code_id"), c.wht);
       }
       const cur = $("record-body").querySelector('[name="currency"]').value;
-      recordTotals(`Net ${money(net, cur)}${other ? ` · other tax ${money(other, cur)}` : ""} · VAT ${money(vat, cur)}
-        ${wht ? ` · WHT −${money(wht, cur)}` : ""} · <b>${sale ? "total" : "payable"} ${money(net + other + vat - wht, cur)} ${cur}</b>
+      recordTotals(`Net ${money(net, cur)}${other ? ` · other tax ${money(other, cur)}` : ""}${charge ? ` · state charge ${money(charge, cur)}` : ""} · VAT ${money(vat, cur)}
+        ${wht ? ` · WHT −${money(wht, cur)}` : ""} · <b>${sale ? "total" : "payable"} ${money(net + other + charge + vat - wht, cur)} ${cur}</b>
         <span class="muted small">estimate; the server calculates the saved figures</span>`);
     };
     const grid = lineGrid($("record-body").querySelector("table.lines"), columns, totals);

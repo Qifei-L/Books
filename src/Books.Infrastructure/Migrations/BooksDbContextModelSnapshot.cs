@@ -2517,6 +2517,15 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("numeric(20,4)")
                         .HasColumnName("quantity");
 
+                    b.Property<decimal>("StateChargeAmount")
+                        .HasPrecision(20, 4)
+                        .HasColumnType("numeric(20,4)")
+                        .HasColumnName("state_charge_amount");
+
+                    b.Property<Guid?>("StateChargeCodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("state_charge_code_id");
+
                     b.Property<decimal>("TaxAmount")
                         .HasPrecision(20, 4)
                         .HasColumnType("numeric(20,4)")
@@ -2567,6 +2576,9 @@ namespace Books.Infrastructure.Migrations
 
                     b.HasIndex("OtherTaxCodeId")
                         .HasDatabaseName("ix_sales_invoice_lines_other_tax_code_id");
+
+                    b.HasIndex("StateChargeCodeId")
+                        .HasDatabaseName("ix_sales_invoice_lines_state_charge_code_id");
 
                     b.HasIndex("TaxCodeId")
                         .HasDatabaseName("ix_sales_invoice_lines_tax_code_id");
@@ -5171,6 +5183,12 @@ namespace Books.Infrastructure.Migrations
                         .HasForeignKey("OtherTaxCodeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_sales_invoice_lines_tax_codes_other_tax_code_id");
+
+                    b.HasOne("Books.Domain.Ledgers.TaxCode", null)
+                        .WithMany()
+                        .HasForeignKey("StateChargeCodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_sales_invoice_lines_tax_codes_state_charge_code_id");
 
                     b.HasOne("Books.Domain.Ledgers.TaxCode", null)
                         .WithMany()

@@ -23,8 +23,8 @@ public sealed record PrintTaxCurrency(string Currency, string Rate, DateOnly Rat
 public sealed record InvoicePrint(
     string Style, bool StateCharge, bool CreditNote, bool Draft, string Number, string? OriginalNumber, DateOnly Date, DateOnly DueDate,
     string? Reference, string? Description, string Currency, InvoiceSettingsDto SellerSettings, string SellerName, PrintParty Buyer,
-    IReadOnlyList<PrintLine> Lines, string NetTotal, IReadOnlyList<PrintAmount> OtherTaxes, string VatTotal, string GrossTotal,
-    PrintTaxCurrency? TaxCurrency);
+    IReadOnlyList<PrintLine> Lines, string NetTotal, IReadOnlyList<PrintAmount> OtherTaxes, IReadOnlyList<PrintAmount> StateCharges,
+    string VatTotal, string GrossTotal, PrintTaxCurrency? TaxCurrency);
 
 /// <summary>
 /// Gathers what a printed sales invoice or credit note shows (M9). The PDF itself is drawn by the API from this.
@@ -54,7 +54,7 @@ public sealed class InvoicePrintService(IBooksDb db, ReadRunner reads, TaxCurren
             var companyName = await db.Companies.Where(c => c.Id == ledger.CompanyId).Select(c => c.Name).SingleAsync(ct);
             var settings = await InvoiceSettingsService.LoadAsync(db, ledgerId, orgId, ct);
             var customer = await db.Parties.AsNoTracking().SingleAsync(p => p.Id == invoice.CustomerId, ct);
-            var codeIds = invoice.Lines.SelectMany(l => new[] { l.TaxCodeId, l.OtherTaxCodeId }).OfType<Guid>().Distinct().ToList();
+            var codeIds = invoice.Lines.SelectMany(l => new[] { l.TaxCodeId, l.OtherTaxCodeId, l.StateChargeCodeId }).OfType<Guid>().Distinct().ToList();
             var codes = await db.TaxCodes.AsNoTracking().Where(t => codeIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, ct);
             string? original = null;
             if (invoice.OriginalInvoiceId is { } originalId)
@@ -73,6 +73,9 @@ public sealed class InvoicePrintService(IBooksDb db, ReadRunner reads, TaxCurren
             var otherTaxes = invoice.Lines.Where(l => l.OtherTaxCodeId is not null && l.OtherTaxAmount != 0)
                 .GroupBy(l => codes.TryGetValue(l.OtherTaxCodeId!.Value, out var c) ? c.Name : "Other tax")
                 .Select(g => new PrintAmount(g.Key, F(g.Sum(l => l.OtherTaxAmount)))).ToList();
+            var stateCharges = invoice.Lines.Where(l => l.StateChargeCodeId is not null && l.StateChargeAmount != 0)
+                .GroupBy(l => codes.TryGetValue(l.StateChargeCodeId!.Value, out var c) ? c.Name : "State charge")
+                .Select(g => new PrintAmount(g.Key, F(g.Sum(l => l.StateChargeAmount)))).ToList();
 
             var kinds = invoice.Lines.Select(l => l.TaxCodeId is { } t && codes.TryGetValue(t, out var c) ? c : null).OfType<TaxCode>().ToList();
             var chosen = style
@@ -86,7 +89,7 @@ public sealed class InvoicePrintService(IBooksDb db, ReadRunner reads, TaxCurren
                 invoice.Date, invoice.DueDate, invoice.Reference, invoice.Description, currency, InvoiceSettingsService.ToDto(settings),
                 settings.NameEnglish ?? companyName,
                 new PrintParty(customer.Name, customer.TaxId, customer.Address, customer.Phone, customer.Email),
-                lines, F(invoice.NetTotal), otherTaxes, F(invoice.TaxTotal), F(invoice.GrossTotal),
+                lines, F(invoice.NetTotal), otherTaxes, stateCharges, F(invoice.TaxTotal), F(invoice.GrossTotal),
                 khr is null ? null : new PrintTaxCurrency(khr.Currency, khr.Rate, khr.RateDate, Group(khr.GrossTotal), Group(khr.TaxTotal)));
         }, ct);
     }

@@ -11,7 +11,7 @@ public static class SalesEndpoints
     public sealed record LineRequest(
         Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string? Amount,
         Guid? TaxCodeId, string? TaxAmount, string? TaxReason, Guid? OtherTaxCodeId = null, string? Unit = null, Guid? LocationId = null,
-        Guid? ClassId = null);
+        Guid? ClassId = null, Guid? StateChargeCodeId = null);
 
     public sealed record InvoiceRequest(
         Guid CustomerId, Guid? ReceivableAccountId, DateOnly Date, DateOnly? DueDate, string? Reference, string? Description,
@@ -66,7 +66,8 @@ public static class SalesEndpoints
         body.CustomerId, body.ReceivableAccountId, body.Date, body.DueDate, body.Reference, body.Description,
         (body.Lines ?? throw BooksProblem.Invalid("lines is required.")).Select((l, i) => new SalesLineInput(
             l.AccountId, l.Description, l.ItemId, PurchaseEndpoints.Number(l.Quantity, i, "quantity", signed: true), PurchaseEndpoints.Number(l.UnitPrice, i, "unit_price"),
-            PurchaseEndpoints.Number(l.Amount, i, "amount", signed: true), l.TaxCodeId, PurchaseEndpoints.Number(l.TaxAmount, i, "tax_amount", signed: true), l.TaxReason, l.OtherTaxCodeId, l.Unit, l.LocationId, l.ClassId)).ToList(),
+            PurchaseEndpoints.Number(l.Amount, i, "amount", signed: true), l.TaxCodeId, PurchaseEndpoints.Number(l.TaxAmount, i, "tax_amount", signed: true), l.TaxReason, l.OtherTaxCodeId, l.Unit, l.LocationId, l.ClassId,
+            l.StateChargeCodeId)).ToList(),
         body.OriginalInvoiceId,
         body.TaxCurrencyRate is null && body.TaxCurrencyReason is null ? null
             : new TaxCurrencyInput(PurchaseEndpoints.Rate(body.TaxCurrencyRate), body.TaxCurrencyReason),
