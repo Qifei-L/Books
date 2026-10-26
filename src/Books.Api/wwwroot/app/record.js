@@ -455,7 +455,6 @@ async function documentRecordForm(segment, kind, id) {
       ...(sale
         ? [{ name: "other_tax_code_id", head: "Other tax", cell: (l) => `<select name="other_tax_code_id">${options(c.other, l?.other_tax_code_id, (t) => t.name, "None")}</select>` }]
         : [
-          { name: "valid_tax_invoice", head: "Tax invoice", cell: (l) => `<input type="checkbox" name="valid_tax_invoice" ${l?.valid_tax_invoice === false ? "" : "checked"}>` },
           { name: "withholding_code_id", head: "WHT", cell: (l) => `<select name="withholding_code_id">${options(c.wht, l?.withholding_code_id, (t) => t.name, "None")}</select>` },
         ]),
     ];
@@ -610,7 +609,6 @@ async function paymentRecordForm(path, receipt, id) {
       { name: "amount", head: "Amount", num: true, cell: (l) => `<input name="amount" class="num" inputmode="decimal" value="${l?.amount ?? ""}">` },
       { name: "settled_amount", head: "Settles (invoice currency)", num: true, cell: (l) => `<input name="settled_amount" class="num" inputmode="decimal" value="${l?.settled_amount ?? ""}">` },
       { name: "tax_code_id", head: "VAT", cell: (l) => `<select name="tax_code_id">${options(vat, l?.tax_code_id, (t) => t.name, "None")}</select>` },
-      ...(receipt ? [] : [{ name: "valid_tax_invoice", head: "Tax invoice", cell: (l) => `<input type="checkbox" name="valid_tax_invoice" ${l?.valid_tax_invoice === false ? "" : "checked"}>` }]),
       { name: "withholding_code_id", head: "WHT", cell: (l) => `<select name="withholding_code_id">${options(wht, l?.withholding_code_id, (t) => t.name, "None")}</select>` },
     ];
     const totals = () => {
