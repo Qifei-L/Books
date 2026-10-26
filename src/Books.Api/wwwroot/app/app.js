@@ -1045,6 +1045,7 @@ async function renderTax(period) {
   $("tab-tax").innerHTML = `
     <p class="filter-bar"><label>Month <select id="tax-period">${months.map((m) => `<option ${m === period ? "selected" : ""}>${m}</option>`).join("")}</select></label>
       <a class="button" href="#" id="tax-xlsx">Excel</a>
+      <a class="button" href="#" id="tax-xlsx-pack">Excel pack</a>
       <a class="button" href="#" id="tax-pdf">PDF workpaper</a>
       <a class="button" href="#" id="tax-share">Share</a>
       <span class="muted small">${esc(r.return_name)} · definition v${r.definition_version} · ${r.currency} / ${r.tax_currency ?? ""}
@@ -1063,6 +1064,7 @@ async function renderTax(period) {
     ${taxCodesSection(taxCodes)}`;
   $("tax-period").onchange = (e) => renderTax(e.target.value);
   $("tax-xlsx").onclick = (e) => { e.preventDefault(); download(`${ledgerUrl()}/tax-returns/${period}.xlsx`, `tax-return-${period}.xlsx`); };
+  $("tax-xlsx-pack").onclick = (e) => { e.preventDefault(); download(`${ledgerUrl()}/tax-returns/${period}/tax-workpaper.xlsx`, `tax-workpaper-${period}.xlsx`); };
   $("tax-pdf").onclick = (e) => { e.preventDefault(); download(`${ledgerUrl()}/tax-returns/${period}.pdf`, `tax-workpaper-${period}.pdf`); };
   $("tax-share").onclick = (e) => { e.preventDefault(); sharePack(`${ledgerUrl()}/tax-returns/${period}.pdf`, 7); };
   for (const tr of $("tab-tax").querySelectorAll("tr[data-box].click")) {

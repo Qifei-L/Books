@@ -100,6 +100,7 @@ and a seven-day share window.
 
 Done: branding/output settings, the Stimulsoft client pack PDF (cover, P&L, BS, TB, AR/AP aging), the tax workpaper PDF
 (trial watermark until a licence key is configured), versioned report templates (code defaults, ledger overrides,
-draft → published, section order and switches) and report runs with stored files, hashes, snapshots and expiring
-share links (watermark and download audit). Still open: Excel report packs and official GDT form facsimiles.
+draft → published, section order and switches), report runs with stored files, hashes, snapshots and expiring
+share links (watermark and download audit), and multi-sheet Excel packs (client pack and tax workpaper). Still open:
+official GDT form facsimiles and M17 attachments.
 

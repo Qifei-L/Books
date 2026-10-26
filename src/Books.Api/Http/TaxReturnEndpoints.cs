@@ -55,6 +55,26 @@ public static class TaxReturnEndpoints
             return Results.File(pdf, "application/pdf", name);
         });
 
+        // The tax workpaper workbook: boxes, reconciliation and issues as separate sheets.
+        ledger.MapGet("/tax-returns/{period}/tax-workpaper.xlsx", async (Guid orgId, Guid ledgerId, string period, string? khrRate, string? khrReason,
+            int? definitionVersion, PrincipalAccessor principals, TaxReturnService service, Books.Application.Reporting.ReportTemplateService templates,
+            Books.Application.Reporting.ReportRunService runs, Books.Application.Reporting.ReportDeliverySettingsService settings,
+            Books.Application.Ledgers.CompanyService companies, HttpContext http, CancellationToken ct) =>
+        {
+            var principal = await principals.GetAsync(ct);
+            var r = await service.ReturnAsync(principal, orgId, ledgerId, period, Override(khrRate, khrReason), ct, definitionVersion);
+            var company = (await companies.GetLedgerAsync(principal, orgId, ledgerId, ct)).CompanyName;
+            var branding = await settings.GetBrandingAsync(principal, orgId, ct);
+            var template = await templates.ResolveDetailedAsync(orgId, ledgerId, Books.Domain.Reporting.ReportTemplateKind.TaxWorkpaper, r.To, ct);
+            var xlsx = ExcelExport.TaxWorkpaper(r, company);
+            var name = $"tax-workpaper-{r.Period}.xlsx";
+            var run = await runs.RecordAsync(principal, orgId, ledgerId, new Books.Application.Reporting.ReportRunInput("tax_workpaper",
+                template.Id, r.Period, "xlsx", name, ExcelExport.ContentType,
+                new Books.Api.Reporting.TaxWorkpaperSnapshot(r, branding, company, template.Spec.EnabledSections), http.TraceIdentifier), xlsx, ct);
+            http.Response.Headers["X-Report-Run-Id"] = run.Id.ToString();
+            return Results.File(xlsx, ExcelExport.ContentType, name);
+        });
+
         ledger.MapGet("/tax-returns/{period}/boxes/{key}", async (Guid orgId, Guid ledgerId, string period, string key, string? khrRate, string? khrReason, int? definitionVersion,
             PrincipalAccessor principals, TaxReturnService service, HttpContext http, CancellationToken ct) =>
             Envelope.Ok(http, await service.BoxLinesAsync(await principals.GetAsync(ct), orgId, ledgerId, period, key, Override(khrRate, khrReason), ct, definitionVersion)));

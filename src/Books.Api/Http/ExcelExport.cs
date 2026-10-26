@@ -16,6 +16,12 @@ public static class ExcelExport
     public static byte[] TrialBalance(TrialBalance tb, string ledgerName)
     {
         using var book = new XLWorkbook();
+        var sheet = AddTrialBalance(book, tb, ledgerName);
+        return Save(book, sheet);
+    }
+
+    private static IXLWorksheet AddTrialBalance(XLWorkbook book, TrialBalance tb, string ledgerName)
+    {
         var sheet = Sheet(book, "Trial Balance", ledgerName, $"{tb.From:yyyy-MM-dd} to {tb.To:yyyy-MM-dd} · {tb.Currency}");
         Header(sheet, 4, "Code", "Account", "Opening Dr", "Opening Cr", "Period Dr", "Period Cr", "Closing Dr", "Closing Cr");
         var row = 5;
@@ -31,7 +37,7 @@ public static class ExcelExport
         Amounts(sheet, row, 3, t.OpeningDebit, t.OpeningCredit, t.PeriodDebit, t.PeriodCredit, t.ClosingDebit, t.ClosingCredit);
         sheet.Row(row).Style.Font.Bold = true;
         Notes(sheet, row + 2, tb.Warnings.Select(w => w.Message).Prepend(tb.Balanced ? "Balanced." : "NOT BALANCED."));
-        return Save(book, sheet);
+        return sheet;
     }
 
     public static byte[] GlDetail(GlDetail gl, string ledgerName)
@@ -61,24 +67,36 @@ public static class ExcelExport
     public static byte[] ProfitAndLoss(ProfitAndLoss pl, string ledgerName)
     {
         using var book = new XLWorkbook();
+        var sheet = AddProfitAndLoss(book, pl, ledgerName);
+        return Save(book, sheet);
+    }
+
+    private static IXLWorksheet AddProfitAndLoss(XLWorkbook book, ProfitAndLoss pl, string ledgerName)
+    {
         var sheet = Sheet(book, "Profit and Loss", ledgerName, $"{pl.From:yyyy-MM-dd} to {pl.To:yyyy-MM-dd} · {pl.Currency}");
         var row = Sections(sheet, 4, pl.Sections);
         sheet.Cell(row, 1).Value = "Net profit";
         Amounts(sheet, row, 2, pl.NetProfit);
         sheet.Row(row).Style.Font.Bold = true;
-        return Save(book, sheet);
+        return sheet;
     }
 
     public static byte[] BalanceSheet(BalanceSheet bs, string ledgerName)
     {
         using var book = new XLWorkbook();
+        var sheet = AddBalanceSheet(book, bs, ledgerName);
+        return Save(book, sheet);
+    }
+
+    private static IXLWorksheet AddBalanceSheet(XLWorkbook book, BalanceSheet bs, string ledgerName)
+    {
         var sheet = Sheet(book, "Balance Sheet", ledgerName, $"As of {bs.AsOf:yyyy-MM-dd} · {bs.Currency}");
         var row = Sections(sheet, 4, bs.Sections);
         sheet.Cell(row, 1).Value = "Total liabilities and equity";
         Amounts(sheet, row, 2, bs.TotalLiabilitiesAndEquity);
         sheet.Row(row).Style.Font.Bold = true;
         Notes(sheet, row + 2, [bs.Balanced ? "Balanced: assets equal liabilities plus equity." : "NOT BALANCED."]);
-        return Save(book, sheet);
+        return sheet;
     }
 
     /// <summary>Each section, its nested groups indented with subtotals, then the section total. Returns the next free row.</summary>
@@ -124,7 +142,132 @@ public static class ExcelExport
         return row + 1;
     }
 
-    /// <summary>The monthly return workpaper: boxes, reconciliation with the tax accounts, and lines with an overridden VAT.</summary>
+    /// <summary>
+    /// The client pack as multiple sheets, in the template's order. Every amount is a numeric cell, headers are frozen
+    /// and columns are sized, so the workbook is usable without formatting by hand.
+    /// </summary>
+    public static byte[] ClientPack(ProfitAndLoss pl, BalanceSheet bs, TrialBalance tb, ArAging ar, ApAging ap, string ledgerName,
+        IReadOnlyList<string>? sections)
+    {
+        using var book = new XLWorkbook();
+        var cover = book.Worksheets.Add("Cover");
+        cover.Cell(1, 1).Value = ledgerName;
+        cover.Cell(1, 1).Style.Font.Bold = true;
+        cover.Cell(1, 1).Style.Font.FontSize = 16;
+        cover.Cell(2, 1).Value = "Client report pack";
+        cover.Cell(3, 1).Value = $"{pl.From:yyyy-MM-dd} to {pl.To:yyyy-MM-dd} · {pl.Currency}";
+        cover.Cell(5, 1).Value = "Generated";
+        cover.Cell(5, 2).Value = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm");
+        cover.Columns().AdjustToContents(8, 60);
+
+        foreach (var section in (sections ?? ["pl", "bs", "tb", "aging"]).Select(s => s.ToLowerInvariant()).Distinct())
+        {
+            switch (section)
+            {
+                case "pl":
+                    AddProfitAndLoss(book, pl, ledgerName).SheetView.FreezeRows(4);
+                    break;
+                case "bs":
+                    AddBalanceSheet(book, bs, ledgerName).SheetView.FreezeRows(4);
+                    break;
+                case "tb":
+                    AddTrialBalance(book, tb, ledgerName).SheetView.FreezeRows(4);
+                    break;
+                case "aging":
+                    AddAging(book, ar, ap, ledgerName).SheetView.FreezeRows(4);
+                    break;
+            }
+        }
+        return Save(book, cover);
+    }
+
+    private static IXLWorksheet AddAging(XLWorkbook book, ArAging ar, ApAging ap, string ledgerName)
+    {
+        var sheet = Sheet(book, "Aging", ledgerName, $"As of {ar.AsOf:yyyy-MM-dd} · {ar.Currency}");
+        Header(sheet, 4, "Party", "Not due", "1–30", "31–60", "61–90", "Over 90", "Total");
+        var row = 5;
+        sheet.Cell(row++, 1).Value = "Receivables";
+        sheet.Cell(row - 1, 1).Style.Font.Bold = true;
+        foreach (var r in ar.Rows)
+        {
+            sheet.Cell(row, 1).Value = r.Customer;
+            Amounts(sheet, row, 2, r.NotDue, r.Days1To30, r.Days31To60, r.Days61To90, r.Over90, r.Total);
+            row++;
+        }
+        sheet.Cell(row, 1).Value = "Receivables total";
+        Amounts(sheet, row, 2, ar.Totals.NotDue, ar.Totals.Days1To30, ar.Totals.Days31To60, ar.Totals.Days61To90, ar.Totals.Over90, ar.Totals.Total);
+        sheet.Row(row++).Style.Font.Bold = true;
+        row++;
+        sheet.Cell(row++, 1).Value = "Payables";
+        sheet.Cell(row - 1, 1).Style.Font.Bold = true;
+        foreach (var r in ap.Rows)
+        {
+            sheet.Cell(row, 1).Value = r.Supplier;
+            Amounts(sheet, row, 2, r.NotDue, r.Days1To30, r.Days31To60, r.Days61To90, r.Over90, r.Total);
+            row++;
+        }
+        sheet.Cell(row, 1).Value = "Payables total";
+        Amounts(sheet, row, 2, ap.Totals.NotDue, ap.Totals.Days1To30, ap.Totals.Days31To60, ap.Totals.Days61To90, ap.Totals.Over90, ap.Totals.Total);
+        sheet.Row(row).Style.Font.Bold = true;
+        Notes(sheet, row + 2, [ar.MatchesControl ? "Receivables equal the control account." : "Receivables do not equal the control account.",
+            ap.MatchesControl ? "Payables equal the control account." : "Payables do not equal the control account."]);
+        return sheet;
+    }
+
+
+    /// <summary>The tax workpaper as three sheets: boxes, reconciliation with the tax accounts, and issues.</summary>
+    public static byte[] TaxWorkpaper(TaxReturnDto r, string ledgerName)
+    {
+        using var book = new XLWorkbook();
+        var basis = r.TaxCurrencyBasis == "override" ? $"{r.TaxCurrency} at {r.OverrideRate} ({r.OverrideReason})" : $"{r.TaxCurrency} from document snapshots";
+        var boxes = Sheet(book, "Boxes", ledgerName, $"{r.ReturnName} · {r.Period} · definition v{r.DefinitionVersion} · {r.Currency}, {basis}");
+        Header(boxes, 4, "Section", "Box", "Label", r.Currency, r.TaxCurrency ?? "");
+        var row = 5;
+        foreach (var b in r.Boxes)
+        {
+            boxes.Cell(row, 1).Value = b.Section;
+            boxes.Cell(row, 2).Value = b.Key;
+            boxes.Cell(row, 3).Value = b.Information ? $"{b.Label} (information)" : b.Label;
+            Amounts(boxes, row, 4, b.Amount);
+            if (b.TaxCurrencyAmount is { } khr)
+            {
+                Amounts(boxes, row, 5, khr);
+            }
+            row++;
+        }
+        boxes.SheetView.FreezeRows(4);
+
+        var rec = book.Worksheets.Add("Reconciliation");
+        Header(rec, 4, "Usage", "Accounts", "Ledger", "Documents", "Difference", "Other postings");
+        row = 5;
+        foreach (var x in r.Reconciliation)
+        {
+            rec.Cell(row, 1).Value = x.Label;
+            rec.Cell(row, 2).Value = string.Join(", ", x.Accounts);
+            Amounts(rec, row, 3, x.LedgerAmount, x.ReturnAmount, x.Difference);
+            rec.Cell(row, 6).Value = string.Join("; ", x.OtherPostings.Select(o => $"No. {o.JournalNo} {o.Date:yyyy-MM-dd} {o.Reference} {o.Amount}"));
+            row++;
+        }
+        rec.SheetView.FreezeRows(4);
+
+        var issues = book.Worksheets.Add("Issues");
+        Header(issues, 4, "Code", "Message");
+        row = 5;
+        foreach (var issue in r.Issues)
+        {
+            issues.Cell(row, 1).Value = issue.Code;
+            issues.Cell(row, 2).Value = issue.Message;
+            row++;
+        }
+        if (r.Issues.Count == 0)
+        {
+            issues.Cell(row, 1).Value = "No issues.";
+        }
+        issues.SheetView.FreezeRows(4);
+
+        return Save(book, boxes);
+    }
+
     public static byte[] TaxReturn(TaxReturnDto r, string ledgerName)
     {
         using var book = new XLWorkbook();
@@ -220,7 +363,10 @@ public static class ExcelExport
 
     private static byte[] Save(XLWorkbook book, IXLWorksheet sheet)
     {
-        sheet.Columns().AdjustToContents(8, 60);
+        foreach (var worksheet in book.Worksheets)
+        {
+            worksheet.Columns().AdjustToContents(8, 60);
+        }
         using var stream = new MemoryStream();
         book.SaveAs(stream);
         return stream.ToArray();

@@ -72,6 +72,33 @@ public static class ReportEndpoints
             return Results.File(pdf, "application/pdf", name);
         });
 
+        // The client pack as an Excel workbook: one sheet per section, numeric amounts.
+        reports.MapGet("/client-pack.xlsx", async (Guid orgId, Guid ledgerId, DateOnly from, DateOnly to,
+            PrincipalAccessor principals, StatementService statements, ReportService reportsService, PayablesReportService payables,
+            ReceivablesReportService receivables, Books.Application.Reporting.ReportDeliverySettingsService settings,
+            Books.Application.Reporting.ReportTemplateService templates, Books.Application.Reporting.ReportRunService runs,
+            Books.Application.Ledgers.CompanyService companies, HttpContext http, CancellationToken ct, Guid? classId = null, Guid? locationId = null) =>
+        {
+            var principal = await principals.GetAsync(ct);
+            var pl = await statements.ProfitAndLossAsync(principal, orgId, ledgerId, from, to, ct, classId, locationId);
+            var bs = await statements.BalanceSheetAsync(principal, orgId, ledgerId, to, ct, classId, locationId);
+            var tb = await reportsService.TrialBalanceAsync(principal, orgId, ledgerId, from, to, ct, classId, locationId);
+            var ar = await receivables.AgingAsync(principal, orgId, ledgerId, to, ct);
+            var ap = await payables.AgingAsync(principal, orgId, ledgerId, to, ct);
+            var company = (await companies.GetLedgerAsync(principal, orgId, ledgerId, ct)).CompanyName;
+            var branding = await settings.GetBrandingAsync(principal, orgId, ct);
+            var output = await settings.GetLedgerSettingsAsync(principal, orgId, ledgerId, ct);
+            var template = await templates.ResolveDetailedAsync(orgId, ledgerId, Books.Domain.Reporting.ReportTemplateKind.ClientPack, to, ct);
+            var xlsx = ExcelExport.ClientPack(pl, bs, tb, ar, ap, company, template.Spec.EnabledSections);
+            var name = $"client-pack-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}.xlsx";
+            var run = await runs.RecordAsync(principal, orgId, ledgerId, new Books.Application.Reporting.ReportRunInput("client_pack",
+                template.Id, $"{from:yyyy-MM-dd}/{to:yyyy-MM-dd}", "xlsx", name, ExcelExport.ContentType,
+                new Books.Api.Reporting.ClientPackSnapshot(pl, bs, tb, ar, ap, branding, output, company, template.Spec.EnabledSections),
+                http.TraceIdentifier), xlsx, ct);
+            http.Response.Headers["X-Report-Run-Id"] = run.Id.ToString();
+            return Results.File(xlsx, ExcelExport.ContentType, name);
+        });
+
         // Excel versions of the same reports (owner decision: Excel is the only export format for now).
         reports.MapGet("/trial-balance.xlsx", async (Guid orgId, Guid ledgerId, DateOnly from, DateOnly to, PrincipalAccessor principals, ReportService service, CompanyService ledgers, CancellationToken ct,
             Guid? classId = null, Guid? locationId = null) =>
