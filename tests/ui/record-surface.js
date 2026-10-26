@@ -125,6 +125,20 @@ async function run() {
   await page.waitForFunction(() => !document.getElementById("record-bar").classList.contains("hidden"));
   assert.equal(await page.locator('#record-body input[name="valid_tax_invoice"]').count(), 0);
   assert.ok(!(await page.locator("#record-body table.lines").innerText()).includes("Tax invoice"));
+
+  // An inventory item posts through its own account, so the account picker hides and shows that account.
+  const trackedItem = await page.evaluate(async () => {
+    const response = await fetch(`/api/v1/organizations/${state.org}/ledgers/${state.ledger.id}/items`, {
+      headers: { Authorization: `Bearer ${sessionStorage.getItem("books.token")}` },
+    });
+    return (await response.json()).data.find((i) => i.track_inventory)?.id;
+  });
+  if (trackedItem) {
+    await page.locator('#record-body table.lines select[name="item_id"]').first().selectOption(trackedItem);
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator('#record-body table.lines select[name="account_id"]').first().isVisible(), false);
+    assert.equal(await page.locator("#record-body .line-account-label").first().isVisible(), true);
+  }
   await page.locator("#record-back").click();
   await page.waitForSelector("#home:not(.hidden)");
 

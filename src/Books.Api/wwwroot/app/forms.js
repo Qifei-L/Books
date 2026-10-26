@@ -152,6 +152,7 @@ const money = (x, currency = state.ledger?.base_currency) => {
   return n.toLocaleString("en-US", { minimumFractionDigits: minor, maximumFractionDigits: minor });
 };
 const rateOf = (id, codes) => num(codes.find((t) => t.id === id)?.rate) / 100;
+const accountWithUsage = (usage) => state.accounts?.find((a) => a.usages?.includes(usage))?.id;
 const partyNames = async () => {
   const parties = await api(`${ledgerUrl()}/parties`);
   return (id) => parties.find((p) => p.id === id)?.name ?? "";
@@ -201,7 +202,11 @@ function fillFromItem(tr, items, side, baseCurrency) {
   if (!item) return;
   const sale = side === "sale";
   const pick = (name, id) => { if (id && [...field(tr, name).options].some((o) => o.value === id)) field(tr, name).value = id; };
-  pick("account_id", (sale ? item.income_account_id : item.inventory_account_id) ?? item.default_account_id);
+  // An inventory item has its own income/inventory account; a service item only suggests its default.
+  const inventory = item.inventory_account_id ?? accountWithUsage("inventory");
+  pick("account_id", sale
+    ? (item.track_inventory ? item.income_account_id : item.default_account_id)
+    : (item.track_inventory ? inventory : item.default_account_id));
   pick("tax_code_id", (sale ? item.sales_tax_code_id : item.purchase_tax_code_id) ?? item.default_tax_code_id);
   if (!value(tr, "description")) field(tr, "description").value = (sale ? item.sales_description : item.purchase_description) ?? item.name;
   const price = sale ? item.sales_price : item.purchase_price;

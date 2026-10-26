@@ -410,8 +410,37 @@ async function renderDocumentRecord(route) {
   wireAttachments($("record-body"));
 }
 
-async function documentRecordForm(segment, kind, id) {
-  if (state.recordDirty && !canLeaveRecord()) return;
+// An inventory item posts through its own account: the server ignores the line account. Show that account instead
+// of letting the picker suggest a different one. Service items keep the account picker (their line account is saved).
+function syncItemAccount(tr, choices, side) {
+  const item = choices.items.find((i) => i.id === value(tr, "item_id"));
+  const select = field(tr, "account_id");
+  const note = tr.querySelector(".line-account-label");
+  if (!select || !note) return;
+  const itemAccount = item?.track_inventory
+    ? (side === "sale" ? item.income_account_id : (item.inventory_account_id ?? accountWithUsage("inventory")))
+    : null;
+  const saleWithoutIncome = side === "sale" && item?.track_inventory && !itemAccount;
+  if (!item?.track_inventory || saleWithoutIncome) {
+    select.classList.remove("hidden");
+    note.classList.add("hidden");
+    note.textContent = "";
+    return;
+  }
+  const shown = itemAccount ?? value(tr, "account_id");
+  if (!shown) {
+    select.classList.remove("hidden");
+    note.classList.add("hidden");
+    return;
+  }
+  if ([...select.options].some((o) => o.value === itemAccount)) select.value = itemAccount;
+  select.classList.add("hidden");
+  note.textContent = accountName(shown) || "Inventory account";
+  note.title = "Inventory items post through their own account; the line account is ignored.";
+  note.classList.remove("hidden");
+}
+
+async function documentRecordForm(segment, kind, id) {  if (state.recordDirty && !canLeaveRecord()) return;
   const doc = id ? (await api(`${ledgerUrl()}/${segment}`)).find((d) => d.id === id) : null;
   const spec = DOCS[kind];
   const sale = spec.side === "sale";
@@ -442,8 +471,15 @@ async function documentRecordForm(segment, kind, id) {
 
     const columns = [
       { name: "item_id", head: "Item", cell: (l) => `<select name="item_id">${options(c.items, l?.item_id, (i) => i.name, "")}</select>`,
-        init: (tr) => { field(tr, "item_id").onchange = () => fillFromItem(tr, c.items, spec.side, $("record-body").querySelector('[name="currency"]').value === base); } },
-      { name: "account_id", head: "Account", cell: (l) => `<select name="account_id">${options(c.accounts, l?.account_id, (a) => `${a.code} ${a.name}`, "Choose")}</select>` },
+        init: (tr) => {
+          const select = field(tr, "item_id");
+          select.onchange = () => {
+            fillFromItem(tr, c.items, spec.side, $("record-body").querySelector('[name="currency"]').value === base);
+            syncItemAccount(tr, c, spec.side);
+          };
+          syncItemAccount(tr, c, spec.side);
+        } },
+      { name: "account_id", head: "Account", cell: (l) => `<div class="line-account"><select name="account_id">${options(c.accounts, l?.account_id, (a) => `${a.code} ${a.name}`, "Choose")}</select><span class="line-account-label hidden"></span></div>` },
       { name: "class_id", head: "Class", cell: (l) => `<select name="class_id">${options(c.classes, l?.class_id, (x) => x.name, "")}</select>` },
       { name: "location_id", head: "Location", cell: (l) => `<select name="location_id">${options(c.locations, l?.location_id, (x) => x.name, "")}</select>` },
       { name: "description", head: "Description", cell: (l) => `<input name="description" value="${esc(l?.description ?? "")}">` },

@@ -304,6 +304,8 @@ label.inline-label { flex-direction: row; align-items: center; gap: 6px; margin:
 .record-body th, .record-body td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
 .record-body th.num, .record-body td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .record-body table.lines input, .record-body table.lines select { min-width: 80px; width: 100%; }
+.line-account-label { display: block; padding: 7px 8px; border: 1px dashed var(--line); border-radius: 6px;
+  color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 18px; align-items: center;
   padding: 10px 24px; background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -2px 10px rgba(0,0,0,.06); z-index: 20; }
 .record-totals { flex: 1; font-variant-numeric: tabular-nums; }
