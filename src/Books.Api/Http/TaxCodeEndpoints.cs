@@ -37,8 +37,7 @@ public static class TaxCodeEndpoints
             "non_vat" => TaxKind.NonVat,
             "withholding" => TaxKind.Withholding,
             "other_tax" => TaxKind.OtherTax,
-            "state_charge" => TaxKind.StateCharge,
-            _ => throw BooksProblem.Invalid("kind must be vat_output, vat_input, vat_input_non_deductible, vat_zero_rated, non_vat, withholding, other_tax or state_charge."),
+            _ => throw BooksProblem.Invalid("kind must be vat_output, vat_input, vat_input_non_deductible, vat_zero_rated, non_vat, withholding or other_tax."),
         },
         decimal.TryParse(body.Rate, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var rate)
             ? rate

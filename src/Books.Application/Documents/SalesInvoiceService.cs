@@ -15,11 +15,9 @@ namespace Books.Application.Documents;
 /// <param name="Amount">Net amount; when omitted it is quantity × unit price, rounded to the currency.</param>
 /// <param name="TaxOverride">A VAT amount entered by a person instead of the calculated one.</param>
 /// <param name="OtherTaxCodeId">A specific, accommodation or public lighting tax charged on the line, on top of VAT.</param>
-/// <param name="StateChargeCodeId">A state charge code, posted and reported separately from other taxes.</param>
 public sealed record SalesLineInput(
     Guid AccountId, string? Description, Guid? ItemId, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
-    Guid? TaxCodeId, decimal? TaxOverride, string? TaxReason, Guid? OtherTaxCodeId = null, string? Unit = null, Guid? LocationId = null, Guid? ClassId = null,
-    Guid? StateChargeCodeId = null);
+    Guid? TaxCodeId, decimal? TaxOverride, string? TaxReason, Guid? OtherTaxCodeId = null, string? Unit = null, Guid? LocationId = null, Guid? ClassId = null);
 
 /// <param name="ReceivableAccountId">Omit to use the ledger's only Receivable account.</param>
 /// <param name="DueDate">Omit for invoice date + the customer's payment terms.</param>
@@ -31,12 +29,12 @@ public sealed record SalesInvoiceInput(
 public sealed record SalesLineDto(
     Guid LineId, Guid AccountId, string? Description, Guid? ItemId, string? Quantity, string? UnitPrice, string NetAmount,
     Guid? TaxCodeId, string TaxCalculated, string TaxAmount, bool TaxAdjusted, string? TaxReason, Guid? OtherTaxCodeId, string OtherTaxAmount,
-    string? Unit = null, Guid? LocationId = null, Guid? ClassId = null, Guid? StateChargeCodeId = null, string StateChargeAmount = "0");
+    string? Unit = null, Guid? LocationId = null, Guid? ClassId = null);
 
 public sealed record SalesInvoiceDto(
     Guid Id, Guid LedgerId, string Type, long InvoiceNo, Guid? OriginalInvoiceId, Guid CustomerId, Guid ReceivableAccountId, DateOnly Date, DateOnly DueDate,
     string? Reference, string? Description, IReadOnlyList<SalesLineDto> Lines,
-    string NetTotal, string OtherTaxTotal, string StateChargeTotal, string TaxTotal, string GrossTotal, TaxCurrencyDto? TaxCurrency,
+    string NetTotal, string OtherTaxTotal, string TaxTotal, string GrossTotal, TaxCurrencyDto? TaxCurrency,
     string Status, IReadOnlyList<JournalIssue> Issues, Guid? JournalId, long? JournalNo, string Version,
     string Currency = "", string? ExchangeRate = null, string? BaseTotal = null, IReadOnlyList<string>? Warnings = null);
 
@@ -227,28 +225,13 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
                 var other = codes.GetValueOrDefault(otherId) ?? throw BooksProblem.Invalid($"Line {i}: other_tax_code_id must be a tax code of this ledger.");
                 if (other.Kind is not TaxKind.OtherTax)
                 {
-                    throw BooksProblem.Invalid($"Line {i}: other_tax_code_id must be an other tax code (specific, accommodation or public lighting); use state_charge_code_id for state charge.");
+                    throw BooksProblem.Invalid($"Line {i}: other_tax_code_id must be an other tax code (specific, accommodation or public lighting).");
                 }
                 if (!other.AppliesOn(input.Date))
                 {
                     issues.Add(new JournalIssue("TAX_CODE_NOT_EFFECTIVE", $"{other.Name} does not apply on {input.Date:yyyy-MM-dd}.", i));
                 }
                 otherTax = TaxCalculator.ForLine(net, other.Rate, minor).Amount;
-            }
-            // State charge is its own field: same rate calculation, separate posting line and return box.
-            var stateCharge = 0m;
-            if (line.StateChargeCodeId is { } chargeId)
-            {
-                var charge = codes.GetValueOrDefault(chargeId) ?? throw BooksProblem.Invalid($"Line {i}: state_charge_code_id must be a tax code of this ledger.");
-                if (charge.Kind != TaxKind.StateCharge)
-                {
-                    throw BooksProblem.Invalid($"Line {i}: state_charge_code_id must be a state_charge code.");
-                }
-                if (!charge.AppliesOn(input.Date))
-                {
-                    issues.Add(new JournalIssue("TAX_CODE_NOT_EFFECTIVE", $"{charge.Name} does not apply on {input.Date:yyyy-MM-dd}.", i));
-                }
-                stateCharge = TaxCalculator.ForLine(net, charge.Rate, minor).Amount;
             }
             LineTax? tax = null;
             if (line.TaxCodeId is { } taxId)
@@ -266,10 +249,10 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
                 {
                     issues.Add(new JournalIssue("TAX_CODE_NOT_EFFECTIVE", $"{code.Name} does not apply on {input.Date:yyyy-MM-dd}.", i));
                 }
-                tax = TaxCalculator.ForLine(net + otherTax + stateCharge, code.Rate, minor, line.TaxOverride, line.TaxReason);
+                tax = TaxCalculator.ForLine(net + otherTax, code.Rate, minor, line.TaxOverride, line.TaxReason);
             }
             var salesLine = new SalesInvoiceLine(accountId, description, line.ItemId, line.Quantity, unitPrice, net, line.TaxCodeId, tax,
-                line.OtherTaxCodeId, otherTax, line.StateChargeCodeId, stateCharge);
+                line.OtherTaxCodeId, otherTax);
             salesLine.InUnit(unit, factor);
             salesLine.AtLocation(await Locations.ResolveAsync(db, ledger.Id, line.LocationId, $"Line {i}: location_id", ct));
             salesLine.AtClass(await Classes.ResolveAsync(db, ledger.Id, line.ClassId, $"Line {i}: class_id", ct));
@@ -319,7 +302,7 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
 
     private async Task<Dictionary<Guid, TaxCode>> TaxCodesAsync(SalesInvoice invoice, CancellationToken ct)
     {
-        var ids = invoice.Lines.SelectMany(l => new[] { l.TaxCodeId, l.OtherTaxCodeId, l.StateChargeCodeId }).OfType<Guid>().Distinct().ToList();
+        var ids = invoice.Lines.SelectMany(l => new[] { l.TaxCodeId, l.OtherTaxCodeId }).OfType<Guid>().Distinct().ToList();
         return await db.TaxCodes.AsNoTracking().Where(t => ids.Contains(t.Id)).ToDictionaryAsync(t => t.Id, ct);
     }
 
@@ -351,9 +334,8 @@ public sealed class SalesInvoiceService(IBooksDb db, WriteRunner writes, ReadRun
             x.i.Id, x.i.LedgerId, x.i.IsCreditNote ? "credit_note" : "invoice", x.i.InvoiceNo, x.i.OriginalInvoiceId, x.i.CustomerId, x.i.ReceivableAccountId,
             x.i.Date, x.i.DueDate, x.i.Reference, x.i.Description,
             x.i.Lines.OrderBy(l => l.LineNo).Select(l => new SalesLineDto(l.LineId, l.AccountId, l.Description, l.ItemId, Q(l.Quantity), Q(l.UnitPrice),
-                F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason, l.OtherTaxCodeId, F(l.OtherTaxAmount), l.Unit, l.LocationId, l.ClassId,
-                l.StateChargeCodeId, F(l.StateChargeAmount))).ToList(),
-            F(x.i.NetTotal), F(x.i.OtherTaxTotal), F(x.i.StateChargeTotal), F(x.i.TaxTotal), F(x.i.GrossTotal), taxCurrencies.GetValueOrDefault(x.i.Id),
+                F(l.NetAmount), l.TaxCodeId, F(l.TaxCalculated), F(l.TaxAmount), l.TaxAdjusted, l.TaxReason, l.OtherTaxCodeId, F(l.OtherTaxAmount), l.Unit, l.LocationId, l.ClassId)).ToList(),
+            F(x.i.NetTotal), F(x.i.OtherTaxTotal), F(x.i.TaxTotal), F(x.i.GrossTotal), taxCurrencies.GetValueOrDefault(x.i.Id),
             Text.Of(x.i.Status), x.i.Issues is null ? [] : JsonSerializer.Deserialize<List<JournalIssue>>(x.i.Issues, BooksJson.Options)!,
             x.i.JournalId, x.JournalNo, x.i.Version.ToString(), x.i.Currency, x.i.ExchangeRate?.ToString("0.##########", CultureInfo.InvariantCulture),
             x.i.Status == DocumentStatus.Posted ? x.i.BaseTotal.ToString("F" + minor, CultureInfo.InvariantCulture) : null)).ToList();

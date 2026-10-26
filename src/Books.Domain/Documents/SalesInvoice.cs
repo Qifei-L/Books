@@ -92,11 +92,8 @@ public sealed class SalesInvoice
     /// <summary>Specific, accommodation and public lighting tax charged on the lines.</summary>
     public decimal OtherTaxTotal => _lines.Sum(l => l.OtherTaxAmount);
 
-    /// <summary>State charge charged on the lines, kept separately from other taxes and reported in its own box.</summary>
-    public decimal StateChargeTotal => _lines.Sum(l => l.StateChargeAmount);
-
     /// <summary>What the customer owes, VAT and other taxes included.</summary>
-    public decimal GrossTotal => NetTotal + OtherTaxTotal + StateChargeTotal + TaxTotal;
+    public decimal GrossTotal => NetTotal + OtherTaxTotal + TaxTotal;
 
     public void Set(Guid customerId, Guid receivableAccountId, DateOnly date, DateOnly dueDate, string? reference, string? description,
         IEnumerable<SalesInvoiceLine> lines, bool isNew, Guid? originalInvoiceId = null)
@@ -172,10 +169,6 @@ public sealed class SalesInvoice
         {
             lines.Add(new DraftLine(other.Key, -sign * other.Sum(l => C(l.OtherTaxAmount)), $"{text} (other tax)"));
         }
-        foreach (var charge in _lines.Where(l => l.StateChargeAmount != 0).GroupBy(l => taxCodes[l.StateChargeCodeId!.Value].AccountId!.Value))
-        {
-            lines.Add(new DraftLine(charge.Key, -sign * charge.Sum(l => C(l.StateChargeAmount)), $"{text} (state charge)"));
-        }
         var receivable = -lines.Sum(l => l.Amount);
         BaseTotal = sign * receivable;
         lines.Add(new DraftLine(ReceivableAccountId, receivable, text, PartyId: CustomerId));
@@ -189,12 +182,10 @@ public sealed class SalesInvoiceLine
     private SalesInvoiceLine() { }
 
     public SalesInvoiceLine(Guid accountId, string? description, Guid? itemId, decimal? quantity, decimal? unitPrice, decimal netAmount, Guid? taxCodeId, LineTax? tax,
-        Guid? otherTaxCodeId = null, decimal otherTaxAmount = 0, Guid? stateChargeCodeId = null, decimal stateChargeAmount = 0)
+        Guid? otherTaxCodeId = null, decimal otherTaxAmount = 0)
     {
         OtherTaxCodeId = otherTaxCodeId;
         OtherTaxAmount = otherTaxAmount;
-        StateChargeCodeId = stateChargeCodeId;
-        StateChargeAmount = stateChargeAmount;
         LineId = Guid.CreateVersion7();
         AccountId = accountId;
         Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
@@ -250,11 +241,6 @@ public sealed class SalesInvoiceLine
     public Guid? OtherTaxCodeId { get; private set; }
 
     public decimal OtherTaxAmount { get; private set; }
-
-    /// <summary>A state charge code; separate from the other-tax code so it is posted and reported on its own.</summary>
-    public Guid? StateChargeCodeId { get; private set; }
-
-    public decimal StateChargeAmount { get; private set; }
 
     /// <summary>Inventory items: the quantity at average cost, moved from inventory to cost of sales.</summary>
     public decimal CostAmount { get; private set; }

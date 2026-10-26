@@ -34,6 +34,14 @@ Research summary from 2026-10-23. **This is not tax advice.** Confirm each item 
 - Whether the prepayment suspension applies to our companies, and whether a nil return is still required.
 - Which other monthly taxes apply to us (salary, specific tax, accommodation, public lighting) and whether any belong in v1.
 
+## State Charge is VAT (2026-10-26)
+
+"State Charge" (បន្ទុករដ្ឋ) is an invoice label, not another tax. It is VAT paid on behalf of the state: the same
+10% VAT rate (4% on fuel from March 2026), the same output VAT account and the same T7 01 boxes 12–15/19. The GDT
+monthly return has no separate State Charge box, so Books does not have a `state_charge` tax kind, a separate sales
+line field or a `t701_state_charge` box. A tax invoice may print the VAT row as "State Charge" (`?stateCharge=true`
+on the PDF), while the accounting stays ordinary output VAT.
+
 ## Manual journal VAT (2026-10-25)
 
 A manual journal line may carry a VAT or other tax code. The amount entered is gross: the server posts the net to the

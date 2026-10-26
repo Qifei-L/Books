@@ -55,7 +55,7 @@ public static class Usages
         TaxKind.VatInput => Usage.InputVat,
         TaxKind.VatInputNonDeductible => Usage.NonDeductibleVat,
         TaxKind.Withholding => Usage.WithholdingPayable,
-        TaxKind.OtherTax or TaxKind.StateCharge => Usage.OtherTaxPayable,
+        TaxKind.OtherTax => Usage.OtherTaxPayable,
         _ => null,
     };
 }

@@ -104,7 +104,9 @@ draft → published, section order and switches), report runs with stored files,
 share links (watermark and download audit), multi-sheet Excel packs (client pack and tax workpaper), M17
 attachments (20 MB, safe file types, audited, MCP upload/list, Files tab on journal/sales/purchase details), and the
 full-page record surface for journals, sales, purchases and payments (hash routes, shared header/grid/action bar,
-Back/Esc and unsaved confirmation, Playwright smoke test in `tests/ui`). Still open: official GDT form facsimiles and
+Back/Esc and unsaved confirmation, Playwright smoke test in `tests/ui`). State Charge is VAT: the invoice may label the
+VAT row "State Charge", but it uses the normal output VAT code, account and return boxes; the separate tax kind and
+`t701_state_charge` boxes were removed on 2026-10-26. Still open: official GDT form facsimiles and
 migrating the remaining record dialogs (transfers, payroll, stock, fixed assets).
 
 ## Remaining P items (2026-10-25)

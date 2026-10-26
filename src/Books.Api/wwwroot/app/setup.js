@@ -158,7 +158,7 @@ async function transferForm(t) {
   }
 }
 
-const TAX_KINDS = ["vat_output", "vat_input", "vat_input_non_deductible", "vat_zero_rated", "non_vat", "withholding", "other_tax", "state_charge"];
+const TAX_KINDS = ["vat_output", "vat_input", "vat_input_non_deductible", "vat_zero_rated", "non_vat", "withholding", "other_tax"];
 
 async function taxCodeForm(t) {
   const [accounts, pack] = await Promise.all([api(`${ledgerUrl()}/accounts`), api(`${ledgerUrl()}/tax-pack`).catch(() => null)]);

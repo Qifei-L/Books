@@ -186,8 +186,7 @@ public sealed class TaxReturnService(IBooksDb db, ReadRunner reads, WriteRunner 
             decimal B(decimal amount) => sign * i.ToBase(amount, baseMinor);
             return new TaxLine(i.SourceKind, i.Id, i.InvoiceNo, i.Date, i.CustomerId, i.Reference, l.LineNo, l.Description, l.AccountId, l.TaxCodeId, Kind(l.TaxCodeId),
                 B(l.NetAmount), B(l.TaxAmount), B(l.TaxCalculated), l.TaxReason, null, 0, Rate(i.Id), PartyTaxable: taxable.Contains(i.CustomerId),
-                TaxCategory: Category(l.TaxCodeId), OtherTax: B(l.OtherTaxAmount), OtherTaxCategory: l.OtherTaxCodeId is { } o ? codes[o].ReturnCategory : null,
-                StateCharge: B(l.StateChargeAmount), StateChargeCategory: l.StateChargeCodeId is { } sc ? codes[sc].ReturnCategory : null);
+                TaxCategory: Category(l.TaxCodeId), OtherTax: B(l.OtherTaxAmount), OtherTaxCategory: l.OtherTaxCodeId is { } o ? codes[o].ReturnCategory : null);
         })));
 
         // Journal postings on tax accounts that do not come from purchase or sales documents (manual corrections):

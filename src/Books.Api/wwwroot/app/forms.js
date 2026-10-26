@@ -180,7 +180,6 @@ async function documentChoices(side) {
     items: items.filter((i) => i.active),
     vat: taxCodes.filter((t) => t.active && [sale ? "vat_output" : "vat_input", "vat_zero_rated", "non_vat"].includes(t.kind)),
     other: taxCodes.filter((t) => t.active && t.kind === "other_tax"),
-    stateCharge: taxCodes.filter((t) => t.active && t.kind === "state_charge"),
     wht: taxCodes.filter((t) => t.active && t.kind === "withholding"),
     invoices: invoices.filter((i) => i.status === "posted" && i.type === "invoice"),
     classes: classes.filter((c) => c.active),
