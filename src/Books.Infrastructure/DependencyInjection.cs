@@ -1,9 +1,11 @@
 using Books.Application.Access;
 using Books.Application.Common;
 using Books.Application.Documents;
+using Books.Application.Files;
 using Books.Application.Journals;
 using Books.Application.Ledgers;
 using Books.Application.Reporting;
+using Books.Infrastructure.Files;
 using Books.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<ClassService>();
         services.AddScoped<ReportDeliverySettingsService>();
         services.AddScoped<ReportTemplateService>();
+        services.AddScoped<ReportRunService>();
         services.AddScoped<JournalService>();
         services.AddScoped<LedgerSettingsService>();
         services.AddScoped<ReportService>();
@@ -62,6 +65,12 @@ public static class DependencyInjection
         services.AddScoped<ReceivablesReportService>();
         services.AddScoped<TaxReturnService>();
         services.AddScoped<ReturnDefinitionService>();
+        return services;
+    }
+
+    public static IServiceCollection AddBooksFileStorage(this IServiceCollection services, string root)
+    {
+        services.AddSingleton<IFileStorage>(new LocalFileStorage(root));
         return services;
     }
 

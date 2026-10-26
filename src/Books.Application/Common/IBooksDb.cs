@@ -40,6 +40,8 @@ public interface IBooksDb
     DbSet<OrganizationBranding> OrganizationBranding { get; }
     DbSet<LedgerReportSettings> LedgerReportSettings { get; }
     DbSet<ReportTemplate> ReportTemplates { get; }
+    DbSet<ReportRun> ReportRuns { get; }
+    DbSet<ReportShare> ReportShares { get; }
     DbSet<Location> Locations { get; }
     DbSet<StockTransfer> StockTransfers { get; }
     DbSet<StockTransferLine> StockTransferLines { get; }

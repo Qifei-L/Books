@@ -48,8 +48,8 @@ public static class ReportEndpoints
         reports.MapGet("/client-pack.pdf", async (Guid orgId, Guid ledgerId, DateOnly from, DateOnly to,
             PrincipalAccessor principals, StatementService statements, ReportService reportsService, PayablesReportService payables,
             ReceivablesReportService receivables, Books.Application.Reporting.ReportDeliverySettingsService settings,
-            Books.Application.Reporting.ReportTemplateService templates, Books.Application.Ledgers.CompanyService companies,
-            CancellationToken ct, Guid? classId = null, Guid? locationId = null) =>
+            Books.Application.Reporting.ReportTemplateService templates, Books.Application.Reporting.ReportRunService runs,
+            Books.Application.Ledgers.CompanyService companies, HttpContext http, CancellationToken ct, Guid? classId = null, Guid? locationId = null) =>
         {
             var principal = await principals.GetAsync(ct);
             var pl = await statements.ProfitAndLossAsync(principal, orgId, ledgerId, from, to, ct, classId, locationId);
@@ -60,10 +60,16 @@ public static class ReportEndpoints
             var company = (await companies.GetLedgerAsync(principal, orgId, ledgerId, ct)).CompanyName;
             var branding = await settings.GetBrandingAsync(principal, orgId, ct);
             var output = await settings.GetLedgerSettingsAsync(principal, orgId, ledgerId, ct);
-            var template = await templates.ResolveAsync(orgId, ledgerId, Books.Domain.Reporting.ReportTemplateKind.ClientPack, to, ct);
+            var template = await templates.ResolveDetailedAsync(orgId, ledgerId, Books.Domain.Reporting.ReportTemplateKind.ClientPack, to, ct);
             var pdf = Books.Api.Reporting.StimulsoftReportRenderer.RenderClientPack(pl, bs, tb, ar, ap, branding, output, company,
-                template.EnabledSections);
-            return Results.File(pdf, "application/pdf", $"client-pack-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}.pdf");
+                template.Spec.EnabledSections);
+            var name = $"client-pack-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}.pdf";
+            var run = await runs.RecordAsync(principal, orgId, ledgerId, new Books.Application.Reporting.ReportRunInput("client_pack",
+                template.Id, $"{from:yyyy-MM-dd}/{to:yyyy-MM-dd}", "pdf", name, "application/pdf",
+                new Books.Api.Reporting.ClientPackSnapshot(pl, bs, tb, ar, ap, branding, output, company, template.Spec.EnabledSections),
+                http.TraceIdentifier), pdf, ct);
+            http.Response.Headers["X-Report-Run-Id"] = run.Id.ToString();
+            return Results.File(pdf, "application/pdf", name);
         });
 
         // Excel versions of the same reports (owner decision: Excel is the only export format for now).

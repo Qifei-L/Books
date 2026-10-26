@@ -15,6 +15,8 @@ var connectionString = builder.Configuration.GetConnectionString("Books")
     ?? throw new InvalidOperationException("ConnectionStrings:Books is not configured.");
 
 builder.Services.AddBooksInfrastructure(connectionString);
+builder.Services.AddBooksFileStorage(builder.Configuration["Storage:Root"]
+    ?? Path.Combine(builder.Environment.ContentRootPath, "App_Data"));
 builder.Services.AddHealthChecks().AddDbContextCheck<BooksDbContext>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<PrincipalAccessor>();
@@ -71,6 +73,8 @@ app.MapDevTokenEndpoint();
 app.MapDemoDataEndpoint();
 
 app.MapMcp("/mcp").RequireAuthorization(AuthSetup.McpPolicy);
+// Read-only share links are public: the token is the credential.
+app.MapShareEndpoints();
 
 var api = app.MapGroup("/api/v1").RequireAuthorization(AuthSetup.ApiPolicy);
 api.MapMeEndpoints();
@@ -82,6 +86,7 @@ api.MapAccountEndpoints();
 api.MapClassEndpoints();
 api.MapReportDeliveryEndpoints();
 api.MapReportTemplateEndpoints();
+api.MapReportRunEndpoints();
 api.MapPartyEndpoints();
 api.MapTaxCodeEndpoints();
 api.MapBankEndpoints();

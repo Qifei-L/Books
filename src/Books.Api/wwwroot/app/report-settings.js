@@ -25,7 +25,7 @@ async function renderReportSettings() {
     : '<div class="card"><h3>Organization branding</h3><p class="muted">Only an organization administrator can change branding.</p></div>';
 
   page.innerHTML = '<p class="muted small">These settings feed client report packs, tax workpapers and print layouts. Ledger settings override the organization defaults for output only.</p>' +
-    '<p><a class="button" href="#" id="client-pack-pdf">Client pack PDF</a> <span class="muted small">Current year to date · P&L, balance sheet, trial balance and aging</span></p>' +
+    '<p><a class="button" href="#" id="client-pack-pdf">Client pack PDF</a> <a class="button" href="#" id="client-pack-share">Share pack</a> <span class="muted small">Current year to date · P&L, balance sheet, trial balance and aging</span></p>' +
     brand +
     '<form id="report-output-form" class="card"><h3>Ledger output</h3><div class="grid">' +
     '<label>Language <select name="language">' + ["en", "km", "bilingual"].map((x) => '<option ' + (settings.language === x ? "selected" : "") + '>' + x + '</option>').join("") + '</select></label>' +
@@ -61,6 +61,13 @@ async function renderReportSettings() {
     download(ledgerUrl() + "/reports/client-pack.pdf?from=" + to.slice(0, 4) + "-01-01&to=" + to, "client-pack-" + to + ".pdf");
   };
 
+  // Generates the pack (which records a run) and hands out a read-only link that expires.
+  $("client-pack-share").onclick = (event) => {
+    event.preventDefault();
+    const to = today();
+    sharePack(ledgerUrl() + "/reports/client-pack.pdf?from=" + to.slice(0, 4) + "-01-01&to=" + to, settings.share_days);
+  };
+
   $("report-output-form").onsubmit = (event) => {
     event.preventDefault();
     const form = event.target;
@@ -75,4 +82,23 @@ async function renderReportSettings() {
       await refreshLedger();
     });
   };
+}
+
+/** Generates a pack (which records a report run) and opens a read-only share link for it. */
+async function sharePack(url, days) {
+  try {
+    const response = await fetch(url, { headers: { Authorization: "Bearer " + state.token } });
+    if (!response.ok) throw new Error("The report could not be generated (HTTP " + response.status + ").");
+    const runId = response.headers.get("X-Report-Run-Id");
+    if (!runId) throw new Error("The server did not record a report run.");
+    const share = (await write("POST", ledgerUrl() + "/report-runs/" + runId + "/shares", {
+      days: Number(days) || 7, watermark: true,
+    })).data;
+    const link = location.origin + share.url;
+    const copied = await navigator.clipboard?.writeText(link).then(() => true).catch(() => false);
+    window.open(share.url, "_blank", "noopener");
+    if (!copied) prompt("Share link", link);
+  } catch (error) {
+    showError(error);
+  }
 }

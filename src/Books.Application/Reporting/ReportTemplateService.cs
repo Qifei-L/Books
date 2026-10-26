@@ -15,6 +15,9 @@ public sealed record EffectiveReportTemplateDto(string Kind, string Name, Guid? 
 public sealed record ReportTemplatesDto(IReadOnlyList<ReportTemplateDto> Templates, IReadOnlyList<EffectiveReportTemplateDto> Effective,
     IReadOnlyDictionary<string, IReadOnlyList<string>> Sections);
 
+/// <summary>The template chosen for a period: its id (null for the code default), version and definition.</summary>
+public sealed record ResolvedReportTemplate(Guid? Id, long Version, string Name, ReportTemplateSpec Spec);
+
 public sealed record ReportTemplateInput(string Kind, string Name, ReportTemplateSpec Definition, DateOnly? EffectiveFrom);
 
 /// <summary>
@@ -132,7 +135,11 @@ public sealed class ReportTemplateService(IBooksDb db, ReadRunner reads, WriteRu
     /// The template effective for one kind at a date: a published ledger override wins over a published organization
     /// template, which wins over the code default. A version with no effective date is the earliest fallback.
     /// </summary>
-    public async Task<ReportTemplateSpec> ResolveAsync(Guid orgId, Guid ledgerId, ReportTemplateKind kind, DateOnly asOf, CancellationToken ct)
+    public async Task<ReportTemplateSpec> ResolveAsync(Guid orgId, Guid ledgerId, ReportTemplateKind kind, DateOnly asOf, CancellationToken ct) =>
+        (await ResolveDetailedAsync(orgId, ledgerId, kind, asOf, ct)).Spec;
+
+    /// <summary>As <see cref="ResolveAsync"/>, but also returns the published row's id so a report run can record it.</summary>
+    public async Task<ResolvedReportTemplate> ResolveDetailedAsync(Guid orgId, Guid ledgerId, ReportTemplateKind kind, DateOnly asOf, CancellationToken ct)
     {
         var rows = await db.ReportTemplates.AsNoTracking()
             .Where(t => t.OrgId == orgId && t.Status == ReportTemplateStatus.Published && t.Kind == kind
@@ -141,7 +148,9 @@ public sealed class ReportTemplateService(IBooksDb db, ReadRunner reads, WriteRu
             .OrderByDescending(t => t.EffectiveFrom ?? DateOnly.MinValue).ThenByDescending(t => t.Version)
             .ToListAsync(ct);
         var row = rows.FirstOrDefault(t => t.LedgerId == ledgerId) ?? rows.FirstOrDefault(t => t.LedgerId == null);
-        return row is null ? ReportTemplates.Default(kind) : ParseDefinition(row.Definition);
+        return row is null
+            ? new ResolvedReportTemplate(null, 0, ReportTemplates.DefaultNames[kind], ReportTemplates.Default(kind))
+            : new ResolvedReportTemplate(row.Id, row.Version, row.Name, ParseDefinition(row.Definition));
     }
 
     public static ReportTemplateSpec ParseDefinition(string definition) => ReportTemplates.Parse(definition);

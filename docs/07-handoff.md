@@ -99,7 +99,7 @@ editable through Settings → Branding & output. Defaults are English, prior-per
 and a seven-day share window.
 
 Done: branding/output settings, the Stimulsoft client pack PDF (cover, P&L, BS, TB, AR/AP aging), the tax workpaper PDF
-(trial watermark until a licence key is configured) and versioned report templates (code defaults, ledger overrides,
-draft → published, section order and switches). Still open: report runs/share links, Excel report packs and official
-GDT form facsimiles.
+(trial watermark until a licence key is configured), versioned report templates (code defaults, ledger overrides,
+draft → published, section order and switches) and report runs with stored files, hashes, snapshots and expiring
+share links (watermark and download audit). Still open: Excel report packs and official GDT form facsimiles.
 

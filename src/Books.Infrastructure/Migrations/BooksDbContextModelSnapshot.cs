@@ -4111,6 +4111,158 @@ namespace Books.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Books.Domain.Reporting.ReportRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("FileKind")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("file_kind");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("file_name");
+
+                    b.Property<DateTimeOffset>("GeneratedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("generated_at");
+
+                    b.Property<Guid>("GeneratedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("generated_by");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("hash");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("period");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("snapshot");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<Guid?>("TemplateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("template_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_report_runs");
+
+                    b.HasIndex("OrgId")
+                        .HasDatabaseName("ix_report_runs_org_id");
+
+                    b.HasIndex("TemplateId")
+                        .HasDatabaseName("ix_report_runs_template_id");
+
+                    b.HasIndex("LedgerId", "GeneratedAt")
+                        .HasDatabaseName("ix_report_runs_ledger_id_generated_at");
+
+                    b.ToTable("report_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_report_runs_file_kind", "file_kind IN ('pdf', 'xlsx')");
+
+                            t.HasCheckConstraint("ck_report_runs_status", "status IN ('ready', 'failed')");
+                        });
+                });
+
+            modelBuilder.Entity("Books.Domain.Reporting.ReportShare", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("ReportRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("report_run_id");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("token");
+
+                    b.Property<bool>("Watermark")
+                        .HasColumnType("boolean")
+                        .HasColumnName("watermark");
+
+                    b.HasKey("Id")
+                        .HasName("pk_report_shares");
+
+                    b.HasIndex("ReportRunId")
+                        .HasDatabaseName("ix_report_shares_report_run_id");
+
+                    b.HasIndex("Token")
+                        .IsUnique()
+                        .HasDatabaseName("ix_report_shares_token");
+
+                    b.ToTable("report_shares", (string)null);
+                });
+
             modelBuilder.Entity("Books.Domain.Reporting.ReportTemplate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5442,6 +5594,39 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_tax_codes_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Reporting.ReportRun", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Ledger", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_report_runs_ledgers_ledger_id");
+
+                    b.HasOne("Books.Domain.Access.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_report_runs_organizations_org_id");
+
+                    b.HasOne("Books.Domain.Reporting.ReportTemplate", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_report_runs_report_templates_template_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Reporting.ReportShare", b =>
+                {
+                    b.HasOne("Books.Domain.Reporting.ReportRun", null)
+                        .WithMany()
+                        .HasForeignKey("ReportRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_report_shares_report_runs_report_run_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Reporting.ReportTemplate", b =>

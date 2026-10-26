@@ -24,6 +24,7 @@ public sealed class TestHost : IAsyncLifetime
 
     private PostgreSqlContainer? _container;
     private WebApplicationFactory<Program>? _factory;
+    private readonly string _storageRoot = Path.Combine(Path.GetTempPath(), $"books-tests-files-{Guid.NewGuid():N}");
 
     public string ConnectionString { get; private set; } = "";
 
@@ -68,6 +69,7 @@ public sealed class TestHost : IAsyncLifetime
             // CI and sandboxed runs have no write access to the Windows event log; the provider must not
             // turn a test's HTTP error into a logging failure that hides the real exception.
             builder.UseSetting("Logging:EventLog:LogLevel:Default", "None");
+            builder.UseSetting("Storage:Root", _storageRoot);
         });
         // Start the server now: lazy start from parallel tests is not thread-safe and could build two hosts with different keys.
         _ = _factory.Server;
@@ -95,6 +97,10 @@ public sealed class TestHost : IAsyncLifetime
         if (_factory is not null)
         {
             await _factory.DisposeAsync();
+        }
+        if (Directory.Exists(_storageRoot))
+        {
+            Directory.Delete(_storageRoot, recursive: true);
         }
         if (_container is not null)
         {
