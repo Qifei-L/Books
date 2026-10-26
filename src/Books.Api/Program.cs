@@ -57,6 +57,12 @@ InvoicePdf.Configure();
 
 var app = builder.Build();
 
+// A real Stimulsoft licence is a release gate. The trial renders a watermark until Stimulsoft:LicenseKey is set.
+if (builder.Configuration["Stimulsoft:LicenseKey"] is { Length: > 0 } licenseKey)
+{
+    Stimulsoft.Base.StiLicense.LoadFromString(licenseKey);
+}
+
 app.UseResponseCompression();
 app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())

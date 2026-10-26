@@ -61,7 +61,7 @@ Replace our Manager.io bookkeeping with a system that:
 | M15.1 Journal dimensions | Manual journals post AR/AP with a party; class and location on journal, sales and purchase lines; class master data, API and page; manual VAT/other tax entered gross and split into net + tax; GL Detail shows class, location and party; State Charge is its own sales-line field and return box | Done |
 | M16 Report dimensions | TB, BS, P&L and GL Detail filter by class and location; the same filters reach the app and Excel; unfiltered totals unchanged | Done (filters also live in the URL, so refresh and Back keep them) |
 | M17 Attachments (implements M13) | Files attached to invoices, bills, payments and journals; upload, download, delete, audit and MCP | Done (journal, sales and purchase documents; Files tab) |
-| M18 Report delivery | Organization branding and per-ledger output settings; Stimulsoft PDF/Excel report packs; tax workpapers before official GDT forms; English default | Done (official GDT form facsimiles remain blocked on official samples; PDFs carry the trial watermark until `Stimulsoft:LicenseKey` is configured) |
+| M18 Report delivery | Organization branding and per-ledger output settings; Stimulsoft PDF/Excel report packs; tax workpapers before official GDT forms; English default | Done (official GDT form facsimiles remain blocked on official samples; PDFs carry the trial watermark until `Stimulsoft:LicenseKey` / `Stimulsoft__LicenseKey` is configured) |
 | Later | Remaining document dimensions; M14 organization-shared data; annual income tax return; CamInvoice | Planned |
 
 MCP tools ship with each milestone, not at the end.

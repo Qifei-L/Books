@@ -39,7 +39,7 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --project src/Books.Api --urls htt
 ```
 
 - **Preview UI:** open <http://localhost:5180/app/>, sign in with the local test issuer (any subject), then **Create demo organization**. The demo has a year of journals, purchases, sales, payments, an imported bank statement and an October tax return. Data entry uses the same API and rules as every other client: the full-page record surface covers journals, sales, purchases and payments, with Files tabs for attachments and Settings for branding, report templates, members and ledger roles.
-- **UI smoke test:** with the API running, `cd tests/ui && npm install && node record-surface.js` (Playwright; see [tests/ui](tests/ui/README.md)).
+- **Report licence:** Stimulsoft runs in trial mode (watermarked PDFs) until a licence is configured. Set `Stimulsoft__LicenseKey` (or `Stimulsoft:LicenseKey` in appsettings) to the licence string before producing client deliverables.
 - **API:** `POST /dev/token` with `{"subject": "me"}` returns a bearer token (Development only). Endpoints live under `/api/v1`, for example `/api/v1/organizations`. Writes need an `Idempotency-Key` header (a UUID) and, for changes, `If-Match: "v<version>"`.
 - **MCP:** `POST /dev/token` with `{"subject": "me", "mcp": true}` gives a token for `http://localhost:5180/mcp` (Streamable HTTP). Point an MCP client such as Claude Desktop, Claude Code or Cursor at it with that bearer token; `tools/list` shows every tool. AI clients save drafts; posting, filing and publishing need a person through the API.
 - **No Docker:** any PostgreSQL 17 works; set the connection string to it. To start over, drop and recreate the database and run the migrations again.
