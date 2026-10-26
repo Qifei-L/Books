@@ -50,12 +50,12 @@ public sealed class InvitationService(IBooksDb db, WriteRunner writes, ReadRunne
 
             var invitation = new Invitation(Guid.CreateVersion7(), inviter, key, command.Role, scope.Now);
             db.Invitations.Add(invitation);
-            db.InvitationGrants.AddRange(command.Grants.Select(g => new InvitationGrant(invitation, g.LedgerId, g.Access)));
+            db.InvitationGrants.AddRange(command.Grants.Select(g => new InvitationGrant(invitation, g.LedgerId, g.Access, MembershipService.ParsedRole(g))));
             scope.Audit("invitation.created", "invitation", invitation.Id, new
             {
                 email = key,
                 role = Text.Of(command.Role),
-                grants = command.Grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access))),
+                grants = command.Grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access), MembershipService.RoleName(g))),
                 expires_at = invitation.ExpiresAt,
             });
             await db.SaveChangesAsync(ct);
@@ -142,7 +142,7 @@ public sealed class InvitationService(IBooksDb db, WriteRunner writes, ReadRunne
             }
 
             var grants = await GrantsOfAsync(invitation.Id, ct);
-            db.LedgerGrants.AddRange(grants.Select(g => new LedgerGrant(membership, g.LedgerId, g.Access, inviter.UserId, scope.Now)));
+            db.LedgerGrants.AddRange(grants.Select(g => new LedgerGrant(membership, g.LedgerId, g.Access, inviter.UserId, scope.Now, MembershipService.ParsedRole(g))));
             invitation.Accept(principal.UserId, scope.Now);
             scope.Audit("invitation.accepted", "invitation", invitation.Id, new { membership_id = membership.Id });
             scope.Audit("membership.joined", "membership", membership.Id, new
@@ -150,14 +150,14 @@ public sealed class InvitationService(IBooksDb db, WriteRunner writes, ReadRunne
                 user_id = principal.UserId,
                 role = Text.Of(membership.Role),
                 generation = membership.Generation,
-                grants = grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access))),
+                grants = grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access), MembershipService.RoleName(g))),
             });
 
             var displayName = await db.Users.Where(u => u.Id == principal.UserId).Select(u => u.DisplayName).SingleAsync(ct);
             return WriteResult.Of(200, new
             {
                 membership = new MemberDto(membership.Id, principal.UserId, displayName, principal.VerifiedEmail, Text.Of(membership.Role), Text.Of(membership.Status),
-                    membership.Generation, grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access))).ToList(), membership.Version.ToString()),
+                    membership.Generation, grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access), MembershipService.RoleName(g))).ToList(), membership.Version.ToString()),
                 organization_id = orgId,
             }, membership.Version);
         }, ct);
@@ -174,9 +174,12 @@ public sealed class InvitationService(IBooksDb db, WriteRunner writes, ReadRunne
     private static bool SameGrants(IReadOnlyList<GrantInput> a, IReadOnlyList<GrantInput> b) =>
         a.OrderBy(g => g.LedgerId).SequenceEqual(b.OrderBy(g => g.LedgerId));
 
-    internal async Task<IReadOnlyList<GrantInput>> GrantsOfAsync(Guid invitationId, CancellationToken ct) =>
-        await db.InvitationGrants.AsNoTracking().Where(g => g.InvitationId == invitationId)
-            .Select(g => new GrantInput(g.LedgerId, g.Access)).ToListAsync(ct);
+    internal async Task<IReadOnlyList<GrantInput>> GrantsOfAsync(Guid invitationId, CancellationToken ct)
+    {
+        var rows = await db.InvitationGrants.AsNoTracking().Where(g => g.InvitationId == invitationId)
+            .OrderBy(g => g.LedgerId).Select(g => new { g.LedgerId, g.Access, g.Role }).ToListAsync(ct);
+        return rows.Select(g => new GrantInput(g.LedgerId, g.Access, g.Role is { } role ? LedgerRoles.Name(role) : null)).ToList();
+    }
 
     private async Task<IReadOnlyList<InvitationDto>> LoadAsync(System.Linq.Expressions.Expression<Func<Invitation, bool>> filter, CancellationToken ct)
     {
@@ -189,7 +192,7 @@ public sealed class InvitationService(IBooksDb db, WriteRunner writes, ReadRunne
         foreach (var row in rows)
         {
             var i = row.i;
-            var grants = (await GrantsOfAsync(i.Id, ct)).Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access))).ToList();
+            var grants = (await GrantsOfAsync(i.Id, ct)).Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access), MembershipService.RoleName(g))).ToList();
             result.Add(new InvitationDto(i.Id, i.OrgId, row.Name, i.TargetEmailKey, Text.Of(i.ProposedRole), grants,
                 Text.Of(i.StatusAt(now)), i.ExpiresAt, i.CreatedAt, i.Version.ToString()));
         }

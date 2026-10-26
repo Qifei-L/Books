@@ -64,16 +64,19 @@ public sealed class InvitationGrant
 {
     private InvitationGrant() { }
 
-    public InvitationGrant(Invitation invitation, Guid ledgerId, LedgerAccess access)
+    public InvitationGrant(Invitation invitation, Guid ledgerId, LedgerAccess access, LedgerRole? role = null)
     {
         OrgId = invitation.OrgId;
         InvitationId = invitation.Id;
         LedgerId = ledgerId;
         Access = access;
+        Role = role;
     }
 
     public Guid OrgId { get; private set; }
     public Guid InvitationId { get; private set; }
     public Guid LedgerId { get; private set; }
     public LedgerAccess Access { get; private set; }
+    public LedgerRole? Role { get; private set; }
+    public LedgerRole EffectiveRole => Role ?? LedgerRoles.FromAccess(Access);
 }

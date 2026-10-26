@@ -68,6 +68,7 @@ function partyForm(p) {
   const form = openForm(p ? `Edit ${p.name}` : "New business party", `
     <div class="grid">
       <label class="wide">Name <input name="name" value="${v("name")}" required></label>
+      <label class="wide">Name in Khmer <input name="name_km" value="${v("name_km")}"></label>
       <label>VATTIN <input name="tax_id" value="${v("tax_id")}"></label>
       <label>Payment terms (days) <input name="payment_terms_days" inputmode="numeric" value="${p?.payment_terms_days ?? ""}"></label>
       <label class="check"><input type="checkbox" name="is_customer" ${!p || p.is_customer ? "checked" : ""}> Customer</label>
@@ -76,6 +77,7 @@ function partyForm(p) {
       <label>Email <input name="email" type="email" value="${v("email")}"></label>
       <label>Phone <input name="phone" value="${v("phone")}"></label>
       <label class="wide">Address <textarea name="address" rows="2">${v("address")}</textarea></label>
+      <label class="wide">Address in Khmer <textarea name="address_km" rows="2">${v("address_km")}</textarea></label>
       ${p ? `<label class="check"><input type="checkbox" name="active" ${p.active ? "checked" : ""}> Active</label>` : ""}
     </div>
     <p class="actions">
@@ -92,6 +94,7 @@ function partyForm(p) {
       const body = {
         name: f.name.value.trim(), tax_id: f.tax_id.value.trim(), is_customer: f.is_customer.checked, is_supplier: f.is_supplier.checked,
         contact_name: f.contact_name.value.trim(), email: f.email.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(),
+        name_km: f.name_km.value.trim(), address_km: f.address_km.value.trim(),
         ...(terms ? { payment_terms_days: Number(terms) } : {}), ...(p ? { active: f.active.checked } : {}),
       };
       if (!body.name) throw new Error("Name is required.");

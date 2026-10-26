@@ -42,7 +42,12 @@ internal sealed class LedgerGrantConfiguration : IEntityTypeConfiguration<Ledger
 {
     public void Configure(EntityTypeBuilder<LedgerGrant> b)
     {
-        b.ToTable("ledger_grants", t => t.HasCheckConstraint("ck_ledger_grants_access", "access IN ('read', 'edit')"));
+        b.ToTable("ledger_grants", t =>
+        {
+            t.HasCheckConstraint("ck_ledger_grants_access", "access IN ('read', 'edit')");
+            t.HasCheckConstraint("ck_ledger_grants_role", "role IS NULL OR role IN ('viewer', 'bookkeeper', 'accountant', 'manager')");
+        });
+        b.Property(x => x.Role).HasMaxLength(20);
         b.HasKey(x => new { x.MembershipId, x.LedgerId });
         b.HasIndex(x => new { x.OrgId, x.LedgerId });
         // Composite keys keep a grant's member and ledger inside the same organization.

@@ -88,6 +88,50 @@ public sealed class Membership
 }
 
 /// <summary>
+/// A member's role inside one ledger. Access stays read/edit for compatibility; the role decides capabilities
+/// such as manual AR/AP control, sharing reports and changing ledger settings.
+/// </summary>
+public enum LedgerRole { Viewer = 1, Bookkeeper = 2, Accountant = 3, Manager = 4 }
+
+public enum LedgerCapability { Read, Edit, ManualControl, ShareReport, ManageSettings }
+
+public static class LedgerRoles
+{
+    public static string Name(LedgerRole role) => role switch
+    {
+        LedgerRole.Viewer => "viewer",
+        LedgerRole.Bookkeeper => "bookkeeper",
+        LedgerRole.Accountant => "accountant",
+        _ => "manager",
+    };
+
+    public static bool TryParse(string? value, out LedgerRole role)
+    {
+        foreach (var candidate in Enum.GetValues<LedgerRole>())
+        {
+            if (Name(candidate) == value)
+            {
+                role = candidate;
+                return true;
+            }
+        }
+        role = default;
+        return false;
+    }
+
+    public static LedgerRole FromAccess(LedgerAccess access) => access == LedgerAccess.Read ? LedgerRole.Viewer : LedgerRole.Bookkeeper;
+
+    /// <summary>Viewers read; bookkeepers also edit and share; accountants also control AR/AP; managers also change settings.</summary>
+    public static bool Allows(LedgerRole role, LedgerCapability capability) => role switch
+    {
+        LedgerRole.Viewer => capability == LedgerCapability.Read,
+        LedgerRole.Bookkeeper => capability is LedgerCapability.Read or LedgerCapability.Edit or LedgerCapability.ShareReport,
+        LedgerRole.Accountant => capability is LedgerCapability.Read or LedgerCapability.Edit or LedgerCapability.ShareReport or LedgerCapability.ManualControl,
+        _ => true,
+    };
+}
+
+/// <summary>
 /// A member's access to one ledger. It counts only while the membership is active, has role member,
 /// and is still the same generation (rule 7: removed or demoted users get no old grants back).
 /// </summary>
@@ -95,13 +139,14 @@ public sealed class LedgerGrant
 {
     private LedgerGrant() { }
 
-    public LedgerGrant(Membership membership, Guid ledgerId, LedgerAccess access, Guid grantedBy, DateTimeOffset createdAt)
+    public LedgerGrant(Membership membership, Guid ledgerId, LedgerAccess access, Guid grantedBy, DateTimeOffset createdAt, LedgerRole? role = null)
     {
         OrgId = membership.OrgId;
         MembershipId = membership.Id;
         MembershipGeneration = membership.Generation;
         LedgerId = ledgerId;
         Access = access;
+        Role = role;
         GrantedBy = grantedBy;
         CreatedAt = createdAt;
     }
@@ -111,6 +156,12 @@ public sealed class LedgerGrant
     public int MembershipGeneration { get; private set; }
     public Guid LedgerId { get; private set; }
     public LedgerAccess Access { get; private set; }
+
+    /// <summary>Null for grants made before roles existed; the access level then decides the role.</summary>
+    public LedgerRole? Role { get; private set; }
+
+    public LedgerRole EffectiveRole => Role ?? LedgerRoles.FromAccess(Access);
+
     public Guid GrantedBy { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 }

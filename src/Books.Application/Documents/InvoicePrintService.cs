@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Books.Application.Documents;
 
-public sealed record PrintParty(string Name, string? TaxId, string? Address, string? Phone, string? Email);
+public sealed record PrintParty(string Name, string? TaxId, string? Address, string? Phone, string? Email, string? NameKm = null, string? AddressKm = null);
 
 /// <param name="Tax">The line's VAT code name, for example "VAT 10% (sales)"; null when the line has none.</param>
 public sealed record PrintLine(int No, string? Description, string? Quantity, string? UnitPrice, string Amount, string? Tax);
@@ -54,6 +54,8 @@ public sealed class InvoicePrintService(IBooksDb db, ReadRunner reads, TaxCurren
             var companyName = await db.Companies.Where(c => c.Id == ledger.CompanyId).Select(c => c.Name).SingleAsync(ct);
             var settings = await InvoiceSettingsService.LoadAsync(db, ledgerId, orgId, ct);
             var customer = await db.Parties.AsNoTracking().SingleAsync(p => p.Id == invoice.CustomerId, ct);
+            var customerKm = await db.PartyLocalizations.AsNoTracking()
+                .SingleOrDefaultAsync(l => l.PartyId == customer.Id && l.Locale == PartyLocalization.Khmer, ct);
             var codeIds = invoice.Lines.SelectMany(l => new[] { l.TaxCodeId, l.OtherTaxCodeId, l.StateChargeCodeId }).OfType<Guid>().Distinct().ToList();
             var codes = await db.TaxCodes.AsNoTracking().Where(t => codeIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, ct);
             string? original = null;
@@ -88,7 +90,7 @@ public sealed class InvoicePrintService(IBooksDb db, ReadRunner reads, TaxCurren
                 chosen, stateCharge, creditNote, invoice.Status != DocumentStatus.Posted, settings.Number(invoice.InvoiceNo, creditNote), original,
                 invoice.Date, invoice.DueDate, invoice.Reference, invoice.Description, currency, InvoiceSettingsService.ToDto(settings),
                 settings.NameEnglish ?? companyName,
-                new PrintParty(customer.Name, customer.TaxId, customer.Address, customer.Phone, customer.Email),
+                new PrintParty(customer.Name, customer.TaxId, customer.Address, customer.Phone, customer.Email, customerKm?.Name, customerKm?.Address),
                 lines, F(invoice.NetTotal), otherTaxes, stateCharges, F(invoice.TaxTotal), F(invoice.GrossTotal),
                 khr is null ? null : new PrintTaxCurrency(khr.Currency, khr.Rate, khr.RateDate, Group(khr.GrossTotal), Group(khr.TaxTotal)));
         }, ct);

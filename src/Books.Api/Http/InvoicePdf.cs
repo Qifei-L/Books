@@ -82,6 +82,10 @@ public static class InvoicePdf
             {
                 buyer.Item().Text("អតិថិជន / Customer").Bold();
                 buyer.Item().Text(p.Buyer.Name);
+                if (p.Buyer.NameKm is not null)
+                {
+                    buyer.Item().Text(p.Buyer.NameKm);
+                }
                 if (p.Buyer.TaxId is not null)
                 {
                     buyer.Item().Text($"លេខអត្តសញ្ញាណកម្ម អតប (VATTIN): {p.Buyer.TaxId}");
@@ -89,6 +93,10 @@ public static class InvoicePdf
                 if (p.Buyer.Address is not null)
                 {
                     buyer.Item().Text($"អាសយដ្ឋាន/Address: {p.Buyer.Address}");
+                }
+                if (p.Buyer.AddressKm is not null)
+                {
+                    buyer.Item().Text($"អាសយដ្ឋាន: {p.Buyer.AddressKm}");
                 }
                 if (p.Buyer.Phone is not null)
                 {

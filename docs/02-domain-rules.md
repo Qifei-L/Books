@@ -9,7 +9,7 @@ Single source of truth · Consistency by design · Traceability · Secure by def
 ## Organizations and access
 
 1. An organization contains members and companies. Each company has exactly one ledger. **[T]**
-2. Roles: **administrator** (all ledgers, members and grants in that organization) and **member** (only assigned ledgers, each read or edit).
+2. Roles: **administrator** (all ledgers, members and grants in that organization) and **member** (only assigned ledgers). A member's grant in a ledger carries a ledger role — **viewer**, **bookkeeper**, **accountant** or **manager** — which decides capabilities: read, edit/share, manual AR/AP control, and ledger settings. **[T]**
 3. Only administrators invite, grant and revoke. Edit access never includes granting access.
 4. A role in one organization gives nothing in another. Guessed IDs grant nothing. **[T]**
 5. Every protected operation checks current membership, ledger ownership and permission inside its transaction. API and MCP use the same check. **[T]**

@@ -15,7 +15,7 @@ public static class InvitationEndpoints
         invitations.MapPost("", async (Guid orgId, CreateInvitationRequest body, PrincipalAccessor principals, InvitationService service, HttpContext http, CancellationToken ct) =>
         {
             var grants = (body.Grants ?? throw BooksProblem.Invalid("grants is required; [] means no ledgers."))
-                .Select(g => new GrantInput(g.LedgerId, MembershipEndpoints.ParseAccess(g.Access))).ToList();
+                .Select(g => new GrantInput(g.LedgerId, MembershipEndpoints.ParseAccess(g.Access), g.Role)).ToList();
             var command = new CreateInvitation(body.Email, MembershipEndpoints.ParseRole(body.Role), grants);
             return WriteHttp.Result(http, await service.CreateAsync(await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, command, ct));
         });

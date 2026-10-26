@@ -7,7 +7,7 @@ namespace Books.Api.Http;
 
 public static class MembershipEndpoints
 {
-    public sealed record GrantRequest(Guid LedgerId, string Access);
+    public sealed record GrantRequest(Guid LedgerId, string Access, string? Role = null);
 
     public sealed record SetAccessRequest(string Role, IReadOnlyList<GrantRequest> Grants);
 
@@ -30,7 +30,7 @@ public static class MembershipEndpoints
         members.MapPut("/{membershipId:guid}/access", async (Guid orgId, Guid membershipId, SetAccessRequest body, PrincipalAccessor principals, MembershipService service, HttpContext http, CancellationToken ct) =>
         {
             var grants = (body.Grants ?? throw BooksProblem.Invalid("grants is required; [] means no ledgers."))
-                .Select(g => new GrantInput(g.LedgerId, ParseAccess(g.Access))).ToList();
+                .Select(g => new GrantInput(g.LedgerId, ParseAccess(g.Access), g.Role)).ToList();
             return WriteHttp.Result(http, await service.SetAccessAsync(
                 await principals.GetAsync(ct), WriteHttp.Meta(http, body), orgId, membershipId, ParseRole(body.Role), grants, ct));
         });

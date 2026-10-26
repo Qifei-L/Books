@@ -118,7 +118,12 @@ internal sealed class InvitationGrantConfiguration : IEntityTypeConfiguration<In
 {
     public void Configure(EntityTypeBuilder<InvitationGrant> b)
     {
-        b.ToTable("invitation_grants", t => t.HasCheckConstraint("ck_invitation_grants_access", "access IN ('read', 'edit')"));
+        b.ToTable("invitation_grants", t =>
+        {
+            t.HasCheckConstraint("ck_invitation_grants_access", "access IN ('read', 'edit')");
+            t.HasCheckConstraint("ck_invitation_grants_role", "role IS NULL OR role IN ('viewer', 'bookkeeper', 'accountant', 'manager')");
+        });
+        b.Property(x => x.Role).HasMaxLength(20);
         b.HasKey(x => new { x.InvitationId, x.LedgerId });
         b.HasOne<Invitation>().WithMany()
             .HasForeignKey(x => new { x.OrgId, x.InvitationId }).HasPrincipalKey(x => new { x.OrgId, x.Id })

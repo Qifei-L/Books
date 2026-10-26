@@ -32,6 +32,15 @@ async function renderSettingsOrg() {
     api(`/api/v1/organizations/${state.org}/companies`),
     api(`/api/v1/organizations/${state.org}/exchange-rates?from=${today().slice(0, 4)}-01-01&to=${today()}`),
   ]);
+  const members = isAdmin() ? await api(`/api/v1/organizations/${state.org}/memberships`) : [];
+  const ledgerName = (id) => companies.find((c) => c.id === id)?.name ?? id;
+  const memberRows = members.map((m) => `<tr>
+      <td>${esc(m.display_name)}<div class="muted small">${esc(m.email ?? "")}</div></td>
+      <td><span class="pill ${m.role === "admin" ? "posted" : "draft"}">${esc(m.role)}</span></td>
+      <td>${m.role === "admin" ? '<span class="muted small">every company</span>'
+        : (m.grants ?? []).map((g) => `${esc(ledgerName(g.ledger_id))}: <b>${esc(g.role ?? g.access)}</b>`).join("<br>") || '<span class="muted small">no companies</span>'}</td>
+      <td class="actions-cell">${m.role === "admin" ? "" : `<button type="button" class="secondary small" data-member="${m.id}">Ledger roles</button>`}</td>
+    </tr>`).join("");
   $("tab-settings-org").innerHTML = `
     <dl class="facts">
       <dt>Organization</dt><dd>${esc(org.name)}</dd>
@@ -41,11 +50,43 @@ async function renderSettingsOrg() {
     <p class="muted small">One ledger per company. The company is chosen in the bar above.</p>
     <table><tr><th>Company</th><th>Created</th></tr>
     ${companies.map((c) => `<tr><td>${esc(c.name)}${c.id === state.ledger.company_id ? ` <span class="pill posted">current</span>` : ""}</td><td>${String(c.created_at ?? "").slice(0, 10)}</td></tr>`).join("")}</table>
+    ${isAdmin() ? `<h3 style="margin-top:16px">Members and ledger roles</h3>
+      <p class="muted small">An organization administrator sees every company. A member's ledger role decides what they can do: viewer reads, bookkeeper edits and shares reports, accountant also posts manual AR/AP journals, manager also changes ledger settings.</p>
+      <table><tr><th>Member</th><th>Organization role</th><th>Companies</th><th></th></tr>${memberRows}</table>` : ""}
     <h3 style="margin-top:16px">Exchange rates this year ${isAdmin() ? `<button class="secondary small" onclick="rateForm()">Set a rate</button>` : ""}</h3>
     <p class="muted small">Shared by every company in the organization. Entered by hand; the Cambodia pack reads the rate of a document's date.</p>
     ${rates.length ? `<table><tr><th>Date</th><th>From</th><th>To</th><th class="num">Rate</th><th>Source</th></tr>
       ${rates.slice(-12).reverse().map((r) => `<tr><td>${r.date}</td><td>${r.from_currency}</td><td>${r.to_currency}</td><td class="num">${r.rate}</td><td>${esc(r.source)}</td></tr>`).join("")}</table>`
       : `<p class="muted small">No rates entered this year.</p>`}`;
+  for (const button of $("tab-settings-org").querySelectorAll("[data-member]")) {
+    button.onclick = () => memberRoleForm(members.find((m) => m.id === button.dataset.member), companies);
+  }
+}
+
+/** Replaces one member's ledger roles; "none" removes the grant. */
+function memberRoleForm(member, companies) {
+  const selected = Object.fromEntries((member.grants ?? []).map((g) => [g.ledger_id, g.role ?? (g.access === "read" ? "viewer" : "bookkeeper")]));
+  const roleOptions = ["viewer", "bookkeeper", "accountant", "manager"];
+  const fields = companies.map((c) => `<label>${esc(c.name)} <select name="ledger_${c.id}">
+      <option value="">No access</option>
+      ${roleOptions.map((role) => `<option value="${role}" ${selected[c.id] === role ? "selected" : ""}>${role}</option>`).join("")}
+    </select></label>`).join("");
+  const form = openForm(`Ledger roles · ${member.display_name}`, `<div class="grid">${fields}</div>
+    <p class="muted small">Manager includes accountant, bookkeeper and viewer; accountant includes bookkeeper and viewer.</p>
+    <p class="actions"><span class="spacer"></span><button type="button" class="secondary" data-cancel>Cancel</button><button type="submit">Save roles</button></p>`);
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    busy(form, async () => {
+      const grants = companies.flatMap((c) => {
+        const role = form.elements[`ledger_${c.id}`].value;
+        return role ? [{ ledger_id: c.id, access: role === "viewer" ? "read" : "edit", role }] : [];
+      });
+      await write("PUT", `/api/v1/organizations/${state.org}/memberships/${member.id}/access`,
+        { role: "member", grants }, member.version);
+      $("form-dialog").close();
+      await refreshLedger();
+    });
+  };
 }
 /** A small form of labelled fields; save(values) runs on submit and the tab refreshes afterwards. */
 function simpleForm(title, fields, save, extra = "") {

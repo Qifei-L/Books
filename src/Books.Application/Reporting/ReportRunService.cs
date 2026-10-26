@@ -119,7 +119,7 @@ public sealed class ReportRunService(IBooksDb db, ReadRunner reads, WriteRunner 
     {
         return await writes.RunAsync(principal, new WriteRequest("report_share.create", orgId, meta, LedgerId: ledgerId), async scope =>
         {
-            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            await scope.RequireCapabilityAsync(ledgerId, LedgerCapability.ShareReport, ct);
             var run = await db.ReportRuns.SingleOrDefaultAsync(r => r.Id == runId && r.LedgerId == ledgerId && r.Status == "ready", ct)
                 ?? throw BooksProblem.NotFound();
             var days = input.Days ?? 7;

@@ -113,6 +113,11 @@ Done: report filters in the URL (refresh and Back keep class/location/date), man
 (line boxes, not posting boxes), report-run/share permission tests, the class FK decision (service-only, no deletion),
 the `tax_line` backfill decision (no historical rows on this pre-release branch) and the Playwright UI smoke test.
 
-Still open after this branch: organization/ledger role capabilities and party localizations (H), official GDT form
-facsimiles, and migrating the remaining record dialogs.
+Still open after this branch: official GDT form facsimiles and migrating the remaining record dialogs.
+
+H is now done: membership grants carry a ledger role (viewer/bookkeeper/accountant/manager) with capabilities
+(manual AR/AP control, share reports, ledger settings), existing read/edit grants derive a role, and Settings →
+Organization edits member roles. Parties carry optional Khmer name and address (`party_localizations`, locale `km`),
+shown on the party form and printed on invoices. Still open: official GDT form facsimiles and migrating transfers,
+payroll, stock and fixed-asset dialogs.
 

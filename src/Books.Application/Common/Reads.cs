@@ -60,6 +60,36 @@ public class OrgScope(IBooksDb db, Principal principal, Organization? organizati
         var access = await LedgerAccessAsync(ledgerId, ct) ?? throw BooksProblem.NotFound();
         return access >= needed ? access : throw BooksProblem.Forbidden();
     }
+
+    /// <summary>The actor's role in one ledger; administrators act as managers. Null when the ledger is invisible.</summary>
+    public async Task<LedgerRole?> LedgerRoleAsync(Guid ledgerId, CancellationToken ct)
+    {
+        var member = RequireMember();
+        if (member.Role == MembershipRole.Admin)
+        {
+            return LedgerRole.Manager;
+        }
+        var grant = await db.LedgerGrants.AsNoTracking().SingleOrDefaultAsync(
+            g => g.MembershipId == member.Id && g.MembershipGeneration == member.Generation && g.LedgerId == ledgerId, ct);
+        return grant?.EffectiveRole;
+    }
+
+    /// <summary>Capabilities combine the organization role with the ledger role (viewer/bookkeeper/accountant/manager).</summary>
+    public async Task<bool> CanAsync(Guid ledgerId, LedgerCapability capability, CancellationToken ct)
+    {
+        var role = await LedgerRoleAsync(ledgerId, ct);
+        return role is { } found && LedgerRoles.Allows(found, capability);
+    }
+
+    /// <summary>404 for a ledger the actor cannot see, 403 when its ledger role does not carry the capability.</summary>
+    public async Task RequireCapabilityAsync(Guid ledgerId, LedgerCapability capability, CancellationToken ct)
+    {
+        var role = await LedgerRoleAsync(ledgerId, ct) ?? throw BooksProblem.NotFound();
+        if (!LedgerRoles.Allows(role, capability))
+        {
+            throw BooksProblem.Forbidden();
+        }
+    }
 }
 
 /// <summary>

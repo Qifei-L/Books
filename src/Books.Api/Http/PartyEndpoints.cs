@@ -7,7 +7,7 @@ namespace Books.Api.Http;
 public static class PartyEndpoints
 {
     private static readonly string[] Fields =
-        ["name", "tax_id", "is_customer", "is_supplier", "email", "phone", "address", "contact_name", "payment_terms_days", "active"];
+        ["name", "tax_id", "is_customer", "is_supplier", "email", "phone", "address", "contact_name", "payment_terms_days", "active", "name_km", "address_km"];
 
     public static void MapPartyEndpoints(this RouteGroupBuilder api)
     {
@@ -30,6 +30,7 @@ public static class PartyEndpoints
     {
         var f = new PatchFields(body, Fields);
         return new PartyInput(f.Text("name"), f.Text("tax_id"), f.Bool("is_customer"), f.Bool("is_supplier"),
-            f.Text("email"), f.Text("phone"), f.Text("address"), f.Text("contact_name"), f.Int("payment_terms_days"), f.Bool("active"));
+            f.Text("email"), f.Text("phone"), f.Text("address"), f.Text("contact_name"), f.Int("payment_terms_days"), f.Bool("active"),
+            f.Text("name_km"), f.Text("address_km"));
     }
 }

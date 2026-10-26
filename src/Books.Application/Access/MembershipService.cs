@@ -4,11 +4,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Books.Application.Access;
 
-public sealed record GrantDto(Guid LedgerId, string Access);
+public sealed record GrantDto(Guid LedgerId, string Access, string? Role = null);
 
 public sealed record MemberDto(Guid Id, Guid UserId, string DisplayName, string? Email, string Role, string Status, int Generation, IReadOnlyList<GrantDto> Grants, string Version);
 
-public sealed record GrantInput(Guid LedgerId, LedgerAccess Access);
+public sealed record GrantInput(Guid LedgerId, LedgerAccess Access, string? Role = null);
 
 /// <summary>Members, roles and ledger grants. Only administrators change them (rule 3).</summary>
 public sealed class MembershipService(IBooksDb db, WriteRunner writes, ReadRunner reads)
@@ -48,9 +48,9 @@ public sealed class MembershipService(IBooksDb db, WriteRunner writes, ReadRunne
             target.ChangeRole(role);
             foreach (var grant in grants)
             {
-                db.LedgerGrants.Add(new LedgerGrant(target, grant.LedgerId, grant.Access, principal.UserId, scope.Now));
+                db.LedgerGrants.Add(new LedgerGrant(target, grant.LedgerId, grant.Access, principal.UserId, scope.Now, ParsedRole(grant)));
             }
-            var after = new { role = Text.Of(role), grants = grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access))).ToList() };
+            var after = new { role = Text.Of(role), grants = grants.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access), RoleName(g))).ToList() };
             scope.Audit("membership.access_changed", "membership", target.Id, new { before, after, invalidated_invitations = invalidated });
             await db.SaveChangesAsync(ct);
             return WriteResult.Of(200, (await LoadAsync(orgId, target.Id, ct)).Single(), target.Version);
@@ -115,7 +115,30 @@ public sealed class MembershipService(IBooksDb db, WriteRunner writes, ReadRunne
         {
             throw BooksProblem.Invalid("Every granted ledger must belong to this organization.");
         }
+        foreach (var grant in grants)
+        {
+            var ledgerRole = ParsedRole(grant) ?? LedgerRoles.FromAccess(grant.Access);
+            if (ledgerRole == LedgerRole.Viewer && grant.Access != LedgerAccess.Read)
+            {
+                throw BooksProblem.Invalid("A viewer grant must have read access.");
+            }
+            if (ledgerRole != LedgerRole.Viewer && grant.Access != LedgerAccess.Edit)
+            {
+                throw BooksProblem.Invalid($"A {LedgerRoles.Name(ledgerRole)} grant must have edit access.");
+            }
+        }
     }
+
+    /// <summary>Parses a grant's optional role; null means "derive from access", as grants made before roles did.</summary>
+    internal static LedgerRole? ParsedRole(GrantInput grant) =>
+        grant.Role is null
+            ? null
+            : LedgerRoles.TryParse(grant.Role, out var role)
+                ? role
+                : throw BooksProblem.Invalid("grant role must be viewer, bookkeeper, accountant or manager.");
+
+    internal static string RoleName(GrantInput grant) =>
+        LedgerRoles.Name(ParsedRole(grant) ?? LedgerRoles.FromAccess(grant.Access));
 
     /// <summary>Rule 8: counted under the organization lock, so two concurrent changes cannot both pass.</summary>
     private async Task EnsureAnotherAdminAsync(Guid orgId, Guid changing, CancellationToken ct)
@@ -132,12 +155,16 @@ public sealed class MembershipService(IBooksDb db, WriteRunner writes, ReadRunne
         await db.Memberships.SingleOrDefaultAsync(m => m.OrgId == orgId && m.Id == membershipId && m.Status == MembershipStatus.Active, ct)
         ?? throw BooksProblem.NotFound();
 
-    private async Task<List<GrantDto>> GrantsOfAsync(Membership m, CancellationToken ct) =>
-        await db.LedgerGrants.AsNoTracking()
+    private async Task<List<GrantDto>> GrantsOfAsync(Membership m, CancellationToken ct)
+    {
+        var rows = await db.LedgerGrants.AsNoTracking()
             .Where(g => g.MembershipId == m.Id && g.MembershipGeneration == m.Generation)
             .OrderBy(g => g.LedgerId)
-            .Select(g => new GrantDto(g.LedgerId, g.Access == LedgerAccess.Edit ? "edit" : "read"))
+            .Select(g => new { g.LedgerId, g.Access, g.Role })
             .ToListAsync(ct);
+        return rows.Select(g => new GrantDto(g.LedgerId, Text.Of(g.Access),
+            LedgerRoles.Name(g.Role ?? LedgerRoles.FromAccess(g.Access)))).ToList();
+    }
 
     private async Task<IReadOnlyList<MemberDto>> LoadAsync(Guid orgId, Guid? membershipId, CancellationToken ct)
     {

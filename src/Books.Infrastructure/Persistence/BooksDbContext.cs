@@ -26,6 +26,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
     public DbSet<AccountPurpose> AccountPurposes => Set<AccountPurpose>();
     public DbSet<AccountUsage> AccountUsages => Set<AccountUsage>();
     public DbSet<Party> Parties => Set<Party>();
+    public DbSet<PartyLocalization> PartyLocalizations => Set<PartyLocalization>();
     public DbSet<TaxCode> TaxCodes => Set<TaxCode>();
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
@@ -84,6 +85,7 @@ public sealed class BooksDbContext(DbContextOptions<BooksDbContext> options) : D
         configurationBuilder.Properties<OrganizationState>().HaveConversion<LowerCaseEnumConverter<OrganizationState>>().HaveMaxLength(20);
         configurationBuilder.Properties<MembershipRole>().HaveConversion<LowerCaseEnumConverter<MembershipRole>>().HaveMaxLength(20);
         configurationBuilder.Properties<LedgerAccess>().HaveConversion<LowerCaseEnumConverter<LedgerAccess>>().HaveMaxLength(10);
+        configurationBuilder.Properties<LedgerRole>().HaveConversion<LowerCaseEnumConverter<LedgerRole>>().HaveMaxLength(20);
         configurationBuilder.Properties<InvitationStatus>().HaveConversion<LowerCaseEnumConverter<InvitationStatus>>().HaveMaxLength(20);
         configurationBuilder.Properties<AccountType>().HaveConversion<LowerCaseEnumConverter<AccountType>>().HaveMaxLength(20);
         configurationBuilder.Properties<JournalKind>().HaveConversion<LowerCaseEnumConverter<JournalKind>>().HaveMaxLength(20);

@@ -154,6 +154,15 @@ async function run() {
   await page.waitForFunction(() => location.hash.includes("from=2026-02-01"), null, { timeout: 15000 });
   assert.equal(await page.locator('#tb-form input[name="from"]').inputValue(), "2026-02-01");
 
+  // H: organization settings list ledger roles, and a party keeps its Khmer details.
+  await nav('#sidenav button[data-tab="settings-org"]', "#tab-settings-org table");
+  assert.ok((await page.locator("#tab-settings-org").innerText()).includes("Members and ledger roles"));
+  await nav('#sidenav button[data-tab="parties"]', "#tab-parties tr[data-party]");
+  await page.locator("#tab-parties tr[data-party]").first().click();
+  await page.waitForSelector("#form-dialog[open]", { timeout: 15000 });
+  assert.equal(await page.locator('#form-dialog input[name="name_km"]').count(), 1);
+  await page.locator("#form-dialog [data-cancel]").click();
+
   // New journal: the same header, grid and fixed bar; save and post, then delete.
   await nav('#sidenav button[data-tab="journals"]', "#tab-journals tr[data-id]");
   await page.locator("#tab-journals .new-doc").click();

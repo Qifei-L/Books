@@ -32,7 +32,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             var ledger = await db.Ledgers.SingleAsync(l => l.Id == ledgerId, ct);
             var expanded = await ExpandTaxAsync(draft, ledger, ct);
             var context = await ContextAsync(ledger, expanded, null, ct);
-            RequireManualControlPermission(scope, expanded, context);
+            await RequireManualControlPermissionAsync(scope, ledgerId, expanded, context, ct);
             var issues = RejectUnknownReferences(JournalValidator.Validate(expanded, context));
             var status = !post ? RevisionStatus.Draft : issues.Count == 0 ? RevisionStatus.Posted : RevisionStatus.Error;
 
@@ -76,7 +76,7 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             var effective = journal.EffectiveRevisionId is { } effectiveId ? await db.JournalRevisions.SingleAsync(r => r.Id == effectiveId, ct) : null;
             var expanded = await ExpandTaxAsync(draft, ledger, ct);
             var context = await ContextAsync(ledger, expanded, effective?.AccountingDate, ct);
-            RequireManualControlPermission(scope, expanded, context);
+            await RequireManualControlPermissionAsync(scope, ledgerId, expanded, context, ct);
             var issues = RejectUnknownReferences(JournalValidator.Validate(expanded, context));
             var status = !post ? RevisionStatus.Draft : issues.Count == 0 ? RevisionStatus.Posted : RevisionStatus.Error;
 
@@ -206,14 +206,15 @@ public sealed class JournalService(IBooksDb db, WriteRunner writes, ReadRunner r
             : journal.EffectiveRevisionId.Value;
 
     /// <summary>
-    /// A manual journal may reach AR/AP only for an organization administrator. Documents post control accounts through
-    /// their own adapters and never call this path.
+    /// A manual journal may reach AR/AP only for an accountant or manager in the ledger (organization administrators are
+    /// managers). Documents post control accounts through their own adapters and never call this path.
     /// </summary>
-    private static void RequireManualControlPermission(WriteScope scope, JournalDraft draft, JournalContext context)
+    private static async Task RequireManualControlPermissionAsync(WriteScope scope, Guid ledgerId, JournalDraft draft, JournalContext context,
+        CancellationToken ct)
     {
         if (draft.Lines.Any(l => context.Accounts.TryGetValue(l.AccountId, out var account) && account.IsControl))
         {
-            scope.RequireAdmin();
+            await scope.RequireCapabilityAsync(ledgerId, LedgerCapability.ManualControl, ct);
         }
     }
 

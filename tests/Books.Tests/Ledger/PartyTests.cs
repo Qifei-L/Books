@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Books.Domain.Journals;
 using Books.Tests.Infrastructure;
 using Books.Tests.Journal;
@@ -26,6 +27,28 @@ public sealed class PartyTests(TestHost host)
         Assert.True(updated.GetProperty("is_supplier").GetBoolean());
         Assert.Equal("K001-123456789", updated.GetProperty("tax_id").GetString());
         Assert.Single((await (await books.Admin.GetAsync(PartiesUrl(books), Ct)).DataAsync()).EnumerateArray());
+    }
+
+    [Fact]
+    public async Task A_party_can_carry_khmer_details_and_clear_them_again()
+    {
+        var books = await JournalBooks.CreateAsync(host);
+
+        var acme = await CreateAsync(books, new
+        {
+            name = "Acme Co", is_customer = true, name_km = "អាកមេ", address_km = "ភ្នំពេញ",
+        });
+        Assert.Equal("អាកមេ", acme.GetProperty("name_km").GetString());
+        Assert.Equal("ភ្នំពេញ", acme.GetProperty("address_km").GetString());
+
+        // Another change leaves the localization alone.
+        var phone = await (await books.Admin.WriteAsync(HttpMethod.Patch, $"{PartiesUrl(books)}/{acme.Id()}", new { phone = "012" }, ifMatch: 1)).DataAsync();
+        Assert.Equal("អាកមេ", phone.GetProperty("name_km").GetString());
+
+        var cleared = await (await books.Admin.WriteAsync(HttpMethod.Patch, $"{PartiesUrl(books)}/{acme.Id()}",
+            new { name_km = "", address_km = "" }, ifMatch: 2)).DataAsync();
+        Assert.Equal(JsonValueKind.Null, cleared.GetProperty("name_km").ValueKind);
+        Assert.Equal(JsonValueKind.Null, cleared.GetProperty("address_km").ValueKind);
     }
 
     [Fact]

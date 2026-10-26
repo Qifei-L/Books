@@ -239,6 +239,11 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("org_id");
 
+                    b.Property<string>("Role")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("role");
+
                     b.HasKey("InvitationId", "LedgerId")
                         .HasName("pk_invitation_grants");
 
@@ -251,6 +256,8 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("invitation_grants", null, t =>
                         {
                             t.HasCheckConstraint("ck_invitation_grants_access", "access IN ('read', 'edit')");
+
+                            t.HasCheckConstraint("ck_invitation_grants_role", "role IS NULL OR role IN ('viewer', 'bookkeeper', 'accountant', 'manager')");
                         });
                 });
 
@@ -286,6 +293,11 @@ namespace Books.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("org_id");
 
+                    b.Property<string>("Role")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("role");
+
                     b.HasKey("MembershipId", "LedgerId")
                         .HasName("pk_ledger_grants");
 
@@ -301,6 +313,8 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("ledger_grants", null, t =>
                         {
                             t.HasCheckConstraint("ck_ledger_grants_access", "access IN ('read', 'edit')");
+
+                            t.HasCheckConstraint("ck_ledger_grants_role", "role IS NULL OR role IN ('viewer', 'bookkeeper', 'accountant', 'manager')");
                         });
                 });
 
@@ -4118,6 +4132,41 @@ namespace Books.Infrastructure.Migrations
                     b.ToTable("parties", (string)null);
                 });
 
+            modelBuilder.Entity("Books.Domain.Ledgers.PartyLocalization", b =>
+                {
+                    b.Property<Guid>("PartyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("party_id");
+
+                    b.Property<string>("Locale")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("locale");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("address");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("PartyId", "Locale")
+                        .HasName("pk_party_localizations");
+
+                    b.ToTable("party_localizations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_party_localizations_locale", "locale IN ('km')");
+                        });
+                });
+
             modelBuilder.Entity("Books.Domain.Ledgers.TaxCode", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5686,6 +5735,16 @@ namespace Books.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_parties_ledgers_org_id_ledger_id");
+                });
+
+            modelBuilder.Entity("Books.Domain.Ledgers.PartyLocalization", b =>
+                {
+                    b.HasOne("Books.Domain.Ledgers.Party", null)
+                        .WithMany()
+                        .HasForeignKey("PartyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_party_localizations_parties_party_id");
                 });
 
             modelBuilder.Entity("Books.Domain.Ledgers.TaxCode", b =>

@@ -72,7 +72,7 @@ public sealed class AttachmentService(IBooksDb db, ReadRunner reads, WriteRunner
 
         var result = await writes.RunAsync(principal, new WriteRequest("attachment.upload", orgId, meta, LedgerId: ledgerId), async scope =>
         {
-            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            await scope.RequireCapabilityAsync(ledgerId, LedgerCapability.Edit, ct);
             if (!await RecordExistsAsync(ledgerId, input.RecordKind, input.RecordId, ct))
             {
                 throw BooksProblem.NotFound();
@@ -111,7 +111,7 @@ public sealed class AttachmentService(IBooksDb db, ReadRunner reads, WriteRunner
     public Task<WriteResult> DeleteAsync(Principal principal, WriteMeta meta, Guid orgId, Guid ledgerId, Guid id, CancellationToken ct) =>
         writes.RunAsync(principal, new WriteRequest("attachment.delete", orgId, meta, LedgerId: ledgerId), async scope =>
         {
-            await scope.RequireLedgerAsync(ledgerId, LedgerAccess.Edit, ct);
+            await scope.RequireCapabilityAsync(ledgerId, LedgerCapability.Edit, ct);
             var row = await db.Attachments.SingleOrDefaultAsync(a => a.Id == id && a.LedgerId == ledgerId, ct) ?? throw BooksProblem.NotFound();
             var dto = ToDto(row);
             db.Attachments.Remove(row);
